@@ -50,7 +50,7 @@ const saveLectureData = (payload) => {
 // Subtle footer
 const Footer = () => (
   <footer className="py-1 text-center text-[9px] text-gray-300">
-    © {new Date().getFullYear()} Austin Holifield, MD
+    © {new Date().getFullYear()} Austin Straley
   </footer>
 );
 

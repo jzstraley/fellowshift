@@ -26,6 +26,11 @@
 
 - [X] Move csv exporters to bottom.
 - [X] Need to fix button bar
+- [ ] Change IMport background dark
+- [ ] Dark light icon not centered
+- [ ] Background for tables not dark
+- [ ] Remove inport/export/reset from vacations tab
+- [ ] New color "Drag to swap rotations. Click a name, header, or cell to highlight. Toggle Vacation Mode to paint vacation blocks."
 
 ---
 
@@ -36,6 +41,7 @@
 - [X] Constraint: Cannot do call weekend same weekend as night float
 - [X] Prioritize even float distribution
 - [X] PGY-4 targets prioritized over PGY-5 targets
+- [ ] No night floats for PGy-6s last 3 months.
 
 ### Clinic Coverage
 

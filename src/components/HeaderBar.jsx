@@ -34,8 +34,8 @@ export default function HeaderBar({
           darkMode ? "border-gray-700" : "border-gray-300"
         }`}
       >
-        <h1 className="text-base font-bold">
-          Fellow<span className="text-red-400 italic">Shift</span>
+        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight leading-none">
+          Fellow<span className="text-red-400 italic ml-[1px]">Shift</span>
         </h1>
 
         <div className="flex items-center gap-2">
