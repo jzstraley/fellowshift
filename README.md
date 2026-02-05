@@ -1,16 +1,94 @@
-# React + Vite
+# FellowShift Update - New Features
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## What's New
 
-Currently, two official plugins are available:
+### 1. 🌙 Dark Mode
+- Toggle button in the header (sun/moon icon)
+- Persists across sessions
+- Applies to all views
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 2. 📅 Lecture Calendar
+- Full calendar view with month navigation
+- List view for upcoming lectures
+- Management view for quick stats
+- Click any lecture to see details and manage RSVPs
 
-## React Compiler
+### 3. 👥 Speaker & Topic Database
+- Add, edit, delete speakers (attendings, fellows, external)
+- Manage lecture topics with default durations
+- Categorize by lecture series (Core Curriculum, Journal Club, Board Review, etc.)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 4. ✅ RSVP Tracking
+- Track attendance per fellow per lecture
+- Attending / Not Attending / Maybe status
+- Visual summary in lecture list
 
-## Expanding the ESLint configuration
+### 5. 📧 Gmail Integration
+- Connect your Gmail account via OAuth
+- Send automated lecture reminders
+- Configurable reminder settings (days before, recipients)
+- **Note:** Requires Google Cloud setup (see instructions in Gmail tab)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 6. 🔄 Recurring Lecture Support
+- One-time, weekly, bi-weekly, monthly options
+- First/last of month patterns
+
+---
+
+## Installation
+
+Copy these files to your existing FellowShift project:
+
+```
+src/
+├── App.jsx                          (replace)
+├── context/
+│   └── ThemeContext.jsx             (new)
+├── data/
+│   └── lectureData.js               (new)
+└── components/
+    ├── HeaderBar.jsx                (replace)
+    ├── LectureCalendarView.jsx      (new)
+    ├── SpeakerTopicManager.jsx      (new)
+    └── GmailIntegration.jsx         (new)
+```
+
+---
+
+## Gmail Setup (Optional)
+
+To enable Gmail reminders:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select existing
+3. Enable the Gmail API
+4. Create OAuth 2.0 credentials (Web application)
+5. Add your domain to authorized JavaScript origins
+6. Update `GMAIL_CONFIG` in `GmailIntegration.jsx`:
+
+```javascript
+const GMAIL_CONFIG = {
+  clientId: "YOUR_CLIENT_ID.apps.googleusercontent.com",
+  apiKey: "YOUR_API_KEY",
+  // ...
+};
+```
+
+---
+
+## New Navigation Tabs
+
+The header now includes:
+- Schedule | Stats | Call/Float | Calendar | Clinic | Vacations | **Lectures** | **Speakers** | **Gmail**
+
+---
+
+## Data Persistence
+
+All lecture data (lectures, speakers, topics, fellow emails) is saved to localStorage under key `fellowship_lectures_v1`.
+
+Use "Reset to Defaults" to clear all data including lectures.
+
+---
+
+© 2026 Austin Straley, DO

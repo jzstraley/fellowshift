@@ -402,21 +402,6 @@ const exportCallFloatCSV = () => {
           </div>
         </div>
       )}
-
-      {/* Export Section */}
-      <div className="bg-white rounded border-2 border-gray-400 overflow-hidden">
-        <div className="px-3 py-2 bg-gray-50 flex items-center justify-between">
-          <span className="text-xs text-gray-600">Export call/float schedule</span>
-          <button
-            onClick={exportCallFloatCSV}
-            className="flex items-center gap-1 px-3 py-1 bg-gray-800 hover:bg-gray-900 text-white text-xs font-semibold rounded"
-            type="button"
-          >
-            <Download className="w-3 h-3" />
-            Export CSV
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

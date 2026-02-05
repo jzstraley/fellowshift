@@ -24,8 +24,8 @@
 - [X] Highlight function - tap name or rotation to highlight across row/column
 - [X] Vacation blocks - muted/gradient/different color styling
 
-- [ ] Move csv exporters to bottom.
-- [ ] Need to fix button bar
+- [X] Move csv exporters to bottom.
+- [X] Need to fix button bar
 
 ---
 
@@ -48,7 +48,7 @@
 
 ## 🟢 Restore Missing Features
 
-- [ ] Restore Vacation/Request page
+- [X] Restore Vacation/Request page
 - [ ] Vacation input and display functionality
 
 ---
@@ -65,9 +65,10 @@
 - [ ] Recurring lecture series support
 
 ### Other Ideas
+
 - [ ] Export to Google Calendar / iCal
-- [ ] Print-friendly views
-- [ ] Dark mode
+- [X] Print-friendly views
+- [X] Dark mode
 - [ ] Undo/redo for schedule changes
 - [ ] Conflict detection warnings
 - [ ] Fellow preferences input (vacation requests, rotation preferences)
@@ -75,27 +76,6 @@
 - [ ] Multi-year schedule planning
 - [ ] Backup/restore functionality
 - [ ] Share schedule via link
-
----
-
-## 📝 Notes
-
-### Constraints Summary
-
-- PGY-4s excluded from clinic coverage blocks 1-4
-- PGY-6s excluded from clinic coverage blocks 21-26
-- Nights rotation = Sun-Fri (6 nights), Sat off
-- Call = Sat + Sun
-- Float = Sat only
-- Cannot have call and night float same weekend
-
-### Targets
-
-| PGY | Call Target | Float Target |
-|-----|-------------|--------------|
-| 4   | 5           | 5            |
-| 5   | 4           | 4            |
-| 6   | 2           | 3            |
 
 ---
 

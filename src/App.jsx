@@ -1,5 +1,6 @@
 // src/App.jsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { CheckCircle } from "lucide-react";
 import ScheduleView from "./components/ScheduleView";
 import StatsView from "./components/StatsView";
 import CallView from "./components/CallView";
@@ -7,11 +8,16 @@ import CalendarView from "./components/CalendarView";
 import HeaderBar from "./components/HeaderBar";
 import ClinicCoverageView from "./components/ClinicCoverageView";
 import ImportExportBar from "./components/ImportExportBar";
+import LectureCalendarView from "./components/LectureCalendarView";
+import SpeakerTopicManager from "./components/SpeakerTopicManager";
+import GmailIntegration from "./components/GmailIntegration";
 import { initialSchedule, initialVacations, pgyLevels, clinicDays, blockDates } from "./data/scheduleData";
+import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
 import LandingPage from "./components/LandingPage";
 
 const STORAGE_KEY = "fellowship_scheduler_v1";
+const LECTURE_STORAGE_KEY = "fellowship_lectures_v1";
 
 const safeParse = (s) => {
   try {
@@ -31,6 +37,16 @@ const savePersisted = (payload) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 };
 
+const loadLectureData = () => {
+  const raw = localStorage.getItem(LECTURE_STORAGE_KEY);
+  if (!raw) return null;
+  return safeParse(raw);
+};
+
+const saveLectureData = (payload) => {
+  localStorage.setItem(LECTURE_STORAGE_KEY, JSON.stringify(payload));
+};
+
 // Subtle footer
 const Footer = () => (
   <footer className="py-1 text-center text-[9px] text-gray-300">
@@ -39,12 +55,36 @@ const Footer = () => (
 );
 
 export default function App() {
+  // Dark mode state
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem("fellowshift_darkmode");
+    return saved === "true";
+  });
+
+  const toggleDarkMode = () => {
+    setDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("fellowshift_darkmode", next);
+      return next;
+    });
+  };
+
+  // Apply dark mode to document
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [darkMode]);
+
   const [activeView, setActiveView] = useState("schedule");
   const [violations, setViolations] = useState([]);
 
   const fellows = useMemo(() => Object.keys(initialSchedule), []);
 
   const persisted = useMemo(() => loadPersisted(), []);
+  const persistedLectures = useMemo(() => loadLectureData(), []);
 
   const [schedule, setSchedule] = useState(
     persisted?.schedule && typeof persisted.schedule === "object"
@@ -66,6 +106,30 @@ export default function App() {
     persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object"
       ? persisted.nightFloatSchedule
       : {}
+  );
+
+  // Lecture system state
+  const [lectures, setLectures] = useState(
+    Array.isArray(persistedLectures?.lectures)
+      ? persistedLectures.lectures
+      : initialLectures
+  );
+
+  const [speakers, setSpeakers] = useState(
+    Array.isArray(persistedLectures?.speakers)
+      ? persistedLectures.speakers
+      : initialSpeakers
+  );
+
+  const [topics, setTopics] = useState(
+    Array.isArray(persistedLectures?.topics)
+      ? persistedLectures.topics
+      : initialTopics
+  );
+
+  // Fellow emails for Gmail integration
+  const [fellowEmails, setFellowEmails] = useState(
+    persistedLectures?.fellowEmails || {}
   );
 
   const [stats, setStats] = useState(null);
@@ -155,6 +219,7 @@ export default function App() {
     return map;
   }, [callSchedule, nightFloatSchedule]);
 
+  // Save schedule data
   useEffect(() => {
     const t = setTimeout(() => {
       savePersisted({
@@ -167,6 +232,20 @@ export default function App() {
 
     return () => clearTimeout(t);
   }, [schedule, vacations, callSchedule, nightFloatSchedule]);
+
+  // Save lecture data
+  useEffect(() => {
+    const t = setTimeout(() => {
+      saveLectureData({
+        lectures,
+        speakers,
+        topics,
+        fellowEmails,
+      });
+    }, 150);
+
+    return () => clearTimeout(t);
+  }, [lectures, speakers, topics, fellowEmails]);
 
   const calculateStats = useCallback(() => {
     setStats((prev) => {
@@ -255,10 +334,15 @@ export default function App() {
 
   const resetToDefaults = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LECTURE_STORAGE_KEY);
     setSchedule(initialSchedule);
     setVacations(initialVacations);
     setCallSchedule({});
     setNightFloatSchedule({});
+    setLectures(initialLectures);
+    setSpeakers(initialSpeakers);
+    setTopics(initialTopics);
+    setFellowEmails({});
   }, []);
 
   const checkBalance = useCallback(() => {
@@ -314,6 +398,14 @@ export default function App() {
     }
   }, [stats, fellows]);
 
+  const handleReminderSent = (lectureId) => {
+    setLectures(
+      lectures.map((l) =>
+        l.id === lectureId ? { ...l, reminderSent: true } : l
+      )
+    );
+  };
+
   const [showLanding, setShowLanding] = useState(true);
 
   if (showLanding) {
@@ -321,11 +413,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-800"}`}>
       <HeaderBar
         activeView={activeView}
         setActiveView={setActiveView}
-        checkBalance={checkBalance}
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
       />
 
       <div className="p-3 pb-16">
@@ -370,16 +463,72 @@ export default function App() {
           />
         )}
 
-        {/* Global Import/Export/Reset bar - shows on all pages */}
-        <div className="mt-4 p-3 bg-white rounded border border-gray-300 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Import/Export Schedule Data</span>
-          <ImportExportBar
+        {activeView === "lectures" && (
+          <LectureCalendarView
+            lectures={lectures}
+            setLectures={setLectures}
+            speakers={speakers}
+            topics={topics}
+            fellows={fellows}
+            darkMode={darkMode}
+            onSendReminder={(lecture) => {
+              // This would trigger Gmail integration
+              console.log("Send reminder for:", lecture);
+            }}
+          />
+        )}
+
+        {activeView === "speakers" && (
+          <SpeakerTopicManager
+            speakers={speakers}
+            setSpeakers={setSpeakers}
+            topics={topics}
+            setTopics={setTopics}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeView === "gmail" && (
+          <GmailIntegration
+            lectures={lectures}
+            speakers={speakers}
+            fellows={fellows}
+            fellowEmails={fellowEmails}
+            darkMode={darkMode}
+            onReminderSent={handleReminderSent}
+          />
+        )}
+
+        {/* Global Import/Export/Reset bar */}
+        <div className={`mt-4 p-3 rounded border ${
+        darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300"
+        }`}>
+        {/* Check Balance - only on call and clinic */}
+        {(activeView === "call" || activeView === "clinic") && (
+            <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+            <button
+                onClick={checkBalance}
+                className="w-full sm:w-auto flex items-center justify-center gap-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded"
+            >
+                <CheckCircle className="w-3 h-3" />
+                Check Balance
+            </button>
+            </div>
+        )}
+        
+        {/* Import/Export - stacked on mobile */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+            Import/Export
+            </span>
+            <ImportExportBar
             fellows={fellows}
             schedule={schedule}
             setSchedule={setSchedule}
             resetToDefaults={resetToDefaults}
             violations={violations}
-          />
+            />
+        </div>
         </div>
       </div>
 
