@@ -2,8 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link id="site-favicon" rel="icon" href="/favicon-light.ico" />
-    <link rel="shortcut icon" href="/favicon-light.ico" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Comprehensive cardiology schedule optimization tool for fellows." />
     <title>FellowShift</title>
@@ -14,10 +13,18 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
         'analytics_storage': 'denied'
       });
       if (localStorage.getItem('cookie_consent') === 'accepted') {
-        gtag('consent', 'update', { 'analytics_storage': 'granted' });
+        gtag('consent', 'update', {
+          'ad_storage': 'denied',
+          'ad_user_data': 'denied',
+          'ad_personalization': 'denied',
+          'analytics_storage': 'granted'
+        });
         var s = document.createElement('script');
         s.async = true;
         s.src = 'https://www.googletagmanager.com/gtag/js?id=G-BXJRY8B4W5';
