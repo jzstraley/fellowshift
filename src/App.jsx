@@ -476,7 +476,7 @@ function AppContent() {
     );
   }
 
-  if (showLanding) {
+  if (showLanding && !user) {
     return (
       <Suspense fallback={<ViewLoader />}>
         <LandingPage onEnter={() => setShowLanding(false)} />
