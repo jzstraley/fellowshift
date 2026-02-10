@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import { LogIn, Loader } from 'lucide-react';
 
-export default function LoginPage() {
+export default function LoginPage({ onLogoClick }) {
   const { signIn, isSupabaseConfigured } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -70,7 +70,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
         <div className="text-center">
-          <h2 className="text-4xl font-extrabold text-gray-900 dark:text-gray-100">
+          <h2
+            className="text-4xl font-extrabold text-gray-900 dark:text-gray-100 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={onLogoClick}
+          >
             Fellow<span className="text-red-400 italic">Shift</span>
           </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">

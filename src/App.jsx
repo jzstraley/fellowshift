@@ -467,21 +467,22 @@ function AppContent() {
     return <ViewLoader />;
   }
 
-  // Require sign-in before anything else
-  if (isSupabaseConfigured && !user) {
-    return (
-      <Suspense fallback={<ViewLoader />}>
-        <LoginPage />
-      </Suspense>
-    );
-  }
-
-  if (showLanding && !user) {
-    return (
-      <Suspense fallback={<ViewLoader />}>
-        <LandingPage onEnter={() => setShowLanding(false)} />
-      </Suspense>
-    );
+  // Show landing or login when not authenticated
+  if (!user) {
+    if (showLanding) {
+      return (
+        <Suspense fallback={<ViewLoader />}>
+          <LandingPage onEnter={() => setShowLanding(false)} />
+        </Suspense>
+      );
+    }
+    if (isSupabaseConfigured) {
+      return (
+        <Suspense fallback={<ViewLoader />}>
+          <LoginPage onLogoClick={() => setShowLanding(true)} />
+        </Suspense>
+      );
+    }
   }
 
   return (
