@@ -462,24 +462,24 @@ function AppContent() {
 
   const [showLanding, setShowLanding] = useState(true);
 
-  if (showLanding) {
-    return (
-      <Suspense fallback={<ViewLoader />}>
-        <LandingPage onEnter={() => setShowLanding(false)} />
-      </Suspense>
-    );
-  }
-
   // Wait for auth to finish loading before deciding what to show
   if (loading) {
     return <ViewLoader />;
   }
 
-  // After landing page, check auth before showing the main app
+  // Require sign-in before anything else
   if (isSupabaseConfigured && !user) {
     return (
       <Suspense fallback={<ViewLoader />}>
         <LoginPage />
+      </Suspense>
+    );
+  }
+
+  if (showLanding) {
+    return (
+      <Suspense fallback={<ViewLoader />}>
+        <LandingPage onEnter={() => setShowLanding(false)} />
       </Suspense>
     );
   }
