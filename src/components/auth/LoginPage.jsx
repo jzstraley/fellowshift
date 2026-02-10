@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabaseClient';
 import { LogIn, Loader } from 'lucide-react';
 
 export default function LoginPage() {
   const { signIn, isSupabaseConfigured } = useAuth();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -14,13 +15,28 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
+    let email = username;
+
+    // If input doesn't look like an email, look up by username
+    if (!username.includes('@')) {
+      const { data, error: lookupError } = await supabase.rpc('get_email_by_username', {
+        lookup_username: username,
+      });
+
+      if (lookupError || !data) {
+        setError('Username not found');
+        setLoading(false);
+        return;
+      }
+      email = data;
+    }
+
     const { error: signInError } = await signIn(email, password);
 
     if (signInError) {
       setError(signInError.message);
       setLoading(false);
     } else {
-      // AuthContext will handle redirect after successful login
       setLoading(false);
     }
   };
@@ -72,21 +88,21 @@ export default function LoginPage() {
           <div className="space-y-4">
             <div>
               <label
-                htmlFor="email"
+                htmlFor="username"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                Email address
+                Username
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="your.email@hospital.edu"
+                placeholder="Enter your username"
               />
             </div>
 

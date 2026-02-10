@@ -16,14 +16,25 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
+    // Safety timeout - if auth check takes too long, stop loading
+    const timeout = setTimeout(() => {
+      console.warn('Auth check timed out - continuing without auth');
+      setLoading(false);
+    }, 5000);
+
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(timeout);
       setUser(session?.user ?? null);
       if (session?.user) {
         loadProfile(session.user.id);
       } else {
         setLoading(false);
       }
+    }).catch((err) => {
+      clearTimeout(timeout);
+      console.error('Error checking session:', err);
+      setLoading(false);
     });
 
     // Listen for auth changes
@@ -41,7 +52,10 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadProfile = async (userId) => {

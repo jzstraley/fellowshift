@@ -4,11 +4,13 @@ import CheckCircle from "lucide-react/dist/esm/icons/check-circle";
 import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
 import CookieConsent from "./components/CookieConsent";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { initialSchedule, initialVacations, pgyLevels, clinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule } from "./data/scheduleData";
 import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
 
 // ✅ LAZY LOAD ALL VIEWS
+const LoginPage = lazy(() => import("./components/auth/LoginPage"));
 const LandingPage = lazy(() => import("./components/LandingPage"));
 const ScheduleView = lazy(() => import("./components/ScheduleView"));
 const StatsView = lazy(() => import("./components/StatsView"));
@@ -19,6 +21,7 @@ const LectureCalendarView = lazy(() => import("./components/LectureCalendarView"
 const SpeakerTopicManager = lazy(() => import("./components/SpeakerTopicManager"));
 const GmailIntegration = lazy(() => import("./components/GmailIntegration"));
 const VacationsView = lazy(() => import("./components/VacationsView"));
+const ProfileSettings = lazy(() => import("./components/ProfileSettings"));
 
 const STORAGE_KEY = "fellowship_scheduler_v1";
 const LECTURE_STORAGE_KEY = "fellowship_lectures_v1";
@@ -65,7 +68,8 @@ const Footer = () => (
   </footer>
 );
 
-export default function App() {
+function AppContent() {
+  const { signOut, profile, user, loading, isSupabaseConfigured } = useAuth();
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("fellowshift_darkmode");
@@ -466,6 +470,20 @@ export default function App() {
     );
   }
 
+  // Wait for auth to finish loading before deciding what to show
+  if (loading) {
+    return <ViewLoader />;
+  }
+
+  // After landing page, check auth before showing the main app
+  if (isSupabaseConfigured && !user) {
+    return (
+      <Suspense fallback={<ViewLoader />}>
+        <LoginPage />
+      </Suspense>
+    );
+  }
+
   return (
     <div className={`min-h-screen ${darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-800"}`}>
       <HeaderBar
@@ -554,6 +572,10 @@ export default function App() {
             />
           )}
 
+          {(activeView === "profile" || activeView === "settings") && (
+            <ProfileSettings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+          )}
+
           {activeView === "vacRequests" && (
             <VacationsView
               fellows={fellows}
@@ -604,5 +626,13 @@ export default function App() {
       <Footer />
       <CookieConsent />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
