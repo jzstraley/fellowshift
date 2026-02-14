@@ -6,78 +6,20 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  
+
   /* Larger touch targets */
   button, select, input {
     min-height: 44px;
     min-width: 44px;
   }
-  
+
   /* Prevent text from being too small */
   td, th {
     white-space: nowrap;
   }
 }
 
-/* Dark mode table/theme overrides for elements that use light utility classes */
-.dark .bg-white,
-.dark .bg-gray-50 {
-  background-color: #0f1724 !important; /* slate-900 */
-  color: #e5e7eb !important; /* gray-200 */
-}
-
-.dark .bg-gray-100,
-.dark .bg-gray-200 {
-  background-color: #111827 !important; /* gray-900 */
-  color: #d1d5db !important; /* gray-300 */
-}
-
-.dark .text-gray-800,
-.dark .text-gray-700,
-.dark .text-gray-600,
-.dark .text-gray-500 {
-  /* Keep original text utility colors to preserve rotation label contrast in dark mode */
-}
-
-.dark .border-gray-300,
-.dark .border-gray-400,
-.dark .border-gray-500 {
-  border-color: #374151 !important; /* gray-700 */
-}
-
-/* Table-specific tweaks */
+/* Dark mode: transparent table backgrounds so row colors show through */
 .dark table {
   background: transparent;
 }
-.dark th,
-.dark td {
-  border-color: #374151 !important;
-}
-
-/* Make sticky headers darker in dark mode */
-.dark .sticky.top-0,
-.dark .sticky.top-\[26px\] {
-  background-color: #0b1220 !important;
-}
-
-/* Dark-mode mappings for specific utility background colors used in tables/badges */
-.dark .bg-blue-50 { background-color: #07122a !important; color: #e6eef8 !important; }
-.dark .bg-purple-100 { background-color: #291238 !important; color: #f0e6fb !important; }
-.dark .bg-blue-100 { background-color: #0b2545 !important; color: #dbeafe !important; }
-.dark .bg-cyan-100 { background-color: #08323a !important; color: #dff7fb !important; }
-.dark .bg-green-100 { background-color: #08321a !important; color: #dff7e6 !important; }
-.dark .bg-green-200 { background-color: #0b4226 !important; color: #e6f8ea !important; }
-.dark .bg-blue-200 { background-color: #0b2b45 !important; color: #dbeafe !important; }
-.dark .bg-red-200 { background-color: #4b1111 !important; color: #ffecec !important; }
-.dark .bg-yellow-100 { background-color: #3b2a0b !important; color: #fff6d6 !important; }
-.dark .bg-amber-100 { background-color: #3b2b0a !important; color: #fff6d6 !important; }
-.dark .bg-pink-100 { background-color: #3a1230 !important; color: #fde8f6 !important; }
-.dark .bg-rose-100 { background-color: #3a1016 !important; color: #ffe6ea !important; }
-.dark .bg-indigo-100 { background-color: #1b2250 !important; color: #e8eaff !important; }
-
-/* Ensure table cells using bg-white/bg-gray-50 variants are readable */
-.dark .bg-white { background-color: #07111a !important; }
-.dark .bg-gray-50 { background-color: #0b1218 !important; }
-
-/* Weekend highlight override used in CalendarView */
-.dark .bg-yellow-100 { opacity: 0.95 !important; }

@@ -101,6 +101,7 @@ export default function LoginPage({ onLogoClick }) {
                 name="username"
                 type="text"
                 autoComplete="username"
+                autoCapitalize="none"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}

@@ -502,8 +502,6 @@ function AppContent() {
               fellows={fellows}
               schedule={schedule}
               vacations={vacations}
-              onScheduleChange={setSchedule}
-              onVacationsChange={setVacations}
             />
           )}
 

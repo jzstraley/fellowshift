@@ -1,5 +1,5 @@
 // src/components/HeaderBar.jsx
-import { Menu, X, Moon, Sun, AlignJustify, User, FileText, Settings, LogIn, LogOut } from "lucide-react";
+import { Menu, X, Moon, Sun, AlignJustify, User, FileText, Settings, LogIn, LogOut, ClipboardList } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 
@@ -117,6 +117,18 @@ export default function HeaderBar({
                 >
                   <FileText className="w-4 h-4" /> Requests
                 </button>
+
+                <a
+                  href="https://github.com/jzstraley/fellowshift/blob/main/CHANGELOG"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setUserMenuOpen(false)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                    darkMode ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-50 text-gray-700"
+                  }`}
+                >
+                  <ClipboardList className="w-4 h-4" /> Changelog
+                </a>
 
                 <button
                   onClick={() => { setActiveView("settings"); setUserMenuOpen(false); }}

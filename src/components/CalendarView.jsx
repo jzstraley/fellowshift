@@ -61,7 +61,7 @@ const PGYDividerRow = ({ pgy, colSpan }) => (
   <tr>
     <td
       colSpan={colSpan}
-      className="sticky left-0 z-20 bg-white border-y-2 border-gray-400 px-2 py-1 text-[10px] font-extrabold text-gray-700"
+      className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-[10px] font-extrabold text-gray-700 dark:text-gray-200"
     >
       PGY-{pgy}
     </td>
@@ -186,13 +186,13 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
   return (
     <div className="space-y-4">
       {/* Legend */}
-      <div className="bg-white rounded border-2 border-gray-400 p-2">
-        <div className="flex flex-wrap gap-2 text-[9px] items-center">
+      <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 p-2">
+        <div className="flex flex-wrap gap-2 text-[9px] items-center dark:text-gray-200">
           <span className="font-bold">Legend:</span>
           <span className="px-2 py-1 bg-red-500 text-white rounded font-semibold">Call</span>
           <span className="px-2 py-1 bg-purple-600 text-white rounded font-semibold">Float</span>
           <span className="px-2 py-1 bg-black text-white rounded font-semibold">Nights</span>
-          <span className="border-l border-gray-300 pl-2 ml-1 text-gray-600">
+          <span className="border-l border-gray-300 dark:border-gray-600 pl-2 ml-1 text-gray-600 dark:text-gray-400">
             Nights = Sun-Fri (6 nights)
           </span>
         </div>
@@ -202,18 +202,18 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
         const colSpan = 1 + days.length;
 
         return (
-          <div key={month} className="bg-white rounded border-2 border-gray-400 overflow-hidden">
+          <div key={month} className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
             {/* Sticky-ish month title for readability */}
-            <div className="px-3 py-2 bg-gray-100 border-b-2 border-gray-400">
-              <h3 className="font-bold text-sm">{month}</h3>
+            <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
+              <h3 className="font-bold text-sm dark:text-gray-100">{month}</h3>
             </div>
 
             {/* One scroll container per month, supports sticky header + sticky first col */}
             <div className="overflow-auto max-h-[calc(100vh-320px)]">
               <table className="w-full text-[9px] border-separate border-spacing-0">
                 <thead>
-                  <tr className="bg-gray-200 border-b-2 border-gray-400 sticky top-0 z-30">
-                    <th className="px-1 py-1 text-left font-bold sticky top-0 left-0 z-40 bg-gray-200 min-w-[90px] border-r-2 border-gray-300">
+                  <tr className="bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 sticky top-0 z-30">
+                    <th className="px-1 py-1 text-left font-bold sticky top-0 left-0 z-40 bg-gray-200 dark:bg-gray-700 dark:text-gray-100 min-w-[90px] border-r-2 border-gray-300 dark:border-gray-600">
                       Fellow
                     </th>
                     {days.map((day, idx) => {
@@ -223,12 +223,12 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                       return (
                         <th
                           key={idx}
-                          className={`px-0.5 py-1 text-center font-bold min-w-[32px] sticky top-0 z-30 bg-gray-200 ${
-                            isWeekend ? "bg-yellow-100" : ""
-                          } ${isSunday ? "border-l-2 border-gray-400" : "border-l border-gray-200"}`}
+                          className={`px-0.5 py-1 text-center font-bold min-w-[32px] sticky top-0 z-30 ${
+                            isWeekend ? "bg-yellow-100 dark:bg-yellow-900/40" : "bg-gray-200 dark:bg-gray-700"
+                          } ${isSunday ? "border-l-2 border-gray-400 dark:border-gray-600" : "border-l border-gray-200 dark:border-gray-600"}`}
                         >
-                          <div className="text-[7px] text-gray-500">{dayNames[dow]}</div>
-                          <div className="text-[9px]">{day.getDate()}</div>
+                          <div className="text-[7px] text-gray-500 dark:text-gray-400">{dayNames[dow]}</div>
+                          <div className="text-[9px] dark:text-gray-200">{day.getDate()}</div>
                         </th>
                       );
                     })}
@@ -240,11 +240,11 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                   {fellowsByPGY[4].map((fellow, idx) => (
                     <tr
                       key={fellow}
-                      className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} border-b border-gray-200`}
+                      className={`${idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"} border-b border-gray-200 dark:border-gray-700`}
                     >
-                      <td className="px-1 py-1 font-semibold text-[10px] sticky left-0 z-10 bg-inherit border-r-2 border-gray-300 whitespace-nowrap">
-                        <span className="text-blue-600">{fellow}</span>
-                        <span className="text-[7px] text-blue-400 ml-0.5">4</span>
+                      <td className="px-1 py-1 font-semibold text-[10px] sticky left-0 z-10 bg-inherit border-r-2 border-gray-300 dark:border-gray-600 whitespace-nowrap">
+                        <span className="text-blue-600 dark:text-blue-400">{fellow}</span>
+                        <span className="text-[7px] text-blue-400 dark:text-blue-500 ml-0.5">4</span>
                       </td>
 
                       {days.map((day, dayIdx) => {
@@ -257,15 +257,15 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                           <td
                             key={dayIdx}
                             className={`px-0 py-0.5 text-center ${
-                              isWeekend ? "bg-yellow-50" : ""
-                            } ${isSunday ? "border-l-2 border-gray-400" : "border-l border-gray-100"}`}
+                              isWeekend ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
+                            } ${isSunday ? "border-l-2 border-gray-400 dark:border-gray-600" : "border-l border-gray-100 dark:border-gray-700"}`}
                           >
                             {cellInfo.type !== "off" && cellInfo.type !== "empty" ? (
                               <div className={`mx-0.5 px-0.5 py-0.5 rounded text-[7px] font-bold ${cellInfo.colorClass}`}>
                                 {cellInfo.label}
                               </div>
                             ) : cellInfo.type === "off" ? (
-                              <div className="text-[8px] text-gray-300">-</div>
+                              <div className="text-[8px] text-gray-300 dark:text-gray-600">-</div>
                             ) : null}
                           </td>
                         );
@@ -277,9 +277,9 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                   {fellowsByPGY[5].map((fellow, idx) => (
                     <tr
                       key={fellow}
-                      className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} border-b border-gray-200`}
+                      className={`${idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"} border-b border-gray-200 dark:border-gray-700`}
                     >
-                      <td className="px-1 py-1 font-semibold text-[10px] sticky left-0 z-10 bg-inherit border-r-2 border-gray-300 whitespace-nowrap">
+                      <td className="px-1 py-1 font-semibold text-[10px] sticky left-0 z-10 bg-inherit border-r-2 border-gray-300 dark:border-gray-600 whitespace-nowrap">
                         <span className="text-green-600">{fellow}</span>
                         <span className="text-[7px] text-green-400 ml-0.5">5</span>
                       </td>
@@ -294,15 +294,15 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                           <td
                             key={dayIdx}
                             className={`px-0 py-0.5 text-center ${
-                              isWeekend ? "bg-yellow-50" : ""
-                            } ${isSunday ? "border-l-2 border-gray-400" : "border-l border-gray-100"}`}
+                              isWeekend ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
+                            } ${isSunday ? "border-l-2 border-gray-400 dark:border-gray-600" : "border-l border-gray-100 dark:border-gray-700"}`}
                           >
                             {cellInfo.type !== "off" && cellInfo.type !== "empty" ? (
                               <div className={`mx-0.5 px-0.5 py-0.5 rounded text-[7px] font-bold ${cellInfo.colorClass}`}>
                                 {cellInfo.label}
                               </div>
                             ) : cellInfo.type === "off" ? (
-                              <div className="text-[8px] text-gray-300">-</div>
+                              <div className="text-[8px] text-gray-300 dark:text-gray-600">-</div>
                             ) : null}
                           </td>
                         );
@@ -314,9 +314,9 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                   {fellowsByPGY[6].map((fellow, idx) => (
                     <tr
                       key={fellow}
-                      className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} border-b border-gray-200`}
+                      className={`${idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"} border-b border-gray-200 dark:border-gray-700`}
                     >
-                      <td className="px-1 py-1 font-semibold text-[10px] sticky left-0 z-10 bg-inherit border-r-2 border-gray-300 whitespace-nowrap">
+                      <td className="px-1 py-1 font-semibold text-[10px] sticky left-0 z-10 bg-inherit border-r-2 border-gray-300 dark:border-gray-600 whitespace-nowrap">
                         <span className="text-purple-600">{fellow}</span>
                         <span className="text-[7px] text-purple-400 ml-0.5">6</span>
                       </td>
@@ -331,15 +331,15 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                           <td
                             key={dayIdx}
                             className={`px-0 py-0.5 text-center ${
-                              isWeekend ? "bg-yellow-50" : ""
-                            } ${isSunday ? "border-l-2 border-gray-400" : "border-l border-gray-100"}`}
+                              isWeekend ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
+                            } ${isSunday ? "border-l-2 border-gray-400 dark:border-gray-600" : "border-l border-gray-100 dark:border-gray-700"}`}
                           >
                             {cellInfo.type !== "off" && cellInfo.type !== "empty" ? (
                               <div className={`mx-0.5 px-0.5 py-0.5 rounded text-[7px] font-bold ${cellInfo.colorClass}`}>
                                 {cellInfo.label}
                               </div>
                             ) : cellInfo.type === "off" ? (
-                              <div className="text-[8px] text-gray-300">-</div>
+                              <div className="text-[8px] text-gray-300 dark:text-gray-600">-</div>
                             ) : null}
                           </td>
                         );

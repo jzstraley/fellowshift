@@ -1,0 +1,33 @@
+# Changelog
+
+## 2026-02-14
+
+- Full dark/light theme overhaul: added explicit dark: variants to every component (StatsView, CallView, CalendarView, ClinicCoverageView, ScheduleView, ImportExportBar)
+- Removed aggressive CSS !important overrides from index.css; dark mode now handled via Tailwind dark: utilities
+- Fixed ImportExportBar status messages being unreadable in dark mode
+- Added Changelog link to the user dropdown menu in the header
+- Made Schedule view read-only; removed drag-and-drop swapping, tap-to-swap, and Vacation Mode editing
+- Added rotation filter dropdown to Schedule view for highlighting all instances of a selected rotation
+- Cleaned up unused schedule/vacation editing props and helper functions from ScheduleView
+- Increased Stats view table font size to match Call/Float table (text-xs)
+
+## 2026-02-10
+
+- Current block row on the Call/Float page is now automatically highlighted with a yellow background and left border
+- Added dark mode support to Call/Float Balance Check table
+- Integrated Requests page with Supabase
+- Vacation requests now fetch from the database scoped to the user's institution
+- Program directors and chief fellows can approve/deny requests with audit tracking
+- Fellows can submit vacation requests for themselves; directors can submit for any fellow
+- Denied requests shown in a separate section instead of being deleted
+- Falls back to local-state behavior when Supabase is not configured
+
+## 2026-02-09
+
+- Landing page now shows first when visiting the site; "Enter Scheduler" navigates to login
+- FellowShift logo on the login page is clickable and returns to the landing page
+- Removed Vacation Mode button from Schedule view
+- Removed rotation swapping (drag-and-drop and tap-to-swap)
+- Added rotation highlight dropdown to filter and highlight all instances of a selected rotation across the year
+- Non-matching cells fade to 30% opacity when a rotation is selected
+- Retained click-to-highlight on fellow names, block headers, and individual cells

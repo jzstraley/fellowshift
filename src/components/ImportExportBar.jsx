@@ -100,8 +100,8 @@ return (
         <div
           className={`text-[11px] px-2 py-2 md:py-1 rounded border w-full md:w-auto ${
             msg.type === "ok"
-              ? "bg-green-50 border-green-300 text-green-800"
-              : "bg-red-50 border-red-300 text-red-800"
+              ? "bg-green-50 dark:bg-green-950/40 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300"
+              : "bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300"
           }`}
         >
           {msg.text}

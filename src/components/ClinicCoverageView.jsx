@@ -122,13 +122,13 @@ const CANNOT_COVER_ROTATIONS = [
       </div>
 
       {/* Coverage Table */}
-      <div className="bg-white rounded border-2 border-gray-400 overflow-hidden">
-        <div className="px-3 py-2 bg-gray-100 border-b-2 border-gray-400">
-          <h3 className="font-bold text-sm flex items-center gap-2">
+      <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
+        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
+          <h3 className="font-bold text-sm flex items-center gap-2 dark:text-gray-100">
             <Calendar className="w-4 h-4" />
             Weekly Clinic Coverage for Nights
           </h3>
-          <p className="text-[10px] text-gray-600 mt-1">
+          <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-1">
             Week slots are blockStart-anchored and clamped to block end dates
           </p>
         </div>
@@ -138,31 +138,31 @@ const CANNOT_COVER_ROTATIONS = [
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           <table className="min-w-full text-[10px]">
-            <thead className="sticky top-0 bg-gray-200 z-10">
-              <tr className="border-b border-gray-400">
-                <th className="px-2 py-2 text-left font-bold">Blk</th>
-                <th className="px-2 py-2 text-left font-bold">Week</th>
-                <th className="px-2 py-2 text-left font-bold">On Nights</th>
-                <th className="px-2 py-2 text-left font-bold">Clinic Date</th>
-                <th className="px-2 py-2 text-center font-bold">→</th>
-                <th className="px-2 py-2 text-left font-bold">Covered By</th>
-                <th className="px-2 py-2 text-left font-bold">Their Rot</th>
-                <th className="px-2 py-2 text-center font-bold">PGY</th>
-                <th className="px-2 py-2 text-center font-bold">#</th>
+            <thead className="sticky top-0 bg-gray-200 dark:bg-gray-700 z-10">
+              <tr className="border-b border-gray-400 dark:border-gray-600">
+                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Blk</th>
+                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Week</th>
+                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">On Nights</th>
+                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Clinic Date</th>
+                <th className="px-2 py-2 text-center font-bold dark:text-gray-100">→</th>
+                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Covered By</th>
+                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Their Rot</th>
+                <th className="px-2 py-2 text-center font-bold dark:text-gray-100">PGY</th>
+                <th className="px-2 py-2 text-center font-bold dark:text-gray-100">#</th>
               </tr>
             </thead>
 
             <tbody>
               {coverageEntries.map((entry, idx) => {
                 const rowBg = !entry.coverer
-                  ? "bg-red-50"
+                  ? "bg-red-50 dark:bg-red-950/40"
                   : entry.relaxedSameClinicDay
-                  ? "bg-yellow-50"
+                  ? "bg-yellow-50 dark:bg-yellow-950/40"
                   : entry.relaxedBackToBack
-                  ? "bg-amber-50"
+                  ? "bg-amber-50 dark:bg-amber-950/40"
                   : idx % 2 === 0
-                  ? "bg-white"
-                  : "bg-gray-50";
+                  ? "bg-white dark:bg-gray-900"
+                  : "bg-gray-50 dark:bg-gray-800";
 
                 const { weekStart, weekEnd } = getWeekRange(
                   entry.blockStart,
@@ -175,10 +175,10 @@ const CANNOT_COVER_ROTATIONS = [
                 const count = entry.coverer ? (coverageStats?.[entry.coverer] || 0) : null;
 
                 return (
-                  <tr key={idx} className={`border-b border-gray-200 ${rowBg}`}>
+                  <tr key={idx} className={`border-b border-gray-200 dark:border-gray-700 ${rowBg}`}>
                     <td className="px-2 py-2 font-bold">{entry.block}</td>
 
-                    <td className="px-2 py-2 text-gray-600">
+                    <td className="px-2 py-2 text-gray-600 dark:text-gray-400">
                       <div className="flex items-center gap-1">
                         <div>W{entry.week}</div>
                         {entry.relaxedSameClinicDay && (
@@ -214,12 +214,12 @@ const CANNOT_COVER_ROTATIONS = [
                       </span>
                     </td>
 
-                    <td className="px-2 py-2 text-left text-gray-700">
+                    <td className="px-2 py-2 text-left text-gray-700 dark:text-gray-300">
                       <div className="font-semibold">{clinicDayName(entry.absentClinicDay)}</div>
-                      <div className="text-[8px] text-gray-500">{formatClinicDate(clinicDate)}</div>
+                      <div className="text-[8px] text-gray-500 dark:text-gray-400">{formatClinicDate(clinicDate)}</div>
                     </td>
 
-                    <td className="px-2 py-2 text-center text-gray-400">→</td>
+                    <td className="px-2 py-2 text-center text-gray-400 dark:text-gray-500">→</td>
 
                     <td className="px-2 py-2">
                       {entry.coverer ? (
@@ -265,7 +265,7 @@ const CANNOT_COVER_ROTATIONS = [
                       )}
                     </td>
 
-                    <td className="px-2 py-2 text-center font-bold text-gray-600">
+                    <td className="px-2 py-2 text-center font-bold text-gray-600 dark:text-gray-300">
                       {entry.coverer ? count : "—"}
                     </td>
                   </tr>
@@ -277,16 +277,16 @@ const CANNOT_COVER_ROTATIONS = [
       </div>
 
       {/* Coverage Stats by PGY */}
-      <div className="bg-white rounded border-2 border-gray-400 overflow-hidden">
-        <div className="px-3 py-2 bg-gray-100 border-b-2 border-gray-400">
-          <h3 className="font-bold text-sm">Coverage Load Distribution</h3>
-          <p className="text-[10px] text-gray-600">Target: 4 per fellow</p>
+      <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
+        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
+          <h3 className="font-bold text-sm dark:text-gray-100">Coverage Load Distribution</h3>
+          <p className="text-[10px] text-gray-600 dark:text-gray-400">Target: 4 per fellow</p>
         </div>
 
         <div className="p-3 space-y-3">
           {[4, 5, 6].map((pgy) => (
             <div key={pgy}>
-              <div className="text-[10px] font-bold text-gray-500 mb-1">PGY-{pgy}</div>
+              <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">PGY-{pgy}</div>
               <div className="flex flex-wrap gap-2">
                 {statsByPGY[pgy].map((fellow) => {
                   const count = coverageStats?.[fellow] || 0;
@@ -298,24 +298,24 @@ const CANNOT_COVER_ROTATIONS = [
                       key={fellow}
                       className={`px-3 py-2 rounded border-2 min-w-[110px] ${
                         isOverTarget
-                          ? "bg-red-50 border-red-300"
+                          ? "bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-700"
                           : isUnderTarget
-                          ? "bg-yellow-50 border-yellow-300"
+                          ? "bg-yellow-50 dark:bg-yellow-950/40 border-yellow-300 dark:border-yellow-700"
                           : getPGYColor(pgy)
                       }`}
                     >
-                      <div className="font-semibold text-xs">{fellow}</div>
+                      <div className="font-semibold text-xs dark:text-gray-100">{fellow}</div>
                       <div className="flex items-baseline gap-1">
                         <span
                           className={`text-xl font-bold ${
-                            isOverTarget ? "text-red-600" : isUnderTarget ? "text-yellow-600" : ""
+                            isOverTarget ? "text-red-600" : isUnderTarget ? "text-yellow-600" : "dark:text-gray-100"
                           }`}
                         >
                           {count}
                         </span>
-                        <span className="text-[9px] text-gray-500">covers</span>
+                        <span className="text-[9px] text-gray-500 dark:text-gray-400">covers</span>
                       </div>
-                      <div className="text-[8px] text-gray-500">
+                      <div className="text-[8px] text-gray-500 dark:text-gray-400">
                         Clinic: {clinicDayName(clinicDays[fellow])}
                       </div>
                     </div>
@@ -326,8 +326,8 @@ const CANNOT_COVER_ROTATIONS = [
           ))}
         </div>
 
-        <div className="px-3 py-2 border-t border-gray-200 bg-gray-50">
-          <div className="text-[10px] text-gray-600">
+        <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+          <div className="text-[10px] text-gray-600 dark:text-gray-400">
             <span className="font-bold">Rules:</span> PGY-4s excluded blocks 1-4 • PGY-6s excluded blocks 21+ •
             B2B avoided unless needed • Same clinic day avoided unless needed
           </div>

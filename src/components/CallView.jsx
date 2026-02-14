@@ -99,6 +99,17 @@ export default function CallView({
   const callTargets = { 4: 5, 5: 4, 6: 2 };
   const floatTargets = { 4: 5, 5: 4, 6: 3 };
 
+  const currentBlockIndex = useMemo(() => {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    for (let i = 0; i < 26; i++) {
+      const start = toLocalNoon(new Date(blockDates[i].start));
+      const end = toLocalNoon(new Date(blockDates[i].end));
+      if (today >= start && today <= end) return i;
+    }
+    return -1;
+  }, []);
+
   // Build date-indexed map: { "YYYY-MM-DD": { call, float, callRelaxed?, floatRelaxed? } }
   const dateCallMap = useMemo(() => {
     const map = {};
@@ -266,9 +277,11 @@ const exportCallFloatCSV = () => {
                     <tr
                       key={i}
                       className={`border-b border-gray-200 dark:border-gray-700 ${
-                        i % 2 === 0
-                          ? 'bg-white dark:bg-gray-900'
-                          : 'bg-gray-50 dark:bg-gray-800'
+                        i === currentBlockIndex
+                          ? 'bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-l-yellow-500'
+                          : i % 2 === 0
+                            ? 'bg-white dark:bg-gray-900'
+                            : 'bg-gray-50 dark:bg-gray-800'
                       }`}
                     >
                       <td className="px-2 py-1 font-semibold dark:text-gray-100">Block {i + 1}</td>
@@ -353,8 +366,8 @@ const exportCallFloatCSV = () => {
                   <th className="px-2 py-1 text-center font-bold bg-blue-100 dark:bg-blue-900 dark:text-blue-200">Call Target</th>
                   <th className="px-2 py-1 text-center font-bold bg-blue-50 dark:bg-blue-950 dark:text-blue-100">Call Actual</th>
                   <th className="px-2 py-1 text-center font-bold">Status</th>
-                  <th className="px-2 py-1 text-center font-bold bg-gray-100">Float Target</th>
-                  <th className="px-2 py-1 text-center font-bold bg-gray-50">Float Actual</th>
+                  <th className="px-2 py-1 text-center font-bold bg-gray-100 dark:bg-gray-700 dark:text-gray-200">Float Target</th>
+                  <th className="px-2 py-1 text-center font-bold bg-gray-50 dark:bg-gray-800 dark:text-gray-200">Float Actual</th>
                   <th className="px-2 py-1 text-center font-bold">Status</th>
                 </tr>
               </thead>
@@ -374,12 +387,12 @@ const exportCallFloatCSV = () => {
                   return (
                     <tr
                       key={f}
-                      className={`border-b border-gray-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                      className={`border-b border-gray-200 dark:border-gray-700 ${idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'}`}
                     >
-                      <td className="px-2 py-1 font-semibold">{f}</td>
-                      <td className="px-2 py-1 text-center">{pgy}</td>
+                      <td className="px-2 py-1 font-semibold dark:text-gray-100">{f}</td>
+                      <td className="px-2 py-1 text-center dark:text-gray-200">{pgy}</td>
 
-                      <td className="px-2 py-1 text-center bg-blue-100">{callTarget}</td>
+                      <td className="px-2 py-1 text-center bg-blue-100 dark:bg-blue-900 dark:text-blue-200">{callTarget}</td>
                       <td className={`px-2 py-1 text-center font-bold ${cStat.cls}`}>
                         {callActual}
                       </td>
@@ -387,7 +400,7 @@ const exportCallFloatCSV = () => {
                         <StatusIcon tone={cStat.tone} />
                       </td>
 
-                      <td className="px-2 py-1 text-center bg-gray-100">{floatTarget}</td>
+                      <td className="px-2 py-1 text-center bg-gray-100 dark:bg-gray-700 dark:text-gray-200">{floatTarget}</td>
                       <td className={`px-2 py-1 text-center font-bold ${fStat.cls}`}>
                         {floatActual}
                       </td>
@@ -400,7 +413,7 @@ const exportCallFloatCSV = () => {
               </tbody>
             </table>
 
-            <div className="mt-2 text-[10px] text-gray-600">
+            <div className="mt-2 text-[10px] text-gray-600 dark:text-gray-400">
               Floats are counted per Saturday night assignment (W1 and W2). Red badges indicate relaxed fallback.
             </div>
           </div>
