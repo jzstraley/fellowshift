@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import CheckCircle from "lucide-react/dist/esm/icons/check-circle";
 import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { initialSchedule, initialVacations, pgyLevels, clinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule } from "./data/scheduleData";
 import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
+import { deriveKey, encryptAndStore, loadAndDecrypt, clearSensitiveStorage } from "./utils/secureStorage";
 
 // ✅ LAZY LOAD ALL VIEWS
 const LoginPage = lazy(() => import("./components/auth/LoginPage"));
@@ -19,40 +20,11 @@ const CalendarView = lazy(() => import("./components/CalendarView"));
 const ClinicCoverageView = lazy(() => import("./components/ClinicCoverageView"));
 const LectureCalendarView = lazy(() => import("./components/LectureCalendarView"));
 const SpeakerTopicManager = lazy(() => import("./components/SpeakerTopicManager"));
-const GmailIntegration = lazy(() => import("./components/GmailIntegration"));
 const VacationsView = lazy(() => import("./components/VacationsView"));
 const ProfileSettings = lazy(() => import("./components/ProfileSettings"));
 
 const STORAGE_KEY = "fellowship_scheduler_v1";
 const LECTURE_STORAGE_KEY = "fellowship_lectures_v1";
-
-const safeParse = (s) => {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
-  }
-};
-
-const loadPersisted = () => {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-  return safeParse(raw);
-};
-
-const savePersisted = (payload) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-};
-
-const loadLectureData = () => {
-  const raw = localStorage.getItem(LECTURE_STORAGE_KEY);
-  if (!raw) return null;
-  return safeParse(raw);
-};
-
-const saveLectureData = (payload) => {
-  localStorage.setItem(LECTURE_STORAGE_KEY, JSON.stringify(payload));
-};
 
 // Loading fallback component
 const ViewLoader = () => (
@@ -118,54 +90,55 @@ function AppContent() {
 
   const fellows = useMemo(() => Object.keys(initialSchedule), []);
 
-  const persisted = useMemo(() => loadPersisted(), []);
-  const persistedLectures = useMemo(() => loadLectureData(), []);
+  // Encryption key derived from user ID — null until user is authenticated
+  const cryptoKeyRef = useRef(null);
+  const [dataReady, setDataReady] = useState(false);
 
-  const [schedule, setSchedule] = useState(
-    persisted?.schedule && typeof persisted.schedule === "object"
-      ? persisted.schedule
-      : initialSchedule
-  );
-
-  const [vacations, setVacations] = useState(
-    Array.isArray(persisted?.vacations) ? persisted.vacations : initialVacations
-  );
-
-  const [callSchedule, setCallSchedule] = useState(
-    persisted?.callSchedule && typeof persisted.callSchedule === "object"
-      ? persisted.callSchedule
-      : initialCallSchedule
-  );
-
-  const [nightFloatSchedule, setNightFloatSchedule] = useState(
-    persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object"
-      ? persisted.nightFloatSchedule
-      : initialNightFloatSchedule
-  );
+  const [schedule, setSchedule] = useState(initialSchedule);
+  const [vacations, setVacations] = useState(initialVacations);
+  const [callSchedule, setCallSchedule] = useState(initialCallSchedule);
+  const [nightFloatSchedule, setNightFloatSchedule] = useState(initialNightFloatSchedule);
 
   // Lecture system state
-  const [lectures, setLectures] = useState(
-    Array.isArray(persistedLectures?.lectures)
-      ? persistedLectures.lectures
-      : initialLectures
-  );
+  const [lectures, setLectures] = useState(initialLectures);
+  const [speakers, setSpeakers] = useState(initialSpeakers);
+  const [topics, setTopics] = useState(initialTopics);
 
-  const [speakers, setSpeakers] = useState(
-    Array.isArray(persistedLectures?.speakers)
-      ? persistedLectures.speakers
-      : initialSpeakers
-  );
+  // Derive encryption key and load persisted data when user becomes available
+  useEffect(() => {
+    if (!user?.id) {
+      cryptoKeyRef.current = null;
+      setDataReady(false);
+      return;
+    }
 
-  const [topics, setTopics] = useState(
-    Array.isArray(persistedLectures?.topics)
-      ? persistedLectures.topics
-      : initialTopics
-  );
+    let cancelled = false;
 
-  // Fellow emails for Gmail integration
-  const [fellowEmails, setFellowEmails] = useState(
-    persistedLectures?.fellowEmails || {}
-  );
+    (async () => {
+      const key = await deriveKey(user.id);
+      if (cancelled) return;
+      cryptoKeyRef.current = key;
+
+      const persisted = await loadAndDecrypt(key, STORAGE_KEY);
+      const persistedLectures = await loadAndDecrypt(key, LECTURE_STORAGE_KEY);
+
+      if (cancelled) return;
+
+      if (persisted?.schedule && typeof persisted.schedule === "object") setSchedule(persisted.schedule);
+      if (Array.isArray(persisted?.vacations)) setVacations(persisted.vacations);
+      if (persisted?.callSchedule && typeof persisted.callSchedule === "object") setCallSchedule(persisted.callSchedule);
+      if (persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object") setNightFloatSchedule(persisted.nightFloatSchedule);
+
+      if (Array.isArray(persistedLectures?.lectures)) setLectures(persistedLectures.lectures);
+      if (Array.isArray(persistedLectures?.speakers)) setSpeakers(persistedLectures.speakers);
+      if (Array.isArray(persistedLectures?.topics)) setTopics(persistedLectures.topics);
+
+      setDataReady(true);
+    })();
+
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
 
   const [stats, setStats] = useState(null);
 
@@ -254,10 +227,11 @@ function AppContent() {
     return map;
   }, [callSchedule, nightFloatSchedule]);
 
-  // Save schedule data
+  // Save schedule data (encrypted)
   useEffect(() => {
+    if (!dataReady || !cryptoKeyRef.current) return;
     const t = setTimeout(() => {
-      savePersisted({
+      encryptAndStore(cryptoKeyRef.current, STORAGE_KEY, {
         schedule,
         vacations,
         callSchedule,
@@ -266,21 +240,21 @@ function AppContent() {
     }, 150);
 
     return () => clearTimeout(t);
-  }, [schedule, vacations, callSchedule, nightFloatSchedule]);
+  }, [schedule, vacations, callSchedule, nightFloatSchedule, dataReady]);
 
-  // Save lecture data
+  // Save lecture data (encrypted)
   useEffect(() => {
+    if (!dataReady || !cryptoKeyRef.current) return;
     const t = setTimeout(() => {
-      saveLectureData({
+      encryptAndStore(cryptoKeyRef.current, LECTURE_STORAGE_KEY, {
         lectures,
         speakers,
         topics,
-        fellowEmails,
       });
     }, 150);
 
     return () => clearTimeout(t);
-  }, [lectures, speakers, topics, fellowEmails]);
+  }, [lectures, speakers, topics, dataReady]);
 
   // Build stats object synchronously from a schedule snapshot.
   const buildCounts = (sched) => {
@@ -387,8 +361,7 @@ function AppContent() {
   }, []);
 
   const resetToDefaults = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LECTURE_STORAGE_KEY);
+    clearSensitiveStorage();
     setSchedule(initialSchedule);
     setVacations(initialVacations);
     setCallSchedule({});
@@ -452,13 +425,6 @@ function AppContent() {
     }
   }, [stats, fellows]);
 
-  const handleReminderSent = (lectureId) => {
-    setLectures(
-      lectures.map((l) =>
-        l.id === lectureId ? { ...l, reminderSent: true } : l
-      )
-    );
-  };
 
   const [showLanding, setShowLanding] = useState(true);
 
@@ -560,16 +526,6 @@ function AppContent() {
             />
           )}
 
-          {activeView === "gmail" && (
-            <GmailIntegration
-              lectures={lectures}
-              speakers={speakers}
-              fellows={fellows}
-              fellowEmails={fellowEmails}
-              darkMode={darkMode}
-              onReminderSent={handleReminderSent}
-            />
-          )}
 
           {(activeView === "profile" || activeView === "settings") && (
             <ProfileSettings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />

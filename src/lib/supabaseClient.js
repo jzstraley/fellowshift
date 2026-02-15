@@ -1,5 +1,6 @@
 // Supabase client initialization
 import { createClient } from '@supabase/supabase-js';
+import { clearSensitiveStorage } from '../utils/secureStorage';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -27,12 +28,11 @@ export const supabase = supabaseUrl && supabaseAnonKey
     })
   : null;
 
-// Auth state change handler
+// Auth state change handler — clear all sensitive data on sign out
 if (supabase) {
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') {
-      // Clear any cached data
-      localStorage.removeItem('fellowshift_cache');
+      clearSensitiveStorage();
     }
   });
 }

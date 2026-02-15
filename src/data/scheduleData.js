@@ -132,3 +132,32 @@ export const initialNightFloatSchedule = {
   'B25-W1': 'Sharma', 'B25-W2': 'Alkhawlani',
   'B26-W1': 'Ezaldin', 'B26-W2': 'Mahmoud'
 };
+
+export const initialClinicSchedule = {
+  'B1-W1': 'Yousafzai',    'B1-W2': 'Straley',
+  'B2-W1': 'Straley',      'B2-W2': 'Yousafzai',
+  'B3-W1': 'Mahmoud',      'B3-W2': 'Elsayed',
+  'B4-W1': 'Mahmoud',      'B4-W2': 'Alkhawlani',
+  'B5-W1': 'Ali',          'B5-W2': 'Naeem',
+  'B6-W1': 'Nor',          'B6-W2': 'Selvam',
+  'B7-W1': 'Varga',        'B7-W2': 'Elkholy',
+  'B8-W1': 'Yousafzai',    'B8-W2': 'Ezaldin',
+  'B9-W1': 'Elkholy',      'B9-W2': 'Ali',
+  'B10-W1': 'Straley',     'B10-W2': 'Sharma',
+  'B11-W1': 'Selvam',      'B11-W2': 'Varga',
+  'B12-W1': 'Mahmoud',     'B12-W2': 'Nor',
+  'B13-W1': 'Ezaldin',     'B13-W2': 'Varga',
+  'B14-W1': 'Naeem',       'B14-W2': 'Yousafzai',
+  'B15-W1': 'Alkhawlani',  'B15-W2': 'Elkholy',
+  'B16-W1': 'Naeem',       'B16-W2': 'Selvam',
+  'B17-W1': 'Sharma',      'B17-W2': 'Straley',
+  'B18-W1': 'Ezaldin',     'B18-W2': 'Sharma',
+  'B19-W1': 'Alkhawlani',  'B19-W2': 'Mahmoud',
+  'B20-W1': 'Ali',         'B20-W2': 'Nor',
+  'B21-W1': 'Elsayed',     'B21-W2': 'Elsayed',
+  'B22-W1': 'Nor',         'B22-W2': 'Ali',
+  'B23-W1': 'Elsayed',     'B23-W2': 'Selvam',
+  'B24-W1': 'Ezaldin',     'B24-W2': 'Varga',
+  'B25-W1': 'Sharma',      'B25-W2': 'Elkholy',
+  'B26-W1': 'Naeem',       'B26-W2': 'Alkhawlani'
+};

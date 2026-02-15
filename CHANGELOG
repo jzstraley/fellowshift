@@ -2,6 +2,7 @@
 
 ## 2026-02-14
 
+- Added initial clinic coverage schedule (initialClinicSchedule) with pre-assigned coverers for all 26 blocks, balanced at 4 covers per fellow
 - Full dark/light theme overhaul: added explicit dark: variants to every component (StatsView, CallView, CalendarView, ClinicCoverageView, ScheduleView, ImportExportBar)
 - Removed aggressive CSS !important overrides from index.css; dark mode now handled via Tailwind dark: utilities
 - Fixed ImportExportBar status messages being unreadable in dark mode
