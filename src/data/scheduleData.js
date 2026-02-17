@@ -133,6 +133,8 @@ export const initialNightFloatSchedule = {
   'B26-W1': 'Ezaldin', 'B26-W2': 'Mahmoud'
 };
 
+export const initialSwapRequests = [];
+
 export const initialClinicSchedule = {
   'B1-W1': 'Yousafzai',    'B1-W2': 'Straley',
   'B2-W1': 'Straley',      'B2-W2': 'Yousafzai',

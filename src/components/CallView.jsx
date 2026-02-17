@@ -95,9 +95,23 @@ export default function CallView({
   pgyLevels,
   onDateCallMap,
   onOptimize,
+  workHourViolations = [],
 }) {
   const callTargets = { 4: 5, 5: 4, 6: 2 };
   const floatTargets = { 4: 5, 5: 4, 6: 3 };
+
+  // Build violation lookup: "fellow#block" → true
+  const violationByFellowBlock = useMemo(() => {
+    const m = new Map();
+    (workHourViolations || []).forEach(v => {
+      if (v.block && v.fellow) {
+        const key = `${v.fellow}#${v.block}`;
+        if (!m.has(key)) m.set(key, []);
+        m.get(key).push(v);
+      }
+    });
+    return m;
+  }, [workHourViolations]);
 
   const currentBlockIndex = useMemo(() => {
     const today = new Date();
@@ -292,8 +306,13 @@ const exportCallFloatCSV = () => {
 
                       <td className="px-2 py-1">
                         {c1.name ? (
-                          <span className={`px-2 py-0.5 rounded ${callBadgeClass(c1.relaxed)}`}>
-                            {c1.name}
+                          <span className="inline-flex items-center gap-1">
+                            <span className={`px-2 py-0.5 rounded ${callBadgeClass(c1.relaxed)}`}>
+                              {c1.name}
+                            </span>
+                            {violationByFellowBlock.has(`${c1.name}#${i + 1}`) && (
+                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${c1.name}#${i + 1}`).map(v => v.detail).join('\n')} />
+                            )}
                           </span>
                         ) : (
                           missingBadge
@@ -302,11 +321,16 @@ const exportCallFloatCSV = () => {
 
                       <td className="px-2 py-1">
                         {f1.name ? (
-                          <span
-                            className={`px-2 py-0.5 rounded ${floatBadgeClass(f1.relaxed)}`}
-                            title={f1.relaxed ? 'relaxed fallback' : 'strict'}
-                          >
-                            {f1.name}
+                          <span className="inline-flex items-center gap-1">
+                            <span
+                              className={`px-2 py-0.5 rounded ${floatBadgeClass(f1.relaxed)}`}
+                              title={f1.relaxed ? 'relaxed fallback' : 'strict'}
+                            >
+                              {f1.name}
+                            </span>
+                            {violationByFellowBlock.has(`${f1.name}#${i + 1}`) && (
+                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${f1.name}#${i + 1}`).map(v => v.detail).join('\n')} />
+                            )}
                           </span>
                         ) : (
                           missingBadge
@@ -319,8 +343,13 @@ const exportCallFloatCSV = () => {
 
                       <td className="px-2 py-1">
                         {c2.name ? (
-                          <span className={`px-2 py-0.5 rounded ${callBadgeClass(c2.relaxed)}`}>
-                            {c2.name}
+                          <span className="inline-flex items-center gap-1">
+                            <span className={`px-2 py-0.5 rounded ${callBadgeClass(c2.relaxed)}`}>
+                              {c2.name}
+                            </span>
+                            {violationByFellowBlock.has(`${c2.name}#${i + 1}`) && (
+                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${c2.name}#${i + 1}`).map(v => v.detail).join('\n')} />
+                            )}
                           </span>
                         ) : (
                           missingBadge
@@ -329,11 +358,16 @@ const exportCallFloatCSV = () => {
 
                       <td className="px-2 py-1">
                         {f2.name ? (
-                          <span
-                            className={`px-2 py-0.5 rounded ${floatBadgeClass(f2.relaxed)}`}
-                            title={f2.relaxed ? 'relaxed fallback' : 'strict'}
-                          >
-                            {f2.name}
+                          <span className="inline-flex items-center gap-1">
+                            <span
+                              className={`px-2 py-0.5 rounded ${floatBadgeClass(f2.relaxed)}`}
+                              title={f2.relaxed ? 'relaxed fallback' : 'strict'}
+                            >
+                              {f2.name}
+                            </span>
+                            {violationByFellowBlock.has(`${f2.name}#${i + 1}`) && (
+                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${f2.name}#${i + 1}`).map(v => v.detail).join('\n')} />
+                            )}
                           </span>
                         ) : (
                           missingBadge

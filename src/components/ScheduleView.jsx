@@ -23,6 +23,7 @@ export default function ScheduleView({
   fellows,
   schedule,
   vacations,
+  workHourViolations = [],
 }) {
   // Highlight state
   const [highlight, setHighlight] = useState(null);
@@ -84,6 +85,19 @@ export default function ScheduleView({
   }, [vacations]);
 
   const isBlockInVacationFast = (fellow, blockNumber) => vacationSet.has(`${fellow}#${blockNumber}`);
+
+  // Precompute violation lookup: "Fellow#block" → array of violations
+  const violationMap = useMemo(() => {
+    const m = new Map();
+    (workHourViolations || []).forEach(v => {
+      if (v.block) {
+        const key = `${v.fellow}#${v.block}`;
+        if (!m.has(key)) m.set(key, []);
+        m.get(key).push(v);
+      }
+    });
+    return m;
+  }, [workHourViolations]);
 
   // Collect unique rotation names from the schedule for the dropdown
   const allRotations = useMemo(() => {
@@ -176,6 +190,12 @@ export default function ScheduleView({
               >
                 <div className="relative">
                   {getBlockDisplay(fellow, idx, schedule, vacations)}
+                  {violationMap.has(`${fellow}#${blockNumber}`) && (
+                    <span
+                      className="absolute -top-1 -right-1 w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent"
+                      title={violationMap.get(`${fellow}#${blockNumber}`).map(v => v.detail).join('\n')}
+                    />
+                  )}
                 </div>
               </div>
             </td>

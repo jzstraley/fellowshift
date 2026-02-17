@@ -130,6 +130,26 @@ CREATE TABLE vacation_requests (
 CREATE INDEX idx_vacation_fellow ON vacation_requests(fellow_id);
 CREATE INDEX idx_vacation_status ON vacation_requests(status);
 
+-- Swap requests (rotation trades between fellows)
+CREATE TABLE swap_requests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  requester_fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
+  target_fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
+  block_number INTEGER NOT NULL CHECK (block_number >= 1 AND block_number <= 26),
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+  requested_by UUID REFERENCES profiles(id),
+  approved_by UUID REFERENCES profiles(id),
+  approved_at TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_swap_requester ON swap_requests(requester_fellow_id);
+CREATE INDEX idx_swap_target ON swap_requests(target_fellow_id);
+CREATE INDEX idx_swap_status ON swap_requests(status);
+
 -- ============================================================================
 -- LECTURE SYSTEM TABLES
 -- ============================================================================
@@ -246,6 +266,7 @@ ALTER TABLE block_dates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE schedule_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE call_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vacation_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE swap_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lectures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lecture_topics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE speakers ENABLE ROW LEVEL SECURITY;
@@ -362,6 +383,37 @@ USING (
   )
 );
 
+-- Swap requests: View policies
+CREATE POLICY "View swap requests in institution"
+ON swap_requests FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM fellows
+    WHERE id = swap_requests.requester_fellow_id
+    AND institution_id = get_user_institution_id()
+  )
+);
+
+-- Fellows can create swap requests
+CREATE POLICY "Fellows can create swap requests"
+ON swap_requests FOR INSERT
+WITH CHECK (
+  requested_by = auth.uid()
+  AND get_user_role() IN ('fellow', 'program_director', 'chief_fellow')
+);
+
+-- Program directors and chief fellows can approve/deny swaps
+CREATE POLICY "Program directors can manage swap requests"
+ON swap_requests FOR UPDATE
+USING (
+  get_user_role() IN ('program_director', 'chief_fellow')
+  AND EXISTS (
+    SELECT 1 FROM fellows
+    WHERE id = swap_requests.requester_fellow_id
+    AND institution_id = get_user_institution_id()
+  )
+);
+
 -- Call assignments: Same pattern as schedules
 CREATE POLICY "View call assignments in institution"
 ON call_assignments FOR SELECT
@@ -429,6 +481,7 @@ CREATE TRIGGER update_block_dates_updated_at BEFORE UPDATE ON block_dates FOR EA
 CREATE TRIGGER update_schedule_assignments_updated_at BEFORE UPDATE ON schedule_assignments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_call_assignments_updated_at BEFORE UPDATE ON call_assignments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_vacation_requests_updated_at BEFORE UPDATE ON vacation_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_swap_requests_updated_at BEFORE UPDATE ON swap_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_lectures_updated_at BEFORE UPDATE ON lectures FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================

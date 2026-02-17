@@ -1,20 +1,32 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { CheckCircle, AlertTriangle, Loader2, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function VacationsView({
   fellows = [],
   schedule = {},
   vacations = [],
+  swapRequests = [],
+  callSchedule = {},
+  nightFloatSchedule = {},
+  clinicDays = {},
+  pgyLevels = {},
   setSchedule,
   setVacations,
+  setSwapRequests,
   isAdmin = true,
 }) {
   const { profile, user, canApprove, isFellow, isProgramDirector, isChiefFellow } = useAuth();
 
+  // Sub-view toggle: 'timeoff' or 'swaps'
+  const [subView, setSubView] = useState('timeoff');
+
   // Supabase-backed state
   const [dbRequests, setDbRequests] = useState([]);
+  const [dbSwapRequests, setDbSwapRequests] = useState([]);
   const [dbFellows, setDbFellows] = useState([]);
   const [loadingDb, setLoadingDb] = useState(false);
   const [dbError, setDbError] = useState(null);
@@ -61,8 +73,29 @@ export default function VacationsView({
 
       if (requestsErr) throw requestsErr;
       setDbRequests(requestsData || []);
+
+      // Fetch swap requests
+      const { data: swapsData, error: swapsErr } = await supabase
+        .from('swap_requests')
+        .select(`
+          id,
+          block_number,
+          reason,
+          status,
+          notes,
+          created_at,
+          approved_at,
+          requested_by,
+          approved_by,
+          requester:fellows!requester_fellow_id (id, name, pgy_level),
+          target:fellows!target_fellow_id (id, name, pgy_level)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (swapsErr) throw swapsErr;
+      setDbSwapRequests(swapsData || []);
     } catch (err) {
-      console.error('Error fetching vacation requests:', err);
+      console.error('Error fetching requests:', err);
       setDbError(err.message);
     } finally {
       setLoadingDb(false);
@@ -73,7 +106,7 @@ export default function VacationsView({
     fetchRequests();
   }, [fetchRequests]);
 
-  // --- Supabase approve/deny ---
+  // --- Supabase approve/deny vacations ---
   const approveDbRequest = async (requestId) => {
     if (!canApprove()) return;
     setSubmitting(true);
@@ -116,7 +149,50 @@ export default function VacationsView({
     }
   };
 
-  // --- Supabase new request ---
+  // --- Supabase approve/deny swaps ---
+  const approveDbSwap = async (requestId) => {
+    if (!canApprove()) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('swap_requests')
+        .update({
+          status: 'approved',
+          approved_by: user.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+      await fetchRequests();
+    } catch (err) {
+      console.error('Error approving swap:', err);
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const denyDbSwap = async (requestId) => {
+    if (!canApprove()) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('swap_requests')
+        .update({ status: 'denied' })
+        .eq('id', requestId);
+
+      if (error) throw error;
+      await fetchRequests();
+    } catch (err) {
+      console.error('Error denying swap:', err);
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // --- Supabase new vacation request ---
   const [newDbReq, setNewDbReq] = useState({ fellow_id: '', start_block: 1, end_block: 1, reason: 'Vacation' });
 
   const submitDbRequest = async () => {
@@ -124,7 +200,6 @@ export default function VacationsView({
     setSubmitting(true);
     setDbError(null);
     try {
-      // Look up block_date IDs for the selected block numbers
       const { data: blocks, error: blocksErr } = await supabase
         .from('block_dates')
         .select('id, block_number')
@@ -165,8 +240,43 @@ export default function VacationsView({
     }
   };
 
+  // --- Supabase new swap request ---
+  const [newDbSwap, setNewDbSwap] = useState({ requester_id: '', target_id: '', block_number: 1, reason: '' });
+
+  const submitDbSwap = async () => {
+    if (!newDbSwap.requester_id || !newDbSwap.target_id) return;
+    if (newDbSwap.requester_id === newDbSwap.target_id) {
+      setDbError('Cannot swap with yourself.');
+      return;
+    }
+    setSubmitting(true);
+    setDbError(null);
+    try {
+      const { error } = await supabase
+        .from('swap_requests')
+        .insert({
+          requester_fellow_id: newDbSwap.requester_id,
+          target_fellow_id: newDbSwap.target_id,
+          block_number: newDbSwap.block_number,
+          reason: newDbSwap.reason || null,
+          status: 'pending',
+          requested_by: user.id,
+        });
+
+      if (error) throw error;
+      setNewDbSwap({ requester_id: '', target_id: '', block_number: 1, reason: '' });
+      await fetchRequests();
+    } catch (err) {
+      console.error('Error submitting swap:', err);
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // --- Local-only fallback (original logic) ---
   const [newReq, setNewReq] = useState({ fellow: fellows[0] || '', startBlock: 1, endBlock: 1, reason: 'Vacation', status: 'pending' });
+  const [newSwap, setNewSwap] = useState({ requester: fellows[0] || '', target: fellows[1] || '', block: 1, reason: '' });
 
   const approveRequest = (idx) => {
     if (!isAdmin) return;
@@ -206,6 +316,133 @@ export default function VacationsView({
     setNewReq({ fellow: fellows[0] || '', startBlock: 1, endBlock: 1, reason: 'Vacation', status: 'pending' });
   };
 
+  // --- Local swap logic ---
+  const approveSwap = (idx) => {
+    if (!isAdmin) return;
+    const pending = swapRequests.filter(s => s.status === 'pending');
+    const req = pending[idx];
+    if (!req) return;
+
+    if (setSchedule) {
+      setSchedule((prev) => {
+        const next = { ...prev };
+        const blockIdx = req.block - 1;
+        const reqArr = [...(next[req.requester] || [])];
+        const tgtArr = [...(next[req.target] || [])];
+        const temp = reqArr[blockIdx];
+        reqArr[blockIdx] = tgtArr[blockIdx];
+        tgtArr[blockIdx] = temp;
+        next[req.requester] = reqArr;
+        next[req.target] = tgtArr;
+        return next;
+      });
+    }
+
+    setSwapRequests(swapRequests.map(s =>
+      s === req ? { ...s, status: 'approved' } : s
+    ));
+  };
+
+  const denySwap = (idx) => {
+    if (!isAdmin) return;
+    const pending = swapRequests.filter(s => s.status === 'pending');
+    const req = pending[idx];
+    if (!req) return;
+    setSwapRequests(swapRequests.filter(s => s !== req));
+  };
+
+  const submitNewSwap = () => {
+    if (!newSwap.requester || !newSwap.target || newSwap.requester === newSwap.target) return;
+    setSwapRequests([...(swapRequests || []), { ...newSwap, status: 'pending' }]);
+    setNewSwap({ requester: fellows[0] || '', target: fellows[1] || '', block: 1, reason: '' });
+  };
+
+  // --- Helper: get call/float/clinic info for a fellow at a block ---
+  const getBlockDetails = useCallback((fellowName, blockNum) => {
+    const details = [];
+    const rotation = schedule[fellowName]?.[blockNum - 1] || '—';
+    details.push({ label: 'Rotation', value: rotation });
+
+    // Clinic day
+    const clinicDay = clinicDays[fellowName];
+    if (clinicDay !== undefined) {
+      details.push({ label: 'Clinic', value: DAY_NAMES[clinicDay] });
+    }
+
+    // Call assignments for this block
+    const w1Key = `B${blockNum}-W1`;
+    const w2Key = `B${blockNum}-W2`;
+    const calls = [];
+    if (callSchedule[w1Key] === fellowName) calls.push('W1');
+    if (callSchedule[w2Key] === fellowName) calls.push('W2');
+    if (calls.length > 0) details.push({ label: 'Call', value: calls.join(', ') });
+
+    // Night float assignments for this block
+    const floats = [];
+    if (nightFloatSchedule[w1Key] === fellowName) floats.push('W1');
+    if (nightFloatSchedule[w2Key] === fellowName) floats.push('W2');
+    if (floats.length > 0) details.push({ label: 'Float', value: floats.join(', ') });
+
+    return details;
+  }, [schedule, callSchedule, nightFloatSchedule, clinicDays]);
+
+  // --- Swap preview component (shows both fellows' details at the selected block) ---
+  const SwapPreview = ({ requester, target, block }) => {
+    if (!requester || !target || requester === target) return null;
+    const reqDetails = getBlockDetails(requester, block);
+    const tgtDetails = getBlockDetails(target, block);
+
+    return (
+      <div className="mt-2 p-2 rounded border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-xs">
+        <div className="font-semibold mb-1 dark:text-blue-200">Swap Preview — Block {block}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="font-medium dark:text-gray-200">{requester}</div>
+            {reqDetails.map(d => (
+              <div key={d.label} className="text-gray-600 dark:text-gray-400">
+                {d.label}: <span className="font-medium dark:text-gray-300">{d.value}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <div className="font-medium dark:text-gray-200">{target}</div>
+            {tgtDetails.map(d => (
+              <div key={d.label} className="text-gray-600 dark:text-gray-400">
+                {d.label}: <span className="font-medium dark:text-gray-300">{d.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // --- Sub-view toggle tabs ---
+  const SubViewTabs = () => (
+    <div className="flex gap-1 mb-3">
+      <button
+        onClick={() => setSubView('timeoff')}
+        className={`px-3 py-1.5 text-xs font-semibold rounded ${
+          subView === 'timeoff'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'
+        }`}
+      >
+        Time Off
+      </button>
+      <button
+        onClick={() => setSubView('swaps')}
+        className={`px-3 py-1.5 text-xs font-semibold rounded flex items-center gap-1 ${
+          subView === 'swaps'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'
+        }`}
+      >
+        <ArrowLeftRight className="w-3 h-3" /> Swaps
+      </button>
+    </div>
+  );
+
   // =====================================================================
   // RENDER: Supabase-backed view
   // =====================================================================
@@ -214,10 +451,13 @@ export default function VacationsView({
     const approvedRequests = dbRequests.filter(r => r.status === 'approved');
     const deniedRequests = dbRequests.filter(r => r.status === 'denied');
 
+    const pendingSwaps = dbSwapRequests.filter(r => r.status === 'pending');
+    const approvedSwaps = dbSwapRequests.filter(r => r.status === 'approved');
+    const deniedSwaps = dbSwapRequests.filter(r => r.status === 'denied');
+
     const userCanApprove = canApprove();
     const userIsFellow = isFellow();
 
-    // Fellows can only select themselves; directors/chiefs can select any fellow
     const selectableFellows = userIsFellow
       ? dbFellows.filter(f => f.user_id === user.id)
       : dbFellows;
@@ -231,11 +471,13 @@ export default function VacationsView({
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold">Vacation Requests</h3>
+          <h3 className="text-lg font-bold">Requests</h3>
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {isProgramDirector() ? 'Program Director' : isChiefFellow() ? 'Chief Fellow' : profile?.role}
           </div>
         </div>
+
+        <SubViewTabs />
 
         {dbError && (
           <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded p-3 text-sm text-red-700 dark:text-red-300">
@@ -248,7 +490,7 @@ export default function VacationsView({
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
             <span className="ml-2 text-sm text-gray-500">Loading requests...</span>
           </div>
-        ) : (
+        ) : subView === 'timeoff' ? (
           <>
             {/* Pending Requests */}
             <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
@@ -359,9 +601,9 @@ export default function VacationsView({
               </div>
             )}
 
-            {/* Create New Request */}
+            {/* Create New Time Off Request */}
             <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-              <div className="mb-2 font-semibold dark:text-gray-100">Create New Request</div>
+              <div className="mb-2 font-semibold dark:text-gray-100">Create New Time Off Request</div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <select
                   className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
@@ -411,6 +653,170 @@ export default function VacationsView({
               </div>
             </div>
           </>
+        ) : (
+          /* ============== SWAPS SUB-VIEW (Supabase) ============== */
+          <>
+            {/* Pending Swaps */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">
+                Pending Swaps ({pendingSwaps.length})
+              </div>
+              {pendingSwaps.length === 0 && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">No pending swap requests</div>
+              )}
+              <div className="space-y-2">
+                {pendingSwaps.map((r) => (
+                  <div key={r.id} className="border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm">
+                        <div className="font-semibold dark:text-gray-100 flex items-center gap-1">
+                          {r.requester?.name ?? '?'}
+                          <ArrowLeftRight className="w-3 h-3 text-blue-500" />
+                          {r.target?.name ?? '?'}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          Block {r.block_number}{r.reason ? ` — ${r.reason}` : ''}
+                        </div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                          Submitted {new Date(r.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      {userCanApprove && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => approveDbSwap(r.id)}
+                            disabled={submitting}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-3 h-3" /> Approve
+                          </button>
+                          <button
+                            onClick={() => denyDbSwap(r.id)}
+                            disabled={submitting}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          >
+                            <AlertTriangle className="w-3 h-3" /> Deny
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {r.requester?.name && r.target?.name && (
+                      <SwapPreview requester={r.requester.name} target={r.target.name} block={r.block_number} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Approved Swaps */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">
+                Approved Swaps ({approvedSwaps.length})
+              </div>
+              {approvedSwaps.length === 0 && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">No approved swaps</div>
+              )}
+              <div className="space-y-2">
+                {approvedSwaps.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-green-100 flex items-center gap-1">
+                        {r.requester?.name ?? '?'}
+                        <ArrowLeftRight className="w-3 h-3 text-green-500" />
+                        {r.target?.name ?? '?'}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-green-200">
+                        Block {r.block_number}{r.reason ? ` — ${r.reason}` : ''}
+                      </div>
+                      {r.approved_at && (
+                        <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">
+                          Approved {new Date(r.approved_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Denied Swaps */}
+            {deniedSwaps.length > 0 && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">
+                  Denied Swaps ({deniedSwaps.length})
+                </div>
+                <div className="space-y-2">
+                  {deniedSwaps.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 rounded">
+                      <div className="text-sm">
+                        <div className="font-semibold dark:text-red-100 flex items-center gap-1">
+                          {r.requester?.name ?? '?'}
+                          <ArrowLeftRight className="w-3 h-3 text-red-400" />
+                          {r.target?.name ?? '?'}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-red-200">
+                          Block {r.block_number}{r.reason ? ` — ${r.reason}` : ''}
+                        </div>
+                      </div>
+                      <div className="px-3 py-1 bg-red-600 text-white rounded text-xs">Denied</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Create New Swap Request */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">Request Schedule Swap</div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <select
+                  className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                  value={newDbSwap.requester_id}
+                  onChange={(e) => setNewDbSwap({ ...newDbSwap, requester_id: e.target.value })}
+                >
+                  <option value="">Your Fellow</option>
+                  {selectableFellows.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name} (PGY-{f.pgy_level})</option>
+                  ))}
+                </select>
+                <select
+                  className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                  value={newDbSwap.target_id}
+                  onChange={(e) => setNewDbSwap({ ...newDbSwap, target_id: e.target.value })}
+                >
+                  <option value="">Swap With</option>
+                  {dbFellows.filter(f => f.id !== newDbSwap.requester_id).map((f) => (
+                    <option key={f.id} value={f.id}>{f.name} (PGY-{f.pgy_level})</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                  min={1}
+                  max={26}
+                  placeholder="Block #"
+                  value={newDbSwap.block_number}
+                  onChange={(e) => setNewDbSwap({ ...newDbSwap, block_number: Number(e.target.value) })}
+                />
+                <input
+                  className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                  placeholder="Reason (optional)"
+                  value={newDbSwap.reason}
+                  onChange={(e) => setNewDbSwap({ ...newDbSwap, reason: e.target.value })}
+                />
+              </div>
+              <div className="mt-2">
+                <button
+                  onClick={submitDbSwap}
+                  disabled={submitting || !newDbSwap.requester_id || !newDbSwap.target_id}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs"
+                >
+                  {submitting ? 'Submitting...' : 'Request Swap'}
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     );
@@ -421,71 +827,167 @@ export default function VacationsView({
   // =====================================================================
   const pendingVacations = vacations.filter(v => !v.status || v.status === 'pending');
   const approvedVacations = vacations.filter(v => v.status === 'approved');
+  const pendingSwapsLocal = swapRequests.filter(s => s.status === 'pending');
+  const approvedSwapsLocal = swapRequests.filter(s => s.status === 'approved');
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold">Vacation Requests</h3>
-        <div className="text-sm text-gray-600">Admin controls enabled</div>
+        <h3 className="text-lg font-bold">Requests</h3>
+        <div className="text-sm text-gray-600 dark:text-gray-400">Admin controls enabled</div>
       </div>
 
-      {/* Pending Requests */}
-      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-        <div className="mb-2 font-semibold dark:text-gray-100">Pending Requests</div>
-        {pendingVacations.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No pending requests</div>}
-        <div className="space-y-2">
-          {pendingVacations.map((v, idx) => (
-            <div key={idx} className="flex items-center justify-between border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
-              <div className="text-sm">
-                <div className="font-semibold dark:text-gray-100">{v.fellow}</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Blocks {v.startBlock}–{v.endBlock} — {v.reason}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => approveRequest(idx)} className="px-3 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Approve
-                </button>
-                <button onClick={() => denyRequest(idx)} className="px-3 py-1 bg-red-600 text-white rounded text-xs flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" /> Deny
-                </button>
-              </div>
+      <SubViewTabs />
+
+      {subView === 'timeoff' ? (
+        <>
+          {/* Pending Requests */}
+          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            <div className="mb-2 font-semibold dark:text-gray-100">Pending Requests</div>
+            {pendingVacations.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No pending requests</div>}
+            <div className="space-y-2">
+              {pendingVacations.map((v, idx) => (
+                <div key={idx} className="flex items-center justify-between border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
+                  <div className="text-sm">
+                    <div className="font-semibold dark:text-gray-100">{v.fellow}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">Blocks {v.startBlock}–{v.endBlock} — {v.reason}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => approveRequest(idx)} className="px-3 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Approve
+                    </button>
+                    <button onClick={() => denyRequest(idx)} className="px-3 py-1 bg-red-600 text-white rounded text-xs flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" /> Deny
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* Approved Vacations */}
-      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-        <div className="mb-2 font-semibold dark:text-gray-100">Approved Vacations</div>
-        {approvedVacations.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved vacations</div>}
-        <div className="space-y-2">
-          {approvedVacations.map((v, idx) => (
-            <div key={idx} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
-              <div className="text-sm">
-                <div className="font-semibold dark:text-green-100">{v.fellow}</div>
-                <div className="text-xs text-gray-600 dark:text-green-200">Blocks {v.startBlock}–{v.endBlock} — {v.reason}</div>
-              </div>
-              <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">
-                Approved
-              </div>
+          {/* Approved Vacations */}
+          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            <div className="mb-2 font-semibold dark:text-gray-100">Approved Vacations</div>
+            {approvedVacations.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved vacations</div>}
+            <div className="space-y-2">
+              {approvedVacations.map((v, idx) => (
+                <div key={idx} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                  <div className="text-sm">
+                    <div className="font-semibold dark:text-green-100">{v.fellow}</div>
+                    <div className="text-xs text-gray-600 dark:text-green-200">Blocks {v.startBlock}–{v.endBlock} — {v.reason}</div>
+                  </div>
+                  <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">
+                    Approved
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-        <div className="mb-2 font-semibold dark:text-gray-100">Create New Request</div>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-          <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newReq.fellow} onChange={(e) => setNewReq({ ...newReq, fellow: e.target.value })}>
-            {fellows.map((f) => <option key={f} value={f}>{f}</option>)}
-          </select>
-          <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} value={newReq.startBlock} onChange={(e) => setNewReq({ ...newReq, startBlock: Number(e.target.value) })} />
-          <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} value={newReq.endBlock} onChange={(e) => setNewReq({ ...newReq, endBlock: Number(e.target.value) })} />
-          <input className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newReq.reason} onChange={(e) => setNewReq({ ...newReq, reason: e.target.value })} />
-        </div>
-        <div className="mt-2">
-          <button onClick={submitNewRequest} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">Add Request</button>
-        </div>
-      </div>
+          {/* Create New Time Off Request */}
+          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            <div className="mb-2 font-semibold dark:text-gray-100">Create New Time Off Request</div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newReq.fellow} onChange={(e) => setNewReq({ ...newReq, fellow: e.target.value })}>
+                {fellows.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+              <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} value={newReq.startBlock} onChange={(e) => setNewReq({ ...newReq, startBlock: Number(e.target.value) })} />
+              <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} value={newReq.endBlock} onChange={(e) => setNewReq({ ...newReq, endBlock: Number(e.target.value) })} />
+              <input className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newReq.reason} onChange={(e) => setNewReq({ ...newReq, reason: e.target.value })} />
+            </div>
+            <div className="mt-2">
+              <button onClick={submitNewRequest} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">Add Request</button>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* ============== SWAPS SUB-VIEW (Local) ============== */
+        <>
+          {/* Pending Swaps */}
+          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            <div className="mb-2 font-semibold dark:text-gray-100">Pending Swaps ({pendingSwapsLocal.length})</div>
+            {pendingSwapsLocal.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No pending swap requests</div>}
+            <div className="space-y-2">
+              {pendingSwapsLocal.map((s, idx) => (
+                <div key={idx} className="border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-gray-100 flex items-center gap-1">
+                        {s.requester}
+                        <ArrowLeftRight className="w-3 h-3 text-blue-500" />
+                        {s.target}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        Block {s.block}{s.reason ? ` — ${s.reason}` : ''}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => approveSwap(idx)} className="px-3 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Approve
+                      </button>
+                      <button onClick={() => denySwap(idx)} className="px-3 py-1 bg-red-600 text-white rounded text-xs flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Deny
+                      </button>
+                    </div>
+                  </div>
+                  <SwapPreview requester={s.requester} target={s.target} block={s.block} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Approved Swaps */}
+          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            <div className="mb-2 font-semibold dark:text-gray-100">Approved Swaps ({approvedSwapsLocal.length})</div>
+            {approvedSwapsLocal.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved swaps</div>}
+            <div className="space-y-2">
+              {approvedSwapsLocal.map((s, idx) => (
+                <div key={idx} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                  <div className="text-sm">
+                    <div className="font-semibold dark:text-green-100 flex items-center gap-1">
+                      {s.requester}
+                      <ArrowLeftRight className="w-3 h-3 text-green-500" />
+                      {s.target}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-green-200">
+                      Block {s.block}{s.reason ? ` — ${s.reason}` : ''}
+                    </div>
+                  </div>
+                  <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Create New Swap Request */}
+          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            <div className="mb-2 font-semibold dark:text-gray-100">Request Schedule Swap</div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newSwap.requester} onChange={(e) => setNewSwap({ ...newSwap, requester: e.target.value })}>
+                {fellows.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+              <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newSwap.target} onChange={(e) => setNewSwap({ ...newSwap, target: e.target.value })}>
+                {fellows.filter(f => f !== newSwap.requester).map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+              <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} value={newSwap.block} onChange={(e) => setNewSwap({ ...newSwap, block: Number(e.target.value) })} />
+              <input className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" placeholder="Reason (optional)" value={newSwap.reason} onChange={(e) => setNewSwap({ ...newSwap, reason: e.target.value })} />
+            </div>
+
+            {/* Live swap preview */}
+            <SwapPreview requester={newSwap.requester} target={newSwap.target} block={newSwap.block} />
+
+            <div className="mt-2">
+              <button
+                onClick={submitNewSwap}
+                disabled={!newSwap.requester || !newSwap.target || newSwap.requester === newSwap.target}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs"
+              >
+                Request Swap
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

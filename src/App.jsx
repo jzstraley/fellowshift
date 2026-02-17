@@ -5,9 +5,10 @@ import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
 import CookieConsent from "./components/CookieConsent";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { initialSchedule, initialVacations, pgyLevels, clinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule } from "./data/scheduleData";
+import { initialSchedule, initialVacations, initialSwapRequests, pgyLevels, clinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule } from "./data/scheduleData";
 import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
+import { checkAllWorkHourViolations } from "./engine/workHourChecker";
 import { deriveKey, encryptAndStore, loadAndDecrypt, clearSensitiveStorage } from "./utils/secureStorage";
 
 // ✅ LAZY LOAD ALL VIEWS
@@ -21,6 +22,7 @@ const ClinicCoverageView = lazy(() => import("./components/ClinicCoverageView"))
 const LectureCalendarView = lazy(() => import("./components/LectureCalendarView"));
 const SpeakerTopicManager = lazy(() => import("./components/SpeakerTopicManager"));
 const VacationsView = lazy(() => import("./components/VacationsView"));
+const ViolationsView = lazy(() => import("./components/ViolationsView"));
 const ProfileSettings = lazy(() => import("./components/ProfileSettings"));
 
 const STORAGE_KEY = "fellowship_scheduler_v1";
@@ -96,6 +98,7 @@ function AppContent() {
 
   const [schedule, setSchedule] = useState(initialSchedule);
   const [vacations, setVacations] = useState(initialVacations);
+  const [swapRequests, setSwapRequests] = useState(initialSwapRequests);
   const [callSchedule, setCallSchedule] = useState(initialCallSchedule);
   const [nightFloatSchedule, setNightFloatSchedule] = useState(initialNightFloatSchedule);
 
@@ -126,6 +129,7 @@ function AppContent() {
 
       if (persisted?.schedule && typeof persisted.schedule === "object") setSchedule(persisted.schedule);
       if (Array.isArray(persisted?.vacations)) setVacations(persisted.vacations);
+      if (Array.isArray(persisted?.swapRequests)) setSwapRequests(persisted.swapRequests);
       if (persisted?.callSchedule && typeof persisted.callSchedule === "object") setCallSchedule(persisted.callSchedule);
       if (persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object") setNightFloatSchedule(persisted.nightFloatSchedule);
 
@@ -227,6 +231,18 @@ function AppContent() {
     return map;
   }, [callSchedule, nightFloatSchedule]);
 
+  // ACGME work-hour violation checker
+  const workHourViolations = useMemo(() => {
+    return checkAllWorkHourViolations({
+      fellows,
+      schedule,
+      callSchedule,
+      nightFloatSchedule,
+      blockDates,
+      vacations,
+    });
+  }, [fellows, schedule, callSchedule, nightFloatSchedule, vacations]);
+
   // Save schedule data (encrypted)
   useEffect(() => {
     if (!dataReady || !cryptoKeyRef.current) return;
@@ -234,13 +250,14 @@ function AppContent() {
       encryptAndStore(cryptoKeyRef.current, STORAGE_KEY, {
         schedule,
         vacations,
+        swapRequests,
         callSchedule,
         nightFloatSchedule,
       });
     }, 150);
 
     return () => clearTimeout(t);
-  }, [schedule, vacations, callSchedule, nightFloatSchedule, dataReady]);
+  }, [schedule, vacations, swapRequests, callSchedule, nightFloatSchedule, dataReady]);
 
   // Save lecture data (encrypted)
   useEffect(() => {
@@ -364,6 +381,7 @@ function AppContent() {
     clearSensitiveStorage();
     setSchedule(initialSchedule);
     setVacations(initialVacations);
+    setSwapRequests(initialSwapRequests);
     setCallSchedule({});
     setNightFloatSchedule({});
     setLectures(initialLectures);
@@ -459,6 +477,7 @@ function AppContent() {
         darkMode={darkMode}
         toggleDarkMode={toggleDarkMode}
         onLogoClick={() => setShowLanding(true)}
+        violationCount={workHourViolations.length}
       />
 
       <div className="p-3 pb-16">
@@ -468,6 +487,7 @@ function AppContent() {
               fellows={fellows}
               schedule={schedule}
               vacations={vacations}
+              workHourViolations={workHourViolations}
             />
           )}
 
@@ -481,6 +501,7 @@ function AppContent() {
               fellows={fellows}
               pgyLevels={pgyLevels}
               onOptimize={debouncedGenerate}
+              workHourViolations={workHourViolations}
             />
           )}
 
@@ -527,6 +548,10 @@ function AppContent() {
           )}
 
 
+          {activeView === "violations" && (
+            <ViolationsView violations={workHourViolations} />
+          )}
+
           {(activeView === "profile" || activeView === "settings") && (
             <ProfileSettings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
           )}
@@ -536,8 +561,14 @@ function AppContent() {
               fellows={fellows}
               schedule={schedule}
               vacations={vacations}
+              swapRequests={swapRequests}
+              callSchedule={callSchedule}
+              nightFloatSchedule={nightFloatSchedule}
+              clinicDays={clinicDays}
+              pgyLevels={pgyLevels}
               setSchedule={setSchedule}
               setVacations={setVacations}
+              setSwapRequests={setSwapRequests}
               isAdmin={true}
             />
           )}

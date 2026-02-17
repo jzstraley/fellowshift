@@ -9,6 +9,7 @@ export default function HeaderBar({
   darkMode,
   toggleDarkMode,
   onLogoClick,
+  violationCount = 0,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -43,8 +44,9 @@ export default function HeaderBar({
     { key: "call", label: "Call/Float" },
     { key: "calendar", label: "Calendar" },
     { key: "clinic", label: "Clinic" },
-    { key: "vacRequests", label: "Vacations" },
+    { key: "vacRequests", label: "Requests" },
     { key: "lectures", label: "Lectures" },
+    { key: "violations", label: "Violations" },
   ];
 
   return (
@@ -179,7 +181,7 @@ export default function HeaderBar({
           <button
             key={v.key}
             onClick={() => setActiveView(v.key)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded ${
+            className={`relative px-3 py-1.5 text-xs font-semibold rounded ${
               activeView === v.key
                 ? "bg-blue-600 text-white"
                 : darkMode
@@ -188,6 +190,11 @@ export default function HeaderBar({
             }`}
           >
             {v.label}
+            {v.key === "violations" && violationCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-bold text-white bg-red-500 rounded-full">
+                {violationCount > 99 ? '99+' : violationCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -202,7 +209,7 @@ export default function HeaderBar({
                 setActiveView(v.key);
                 setMobileMenuOpen(false);
               }}
-              className={`px-2 py-2 text-xs font-semibold rounded ${
+              className={`relative px-2 py-2 text-xs font-semibold rounded ${
                 activeView === v.key
                   ? "bg-blue-600 text-white"
                   : darkMode
@@ -211,6 +218,11 @@ export default function HeaderBar({
               }`}
             >
               {v.label}
+              {v.key === "violations" && violationCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[8px] font-bold text-white bg-red-500 rounded-full">
+                  {violationCount > 99 ? '99+' : violationCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
