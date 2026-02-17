@@ -8,7 +8,7 @@
  */
 const SHIFT_TEMPLATES = {
   // 12-hour rotations
-  'ICU':        { startHour: 7, endHour: 19, hours: 12, isNight: false, weekdaysOnly: false },
+  'ICU':        { startHour: 7, endHour: 19, hours: 12, isNight: false, weekdaysOnly: true },
   'Nights':     { startHour: 19, endHour: 7, hours: 12, isNight: true, weekdaysOnly: true },
 
   // 10-hour rotations (weekdays)
