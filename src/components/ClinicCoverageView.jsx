@@ -204,7 +204,7 @@ const CANNOT_COVER_ROTATIONS = [
                     </td>
 
                     <td className="px-2 py-2">
-                      <span className="font-semibold">{entry.absent}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold">{entry.absent}</span>
                       <span
                         className={`ml-1 px-1 py-0.5 rounded text-[8px] font-semibold ${getRotationColor(
                           "Nights"
@@ -224,7 +224,7 @@ const CANNOT_COVER_ROTATIONS = [
                     <td className="px-2 py-2">
                       {entry.coverer ? (
                         <span>
-                          <span className="font-semibold">{entry.coverer}</span>
+                          <span className={`px-1.5 py-0.5 rounded font-semibold ${getRotationColor(entry.covererRotation)}`}>{entry.coverer}</span>
                           <span className="text-[8px] text-gray-400 ml-1">
                             ({clinicDayName(entry.covererClinicDay)})
                           </span>

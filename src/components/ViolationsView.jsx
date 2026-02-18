@@ -1,6 +1,7 @@
 // src/components/ViolationsView.jsx
-import { useState, useMemo } from "react";
-import { AlertTriangle, CheckCircle, Filter, X } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { AlertTriangle, CheckCircle, Filter, X, Lightbulb, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { generateSuggestions } from "../engine/violationSuggester";
 
 const RULE_LABELS = {
   '80hr_weekly_avg': '80h Weekly Avg',
@@ -24,12 +25,31 @@ const SEVERITY_STYLES = {
   },
 };
 
-export default function ViolationsView({ violations = [] }) {
+export default function ViolationsView({
+  violations = [],
+  schedule,
+  setSchedule,
+  callSchedule,
+  setCallSchedule,
+  nightFloatSchedule,
+  setNightFloatSchedule,
+  fellows,
+  blockDates,
+  vacations,
+}) {
   const [fellowFilter, setFellowFilter] = useState(null);
   const [ruleFilter, setRuleFilter] = useState(null);
   const [severityFilter, setSeverityFilter] = useState(null);
 
-  const fellows = useMemo(() => {
+  // Track which violation row has suggestions expanded (by index in filtered list)
+  const [expandedRow, setExpandedRow] = useState(null);
+  // Cache generated suggestions per violation key
+  const [suggestionsCache, setSuggestionsCache] = useState({});
+  const [loadingRow, setLoadingRow] = useState(null);
+
+  const canSuggest = schedule && fellows && blockDates;
+
+  const uniqueFellows = useMemo(() => {
     const set = new Set(violations.map(v => v.fellow));
     return Array.from(set).sort();
   }, [violations]);
@@ -52,6 +72,64 @@ export default function ViolationsView({ violations = [] }) {
   const warnCount = violations.filter(v => v.severity === 'warn').length;
 
   const hasFilters = fellowFilter || ruleFilter || severityFilter;
+
+  // Build a unique key for a violation to use as cache key
+  const violationKey = useCallback((v) =>
+    `${v.fellow}|${v.rule}|${v.startDate}|${v.endDate}`, []);
+
+  const handleSuggestFix = useCallback((v, rowIdx) => {
+    if (expandedRow === rowIdx) {
+      setExpandedRow(null);
+      return;
+    }
+
+    const key = violationKey(v);
+    if (suggestionsCache[key]) {
+      setExpandedRow(rowIdx);
+      return;
+    }
+
+    // Generate suggestions lazily
+    setLoadingRow(rowIdx);
+    setExpandedRow(rowIdx);
+
+    // Use setTimeout to avoid blocking UI paint
+    setTimeout(() => {
+      const results = generateSuggestions(v, {
+        fellows,
+        schedule,
+        callSchedule,
+        nightFloatSchedule,
+        blockDates,
+        vacations,
+      });
+      setSuggestionsCache(prev => ({ ...prev, [key]: results }));
+      setLoadingRow(null);
+    }, 0);
+  }, [expandedRow, suggestionsCache, violationKey, fellows, schedule, callSchedule, nightFloatSchedule, blockDates, vacations]);
+
+  const handleApply = useCallback((suggestion) => {
+    if (suggestion.type === 'rotationSwap') {
+      const { fellowA, fellowB, blockIndex } = suggestion.apply;
+      setSchedule(prev => {
+        const next = {};
+        for (const f of Object.keys(prev)) next[f] = [...prev[f]];
+        const temp = next[fellowA][blockIndex];
+        next[fellowA][blockIndex] = next[fellowB][blockIndex];
+        next[fellowB][blockIndex] = temp;
+        return next;
+      });
+    } else if (suggestion.type === 'callReassign') {
+      const { weekendKey, toFellow } = suggestion.apply;
+      setCallSchedule(prev => ({ ...prev, [weekendKey]: toFellow }));
+    } else if (suggestion.type === 'floatReassign') {
+      const { weekendKey, toFellow } = suggestion.apply;
+      setNightFloatSchedule(prev => ({ ...prev, [weekendKey]: toFellow }));
+    }
+    // Clear cache and collapse since violations will recompute
+    setSuggestionsCache({});
+    setExpandedRow(null);
+  }, [setSchedule, setCallSchedule, setNightFloatSchedule]);
 
   if (violations.length === 0) {
     return (
@@ -117,7 +195,7 @@ export default function ViolationsView({ violations = [] }) {
           className="text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-200"
         >
           <option value="">All Fellows</option>
-          {fellows.map(f => <option key={f} value={f}>{f}</option>)}
+          {uniqueFellows.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
 
         {/* Rule filter */}
@@ -155,35 +233,117 @@ export default function ViolationsView({ violations = [] }) {
               <th className="px-3 py-2 font-semibold text-gray-600 dark:text-gray-300">Block</th>
               <th className="px-3 py-2 font-semibold text-gray-600 dark:text-gray-300">Dates</th>
               <th className="px-3 py-2 font-semibold text-gray-600 dark:text-gray-300">Details</th>
+              {canSuggest && (
+                <th className="px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 w-24">Fix</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {filtered.map((v, i) => {
               const sev = SEVERITY_STYLES[v.severity] || SEVERITY_STYLES.warn;
+              const isExpanded = expandedRow === i;
+              const key = violationKey(v);
+              const suggestions = suggestionsCache[key];
+              const isLoading = loadingRow === i;
+
               return (
-                <tr key={i} className={`${sev.row} bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800`}>
-                  <td className="px-3 py-2 font-medium dark:text-gray-200">{v.fellow}</td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${sev.badge}`}>
-                      {RULE_LABELS[v.rule] || v.rule}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${
-                      v.severity === 'error' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
-                      {v.severity === 'error' ? 'Error' : 'Warning'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
-                    {v.block ? `B${v.block}` : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                    {v.startDate === v.endDate ? v.startDate : `${v.startDate} — ${v.endDate}`}
-                  </td>
-                  <td className="px-3 py-2 text-gray-700 dark:text-gray-300 max-w-xs">
-                    {v.detail}
+                <tr key={i} className="contents">
+                  {/* Use a wrapper fragment so we can render the suggestion row below */}
+                  <td colSpan={canSuggest ? 7 : 6} className="p-0">
+                    <table className="w-full">
+                      <tbody>
+                        {/* Main violation row */}
+                        <tr className={`${sev.row} bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800`}>
+                          <td className="px-3 py-2 font-medium dark:text-gray-200">{v.fellow}</td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${sev.badge}`}>
+                              {RULE_LABELS[v.rule] || v.rule}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${
+                              v.severity === 'error' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${sev.dot}`} />
+                              {v.severity === 'error' ? 'Error' : 'Warning'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
+                            {v.block ? `B${v.block}` : '\u2014'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                            {v.startDate === v.endDate ? v.startDate : `${v.startDate} \u2014 ${v.endDate}`}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-300 max-w-xs">
+                            {v.detail}
+                          </td>
+                          {canSuggest && (
+                            <td className="px-3 py-2">
+                              <button
+                                onClick={() => handleSuggestFix(v, i)}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                  isExpanded
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-300'
+                                }`}
+                              >
+                                <Lightbulb className="w-3 h-3" />
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+
+                        {/* Suggestions panel */}
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={canSuggest ? 7 : 6} className="px-4 py-3 bg-blue-50/50 dark:bg-blue-950/20">
+                              {isLoading ? (
+                                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  Analyzing possible fixes...
+                                </div>
+                              ) : suggestions && suggestions.length > 0 ? (
+                                <div className="space-y-2">
+                                  <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                    Suggested Fixes
+                                  </div>
+                                  {suggestions.map((s, si) => (
+                                    <div
+                                      key={si}
+                                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                                    >
+                                      <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                          s.type === 'rotationSwap' ? 'bg-purple-500' :
+                                          s.type === 'callReassign' ? 'bg-orange-500' : 'bg-indigo-500'
+                                        }`} />
+                                        {s.description}
+                                        {s.netChange < 0 && (
+                                          <span className="text-[10px] text-green-600 dark:text-green-400 font-medium">
+                                            ({s.netChange} violations)
+                                          </span>
+                                        )}
+                                      </div>
+                                      <button
+                                        onClick={() => handleApply(s)}
+                                        className="shrink-0 px-2.5 py-1 rounded text-[10px] font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                      >
+                                        Apply
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  No suggestions found. This violation may require manual schedule adjustments.
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </td>
                 </tr>
               );

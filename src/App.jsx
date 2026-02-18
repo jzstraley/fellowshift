@@ -43,7 +43,7 @@ const Footer = () => (
 );
 
 function AppContent() {
-  const { signOut, profile, user, loading, isSupabaseConfigured } = useAuth();
+  const { signOut, profile, user, loading, isSupabaseConfigured, canApprove } = useAuth();
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("fellowshift_darkmode");
@@ -478,6 +478,7 @@ function AppContent() {
         toggleDarkMode={toggleDarkMode}
         onLogoClick={() => setShowLanding(true)}
         violationCount={workHourViolations.length}
+        showViolations={!isSupabaseConfigured || canApprove?.()}
       />
 
       <div className="p-3 pb-16">
@@ -548,8 +549,19 @@ function AppContent() {
           )}
 
 
-          {activeView === "violations" && (
-            <ViolationsView violations={workHourViolations} />
+          {activeView === "violations" && (!isSupabaseConfigured || canApprove?.()) && (
+            <ViolationsView
+              violations={workHourViolations}
+              schedule={schedule}
+              setSchedule={setSchedule}
+              callSchedule={callSchedule}
+              setCallSchedule={setCallSchedule}
+              nightFloatSchedule={nightFloatSchedule}
+              setNightFloatSchedule={setNightFloatSchedule}
+              fellows={fellows}
+              blockDates={blockDates}
+              vacations={vacations}
+            />
           )}
 
           {(activeView === "profile" || activeView === "settings") && (

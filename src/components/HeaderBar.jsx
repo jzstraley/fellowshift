@@ -10,6 +10,7 @@ export default function HeaderBar({
   toggleDarkMode,
   onLogoClick,
   violationCount = 0,
+  showViolations = false,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -46,7 +47,7 @@ export default function HeaderBar({
     { key: "clinic", label: "Clinic" },
     { key: "vacRequests", label: "Requests" },
     { key: "lectures", label: "Lectures" },
-    { key: "violations", label: "Violations" },
+    ...(showViolations ? [{ key: "violations", label: "Violations" }] : []),
   ];
 
   return (
