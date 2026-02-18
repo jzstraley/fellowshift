@@ -6,7 +6,7 @@ const PGYDividerRow = ({ pgy, colSpan }) => (
   <tr>
     <td
       colSpan={colSpan}
-      className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-xs font-extrabold text-gray-700 dark:text-gray-200"
+      className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-sm font-extrabold text-gray-700 dark:text-gray-200"
     >
       PGY-{pgy}
     </td>
@@ -37,7 +37,7 @@ export default function StatsView({ stats, fellows }) {
     >
       <td className="px-2 py-1 font-semibold sticky left-0 z-10 bg-inherit border-r border-gray-200 dark:border-gray-700 whitespace-nowrap dark:text-gray-100">
         {f}
-        <span className="ml-1 text-[8px] text-gray-400 dark:text-gray-500">PGY{pgyLevels[f]}</span>
+        <span className="ml-1 text-[10px] text-gray-400 dark:text-gray-500">PGY{pgyLevels[f]}</span>
       </td>
       <td className="px-1 py-1 text-center dark:text-gray-200">{stats[f]?.ai ?? 0}</td>
       <td className="px-1 py-1 text-center dark:text-gray-200">{stats[f]?.ai2 ?? 0}</td>
@@ -70,7 +70,7 @@ export default function StatsView({ stats, fellows }) {
     <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
       {/* One long scroll container, sticky header works inside this */}
       <div className="overflow-auto max-h-[calc(100vh-260px)]">
-        <table className="w-full text-xs border-separate border-spacing-0">
+        <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr className="bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 sticky top-0 z-30">
               <th className="px-2 py-1 text-left font-bold sticky top-0 left-0 z-40 bg-gray-200 dark:bg-gray-700 border-r border-gray-300 dark:border-gray-600 dark:text-gray-100">

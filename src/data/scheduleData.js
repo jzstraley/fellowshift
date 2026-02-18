@@ -135,6 +135,13 @@ export const initialNightFloatSchedule = {
 
 export const initialSwapRequests = [];
 
+export const allRotationTypes = [
+  '', 'AI', 'AI 2', 'AI 3', 'Admin', 'CTS', 'Cath', 'Cath 2', 'Cath 3',
+  'E', 'EP', 'Echo', 'Echo 2', 'Floor A', 'Floor B', 'ICU',
+  'Nights', 'Nuclear', 'Nuclear 2', 'Research', 'Research 2',
+  'SPC', 'Structural', 'Vascular'
+];
+
 export const initialClinicSchedule = {
   'B1-W1': 'Yousafzai',    'B1-W2': 'Straley',
   'B2-W1': 'Straley',      'B2-W2': 'Yousafzai',

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-02-18
+
+- Added ACGME work hour violation checker engine that builds a day-by-day shift timeline per fellow and flags 80h weekly average, 24+4h max shift, 1-in-7 day off, and other ACGME rule violations
+- Added Violations view with filters by fellow, rule, and severity
+- Added violation fix suggester that proposes swap/reassignment options to resolve violations without introducing new ones
+- Added "Suggest Fix" button on each violation row with expandable suggestion details
+- Added swap request workflow to Vacations view (sub-view toggle between time-off requests and swap requests)
+- Swap requests are backed by Supabase with approval/denial tracking
+- Replaced plain localStorage with AES-GCM encrypted storage; encryption key derived from user ID
+- Removed GmailIntegration component
+
 ## 2026-02-14
 
 - Added initial clinic coverage schedule (initialClinicSchedule) with pre-assigned coverers for all 26 blocks, balanced at 4 covers per fellow

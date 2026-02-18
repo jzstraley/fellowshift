@@ -5,7 +5,7 @@ import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
 import CookieConsent from "./components/CookieConsent";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { initialSchedule, initialVacations, initialSwapRequests, pgyLevels, clinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule } from "./data/scheduleData";
+import { initialSchedule, initialVacations, initialSwapRequests, pgyLevels, clinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule, allRotationTypes } from "./data/scheduleData";
 import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
 import { checkAllWorkHourViolations } from "./engine/workHourChecker";
@@ -23,6 +23,7 @@ const LectureCalendarView = lazy(() => import("./components/LectureCalendarView"
 const SpeakerTopicManager = lazy(() => import("./components/SpeakerTopicManager"));
 const VacationsView = lazy(() => import("./components/VacationsView"));
 const ViolationsView = lazy(() => import("./components/ViolationsView"));
+const ScheduleEditorView = lazy(() => import("./components/ScheduleEditorView"));
 const ProfileSettings = lazy(() => import("./components/ProfileSettings"));
 
 const STORAGE_KEY = "fellowship_scheduler_v1";
@@ -101,6 +102,7 @@ function AppContent() {
   const [swapRequests, setSwapRequests] = useState(initialSwapRequests);
   const [callSchedule, setCallSchedule] = useState(initialCallSchedule);
   const [nightFloatSchedule, setNightFloatSchedule] = useState(initialNightFloatSchedule);
+  const [dayOverrides, setDayOverrides] = useState({});
 
   // Lecture system state
   const [lectures, setLectures] = useState(initialLectures);
@@ -132,6 +134,7 @@ function AppContent() {
       if (Array.isArray(persisted?.swapRequests)) setSwapRequests(persisted.swapRequests);
       if (persisted?.callSchedule && typeof persisted.callSchedule === "object") setCallSchedule(persisted.callSchedule);
       if (persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object") setNightFloatSchedule(persisted.nightFloatSchedule);
+      if (persisted?.dayOverrides && typeof persisted.dayOverrides === "object") setDayOverrides(persisted.dayOverrides);
 
       if (Array.isArray(persistedLectures?.lectures)) setLectures(persistedLectures.lectures);
       if (Array.isArray(persistedLectures?.speakers)) setSpeakers(persistedLectures.speakers);
@@ -253,11 +256,12 @@ function AppContent() {
         swapRequests,
         callSchedule,
         nightFloatSchedule,
+        dayOverrides,
       });
     }, 150);
 
     return () => clearTimeout(t);
-  }, [schedule, vacations, swapRequests, callSchedule, nightFloatSchedule, dataReady]);
+  }, [schedule, vacations, swapRequests, callSchedule, nightFloatSchedule, dayOverrides, dataReady]);
 
   // Save lecture data (encrypted)
   useEffect(() => {
@@ -384,6 +388,7 @@ function AppContent() {
     setSwapRequests(initialSwapRequests);
     setCallSchedule({});
     setNightFloatSchedule({});
+    setDayOverrides({});
     setLectures(initialLectures);
     setSpeakers(initialSpeakers);
     setTopics(initialTopics);
@@ -479,6 +484,7 @@ function AppContent() {
         onLogoClick={() => setShowLanding(true)}
         violationCount={workHourViolations.length}
         showViolations={!isSupabaseConfigured || canApprove?.()}
+        showEdit={!isSupabaseConfigured || canApprove?.()}
       />
 
       <div className="p-3 pb-16">
@@ -489,6 +495,8 @@ function AppContent() {
               schedule={schedule}
               vacations={vacations}
               workHourViolations={workHourViolations}
+              clinicDays={clinicDays}
+              blockDates={blockDates}
             />
           )}
 
@@ -561,6 +569,21 @@ function AppContent() {
               fellows={fellows}
               blockDates={blockDates}
               vacations={vacations}
+            />
+          )}
+
+          {activeView === "editSchedule" && (!isSupabaseConfigured || canApprove?.()) && (
+            <ScheduleEditorView
+              fellows={fellows}
+              schedule={schedule}
+              setSchedule={setSchedule}
+              dayOverrides={dayOverrides}
+              setDayOverrides={setDayOverrides}
+              pgyLevels={pgyLevels}
+              blockDates={blockDates}
+              clinicDays={clinicDays}
+              vacations={vacations}
+              workHourViolations={workHourViolations}
             />
           )}
 

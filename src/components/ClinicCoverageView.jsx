@@ -93,29 +93,29 @@ const CANNOT_COVER_ROTATIONS = [
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 p-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="text-sm dark:text-gray-200">
+            <div className="text-base dark:text-gray-200">
               <span className="font-bold">{coverageEntries.length}</span> weekly coverage slots
             </div>
 
-            <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-base text-gray-600 dark:text-gray-400">
               Assigned: <span className="font-bold">{totalAssignments}</span> (Target total:{" "}
               <span className="font-bold">{targetTotal}</span>)
             </div>
 
             {noCoverageCount > 0 ? (
-              <div className="flex items-center gap-1 text-red-600 text-sm font-bold">
+              <div className="flex items-center gap-1 text-red-600 text-base font-bold">
                 <AlertTriangle className="w-4 h-4" />
                 {noCoverageCount} missing
               </div>
             ) : (
-              <div className="flex items-center gap-1 text-green-600 text-sm font-bold">
+              <div className="flex items-center gap-1 text-green-600 text-base font-bold">
                 <CheckCircle className="w-4 h-4" />
                 All covered
               </div>
             )}
           </div>
 
-          <div className="text-[10px] text-gray-500">
+          <div className="text-xs text-gray-500">
             Optimized toward 4 per fellow, relaxations flagged
           </div>
         </div>
@@ -124,11 +124,11 @@ const CANNOT_COVER_ROTATIONS = [
       {/* Coverage Table */}
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
-          <h3 className="font-bold text-sm flex items-center gap-2 dark:text-gray-100">
+          <h3 className="font-bold text-base flex items-center gap-2 dark:text-gray-100">
             <Calendar className="w-4 h-4" />
             Weekly Clinic Coverage for Nights
           </h3>
-          <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
             Week slots are blockStart-anchored and clamped to block end dates
           </p>
         </div>
@@ -137,7 +137,7 @@ const CANNOT_COVER_ROTATIONS = [
           className="overflow-x-auto max-h-[400px] overflow-y-auto"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
-          <table className="min-w-full text-[10px]">
+          <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-gray-200 dark:bg-gray-700 z-10">
               <tr className="border-b border-gray-400 dark:border-gray-600">
                 <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Blk</th>
@@ -182,17 +182,17 @@ const CANNOT_COVER_ROTATIONS = [
                       <div className="flex items-center gap-1">
                         <div>W{entry.week}</div>
                         {entry.relaxedSameClinicDay && (
-                          <span className="px-1 rounded text-[8px] font-bold bg-yellow-200 text-yellow-900">
+                          <span className="px-1 rounded text-[10px] font-bold bg-yellow-200 text-yellow-900">
                             RELAX
                           </span>
                         )}
                         {!entry.relaxedSameClinicDay && entry.relaxedBackToBack && (
-                          <span className="px-1 rounded text-[8px] font-bold bg-amber-200 text-amber-900">
+                          <span className="px-1 rounded text-[10px] font-bold bg-amber-200 text-amber-900">
                             B2B
                           </span>
                         )}
                       </div>
-                      <div className="text-[8px] text-gray-400">
+                      <div className="text-[10px] text-gray-400">
                         {`${weekStart.toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -206,7 +206,7 @@ const CANNOT_COVER_ROTATIONS = [
                     <td className="px-2 py-2">
                       <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold">{entry.absent}</span>
                       <span
-                        className={`ml-1 px-1 py-0.5 rounded text-[8px] font-semibold ${getRotationColor(
+                        className={`ml-1 px-1 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(
                           "Nights"
                         )}`}
                       >
@@ -216,7 +216,7 @@ const CANNOT_COVER_ROTATIONS = [
 
                     <td className="px-2 py-2 text-left text-gray-700 dark:text-gray-300">
                       <div className="font-semibold">{clinicDayName(entry.absentClinicDay)}</div>
-                      <div className="text-[8px] text-gray-500 dark:text-gray-400">{formatClinicDate(clinicDate)}</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400">{formatClinicDate(clinicDate)}</div>
                     </td>
 
                     <td className="px-2 py-2 text-center text-gray-400 dark:text-gray-500">→</td>
@@ -225,7 +225,7 @@ const CANNOT_COVER_ROTATIONS = [
                       {entry.coverer ? (
                         <span>
                           <span className={`px-1.5 py-0.5 rounded font-semibold ${getRotationColor(entry.covererRotation)}`}>{entry.coverer}</span>
-                          <span className="text-[8px] text-gray-400 ml-1">
+                          <span className="text-[10px] text-gray-400 ml-1">
                             ({clinicDayName(entry.covererClinicDay)})
                           </span>
                         </span>
@@ -240,7 +240,7 @@ const CANNOT_COVER_ROTATIONS = [
                     <td className="px-2 py-2">
                       {entry.covererRotation ? (
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[8px] font-semibold ${getRotationColor(
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(
                             entry.covererRotation
                           )}`}
                         >
@@ -254,7 +254,7 @@ const CANNOT_COVER_ROTATIONS = [
                     <td className="px-2 py-2 text-center">
                       {entry.covererPGY ? (
                         <span
-                          className={`px-1 py-0.5 rounded text-[8px] font-bold border ${getPGYColor(
+                          className={`px-1 py-0.5 rounded text-[10px] font-bold border ${getPGYColor(
                             entry.covererPGY
                           )}`}
                         >
@@ -279,14 +279,14 @@ const CANNOT_COVER_ROTATIONS = [
       {/* Coverage Stats by PGY */}
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
-          <h3 className="font-bold text-sm dark:text-gray-100">Coverage Load Distribution</h3>
-          <p className="text-[10px] text-gray-600 dark:text-gray-400">Target: 4 per fellow</p>
+          <h3 className="font-bold text-base dark:text-gray-100">Coverage Load Distribution</h3>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Target: 4 per fellow</p>
         </div>
 
         <div className="p-3 space-y-3">
           {[4, 5, 6].map((pgy) => (
             <div key={pgy}>
-              <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">PGY-{pgy}</div>
+              <div className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">PGY-{pgy}</div>
               <div className="flex flex-wrap gap-2">
                 {statsByPGY[pgy].map((fellow) => {
                   const count = coverageStats?.[fellow] || 0;
@@ -304,7 +304,7 @@ const CANNOT_COVER_ROTATIONS = [
                           : getPGYColor(pgy)
                       }`}
                     >
-                      <div className="font-semibold text-xs dark:text-gray-100">{fellow}</div>
+                      <div className="font-semibold text-sm dark:text-gray-100">{fellow}</div>
                       <div className="flex items-baseline gap-1">
                         <span
                           className={`text-xl font-bold ${
@@ -313,9 +313,9 @@ const CANNOT_COVER_ROTATIONS = [
                         >
                           {count}
                         </span>
-                        <span className="text-[9px] text-gray-500 dark:text-gray-400">covers</span>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400">covers</span>
                       </div>
-                      <div className="text-[8px] text-gray-500 dark:text-gray-400">
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400">
                         Clinic: {clinicDayName(clinicDays[fellow])}
                       </div>
                     </div>
@@ -327,7 +327,7 @@ const CANNOT_COVER_ROTATIONS = [
         </div>
 
         <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-          <div className="text-[10px] text-gray-600 dark:text-gray-400">
+          <div className="text-xs text-gray-600 dark:text-gray-400">
             <span className="font-bold">Rules:</span> PGY-4s excluded blocks 1-4 • PGY-6s excluded blocks 21+ •
             B2B avoided unless needed • Same clinic day avoided unless needed
           </div>

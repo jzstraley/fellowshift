@@ -11,6 +11,7 @@ export default function HeaderBar({
   onLogoClick,
   violationCount = 0,
   showViolations = false,
+  showEdit = false,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -30,12 +31,17 @@ export default function HeaderBar({
 
   const handleSignOut = async () => {
     setUserMenuOpen(false);
-    try {
-      await signOut();
-    } catch (err) {
-      console.error('Sign out error:', err);
+    const { error: signOutError } = await signOut();
+    if (signOutError) {
+      console.error('Sign out error:', signOutError);
     }
-    // Force reload to clear all state and return to clean start
+    // Clear persisted session so reload won't restore it
+    try {
+      const host = new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0];
+      localStorage.removeItem(`sb-${host}-auth-token`);
+    } catch (_) {
+      // ignore if URL parsing or removal fails
+    }
     window.location.reload();
   };
 
@@ -47,6 +53,7 @@ export default function HeaderBar({
     { key: "clinic", label: "Clinic" },
     { key: "vacRequests", label: "Requests" },
     { key: "lectures", label: "Lectures" },
+    ...(showEdit ? [{ key: "editSchedule", label: "Edit" }] : []),
     ...(showViolations ? [{ key: "violations", label: "Violations" }] : []),
   ];
 

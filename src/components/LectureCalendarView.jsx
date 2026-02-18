@@ -329,7 +329,7 @@ export default function LectureCalendarView({
                           e.stopPropagation();
                           setSelectedLecture(lec);
                         }}
-                        className={`text-[8px] px-1 py-0.5 rounded text-white truncate ${getSeriesColor(
+                        className={`text-xs px-1 py-0.5 rounded text-white truncate ${getSeriesColor(
                           lec.series
                         )}`}
                         title={lec.title}
@@ -338,7 +338,7 @@ export default function LectureCalendarView({
                       </div>
                     ))}
                     {dayLectures.length > 3 && (
-                      <div className="text-[8px] text-gray-500">
+                      <div className="text-xs text-gray-500">
                         +{dayLectures.length - 3} more
                       </div>
                     )}
@@ -368,7 +368,7 @@ export default function LectureCalendarView({
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded text-white ${getSeriesColor(
+                            className={`text-xs px-2 py-0.5 rounded text-white ${getSeriesColor(
                               lec.series
                             )}`}
                           >
@@ -378,8 +378,8 @@ export default function LectureCalendarView({
                             <RefreshCw className="w-3 h-3 text-gray-400" />
                           )}
                         </div>
-                        <h4 className="font-semibold text-sm">{lec.title}</h4>
-                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                        <h4 className="font-semibold text-base">{lec.title}</h4>
+                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {new Date(lec.date).toLocaleDateString("en-US", {
@@ -397,7 +397,7 @@ export default function LectureCalendarView({
                             {lec.location}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                        <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                           <span className="flex items-center gap-1">
                             <User className="w-3 h-3" />
                             {lec.speakerId
@@ -406,7 +406,7 @@ export default function LectureCalendarView({
                           </span>
                         </div>
                       </div>
-                      <div className="text-right text-xs">
+                      <div className="text-right text-sm">
                         <div className="text-green-600">✓ {counts.attending}</div>
                         <div className="text-red-600">✗ {counts.notAttending}</div>
                         <div className="text-yellow-600">? {counts.maybe}</div>
@@ -424,12 +424,12 @@ export default function LectureCalendarView({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Series Legend */}
           <div className={`rounded border-2 p-3 ${cardClasses}`}>
-            <h3 className="font-bold text-sm mb-3">Lecture Series</h3>
+            <h3 className="font-bold text-base mb-3">Lecture Series</h3>
             <div className="grid grid-cols-2 gap-2">
               {Object.values(LECTURE_SERIES).map((series) => (
                 <div key={series} className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded ${getSeriesColor(series)}`} />
-                  <span className="text-xs">{series}</span>
+                  <span className="text-sm">{series}</span>
                 </div>
               ))}
             </div>
@@ -437,8 +437,8 @@ export default function LectureCalendarView({
 
           {/* Quick Stats */}
           <div className={`rounded border-2 p-3 ${cardClasses}`}>
-            <h3 className="font-bold text-sm mb-3">Quick Stats</h3>
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <h3 className="font-bold text-base mb-3">Quick Stats</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-gray-500">Total Lectures:</span>
                 <span className="ml-2 font-bold">{lectures.length}</span>
@@ -492,7 +492,7 @@ export default function LectureCalendarView({
 
             <div className="p-4 space-y-4">
               {/* Lecture Info */}
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-base">
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-xs px-2 py-0.5 rounded text-white ${getSeriesColor(

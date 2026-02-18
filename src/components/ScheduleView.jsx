@@ -1,6 +1,6 @@
 // src/components/ScheduleView.jsx
 import React, { useMemo, useState } from "react";
-import { blockDates, pgyLevels } from "../data/scheduleData";
+import { blockDates as defaultBlockDates, pgyLevels, clinicDays as defaultClinicDays } from "../data/scheduleData";
 import {
   getRotationColor,
   getPGYColor,
@@ -12,7 +12,7 @@ const PGYDividerRow = ({ pgy, colSpan }) => (
   <tr>
     <td
       colSpan={colSpan}
-      className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-xs font-extrabold text-gray-700 dark:text-gray-200"
+      className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-sm font-extrabold text-gray-700 dark:text-gray-200"
     >
       PGY-{pgy}
     </td>
@@ -24,6 +24,8 @@ export default function ScheduleView({
   schedule,
   vacations,
   workHourViolations = [],
+  clinicDays = defaultClinicDays,
+  blockDates = defaultBlockDates,
 }) {
   // Highlight state
   const [highlight, setHighlight] = useState(null);
@@ -99,6 +101,27 @@ export default function ScheduleView({
     return m;
   }, [workHourViolations]);
 
+  // Precompute clinic indicators per block: fellow has clinic day(s) in that block
+  // clinicDays maps fellow -> day-of-week (1=Mon..5=Fri)
+  // A block spans ~2 weeks, so the fellow's clinic day always falls in it
+  // We mark it so the cell can show a ▼ indicator
+  const clinicBlockSet = useMemo(() => {
+    const s = new Set();
+    if (!clinicDays) return s;
+    fellows.forEach((f) => {
+      const day = clinicDays[f];
+      if (!day) return;
+      // Every block spans 2 weeks, so the fellow's weekly clinic day always appears
+      for (let i = 0; i < blockDates.length; i++) {
+        // Nights rotation = no clinic that block
+        const rot = schedule[f]?.[i];
+        if (rot === "Nights") continue;
+        s.add(`${f}#${i}`);
+      }
+    });
+    return s;
+  }, [fellows, clinicDays, blockDates, schedule]);
+
   // Collect unique rotation names from the schedule for the dropdown
   const allRotations = useMemo(() => {
     const rotSet = new Set();
@@ -146,7 +169,7 @@ export default function ScheduleView({
         >
           <div className="flex items-center gap-1">
             <span className="truncate">{fellow}</span>
-            <span className="text-[8px] text-gray-500 dark:text-gray-400">PGY{pgy}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">PGY{pgy}</span>
           </div>
         </td>
 
@@ -177,7 +200,7 @@ export default function ScheduleView({
               } cursor-pointer`}
             >
               <div
-                className={`relative px-1 py-1 rounded text-[9px] font-semibold whitespace-nowrap transition-all ${
+                className={`relative px-1 py-1 rounded text-[11px] font-semibold whitespace-nowrap transition-all ${
                   isVac ? "" : getRotationColor(rot)
                 } ${vacStyle} ${
                   hotRot ? "ring-2 ring-amber-400" : ""
@@ -190,6 +213,14 @@ export default function ScheduleView({
               >
                 <div className="relative">
                   {getBlockDisplay(fellow, idx, schedule, vacations)}
+                  {clinicBlockSet.has(`${fellow}#${idx}`) && (
+                    <span
+                      className="absolute -bottom-0.5 -left-0.5 text-[7px] leading-none text-gray-600 dark:text-gray-300 opacity-70"
+                      title={`Clinic (${["","Mon","Tue","Wed","Thu","Fri"][clinicDays[fellow]] || ""})`}
+                    >
+                      ▼
+                    </span>
+                  )}
                   {violationMap.has(`${fellow}#${blockNumber}`) && (
                     <span
                       className="absolute -top-1 -right-1 w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent"
@@ -208,19 +239,19 @@ export default function ScheduleView({
   return (
     <div className="space-y-2">
       {highlight && (
-        <div className="bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded p-2 text-xs text-gray-800 dark:text-gray-200 flex items-center justify-between gap-2">
+        <div className="bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded p-2 text-sm text-gray-800 dark:text-gray-200 flex items-center justify-between gap-2">
           <div className="truncate">
             Highlighting:{" "}
             {highlight.type === "fellow" && `Fellow ${highlight.fellow}`}
             {highlight.type === "rotation" && `Rotation ${highlight.rotation}`}
             {highlight.type === "col" && `Block ${highlight.idx + 1}`}
-            <span className="ml-2 text-[10px] text-gray-500 dark:text-gray-400">
+            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
               (click again to clear)
             </span>
           </div>
           <button
             type="button"
-            className="px-2 py-1 text-[10px] font-semibold rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
+            className="px-2 py-1 text-xs font-semibold rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
             onClick={() => setHighlight(null)}
           >
             Clear
@@ -229,7 +260,7 @@ export default function ScheduleView({
       )}
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <div className="text-xs text-gray-700 dark:text-gray-300 font-semibold">
+        <div className="text-sm text-gray-700 dark:text-gray-300 font-semibold">
           Click a name, header, or cell to highlight. Use the dropdown to filter by rotation.
         </div>
 
@@ -243,7 +274,7 @@ export default function ScheduleView({
               setHighlight(null);
             }
           }}
-          className="px-3 py-2 text-xs font-semibold rounded border min-h-[44px] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
+          className="px-3 py-2 text-sm font-semibold rounded border min-h-[44px] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
         >
           <option value="">All Rotations</option>
           {allRotations.map((rot) => (
@@ -259,7 +290,7 @@ export default function ScheduleView({
           className="overflow-auto max-h-[calc(100vh-260px)]"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
-          <table className="min-w-full text-[10px] border-separate border-spacing-0">
+          <table className="min-w-full text-xs border-separate border-spacing-0">
             <thead>
               {/* Rotation groups header row (sticky) */}
               <tr className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-30">
@@ -292,7 +323,7 @@ export default function ScheduleView({
                     title="Click to highlight this block column (click again to clear)"
                   >
                     <div className="font-bold dark:text-gray-100">{bd.block}</div>
-                    <div className="text-[8px] text-gray-700 dark:text-gray-300 whitespace-nowrap font-semibold">
+                    <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap font-semibold">
                       {formatDate(bd.start)}-{formatDate(bd.end)}
                     </div>
                   </th>
