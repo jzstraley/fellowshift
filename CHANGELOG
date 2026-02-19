@@ -1,7 +1,21 @@
 # Changelog
 
+## 2026-02-18 — Dashboard Redesign
+
+- Redesigned Dashboard with time-of-day greeting and gradient hero banner showing current block, days remaining, and year progress bar
+- Upgraded cards with colored icon badges, hover highlights, and improved visual hierarchy
+- Non-admin users now see "My Requests" (their own pending requests) instead of global counts
+- Added "Quick Links" card for non-admins with shortcuts to Request Time Off, Swap Rotation, Full Calendar, and View Stats
+- Admin users see "Pending Approvals" and ACGME Violations cards
+- Improved empty states with helpful messages
+- Call/Night Float duties shown with colored pill badges
+
 ## Phase 1 — Foundation & Core UX (2026-02-18)
 
+- Pinned the Import/Export bar to the bottom of the screen on the Home (Dashboard) view so it stays visible while scrolling
+- Fixed Clinic Coverage Load Distribution cards: text was invisible in light mode (white on white); added explicit dark text colors
+- Reduced column spacing in Weekly Clinic Coverage for Nights table for a more compact layout
+- Fixed block number and cell text visibility in Clinic Coverage table for both light and dark modes
 - Added Dashboard home view as the default landing page after login; shows current rotation, upcoming call/float, pending requests, upcoming lectures, and active violations (admin only)
 - Refactored undo system in Schedule Editor to support full undo/redo with dual stacks (max 30 snapshots); added Redo button and Ctrl+Z / Ctrl+Shift+Z keyboard bindings
 - Added Validate button to Schedule Editor that runs conflict detection before saving: checks for double-booked day overrides, coverage gaps (ICU, Floor A/B, Nights), and ACGME violations
