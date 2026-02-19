@@ -140,15 +140,15 @@ const CANNOT_COVER_ROTATIONS = [
           <table className="min-w-full text-xs">
             <thead className="sticky top-0 bg-gray-200 dark:bg-gray-700 z-10">
               <tr className="border-b border-gray-400 dark:border-gray-600">
-                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Blk</th>
-                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Week</th>
-                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">On Nights</th>
-                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Clinic Date</th>
-                <th className="px-2 py-2 text-center font-bold dark:text-gray-100">→</th>
-                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Covered By</th>
-                <th className="px-2 py-2 text-left font-bold dark:text-gray-100">Their Rot</th>
-                <th className="px-2 py-2 text-center font-bold dark:text-gray-100">PGY</th>
-                <th className="px-2 py-2 text-center font-bold dark:text-gray-100">#</th>
+                <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Blk</th>
+                <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Week</th>
+                <th className="px-1 py-1 text-left font-bold dark:text-gray-100">On Nights</th>
+                <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Clinic Date</th>
+                <th className="px-1 py-1 text-center font-bold dark:text-gray-100">→</th>
+                <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Covered By</th>
+                <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Their Rot</th>
+                <th className="px-1 py-1 text-center font-bold dark:text-gray-100">PGY</th>
+                <th className="px-1 py-1 text-center font-bold dark:text-gray-100">#</th>
               </tr>
             </thead>
 
@@ -176,9 +176,9 @@ const CANNOT_COVER_ROTATIONS = [
 
                 return (
                   <tr key={idx} className={`border-b border-gray-200 dark:border-gray-700 ${rowBg}`}>
-                    <td className="px-2 py-2 font-bold">{entry.block}</td>
+                    <td className="px-1 py-1 font-bold text-gray-900 dark:text-gray-100">{entry.block}</td>
 
-                    <td className="px-2 py-2 text-gray-600 dark:text-gray-400">
+                    <td className="px-1 py-1 text-gray-600 dark:text-gray-400">
                       <div className="flex items-center gap-1">
                         <div>W{entry.week}</div>
                         {entry.relaxedSameClinicDay && (
@@ -203,7 +203,7 @@ const CANNOT_COVER_ROTATIONS = [
                       </div>
                     </td>
 
-                    <td className="px-2 py-2">
+                    <td className="px-1 py-1">
                       <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold">{entry.absent}</span>
                       <span
                         className={`ml-1 px-1 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(
@@ -214,14 +214,14 @@ const CANNOT_COVER_ROTATIONS = [
                       </span>
                     </td>
 
-                    <td className="px-2 py-2 text-left text-gray-700 dark:text-gray-300">
+                    <td className="px-1 py-1 text-left text-gray-700 dark:text-gray-300">
                       <div className="font-semibold">{clinicDayName(entry.absentClinicDay)}</div>
                       <div className="text-[10px] text-gray-500 dark:text-gray-400">{formatClinicDate(clinicDate)}</div>
                     </td>
 
-                    <td className="px-2 py-2 text-center text-gray-400 dark:text-gray-500">→</td>
+                    <td className="px-1 py-1 text-center text-gray-400 dark:text-gray-500">→</td>
 
-                    <td className="px-2 py-2">
+                    <td className="px-1 py-1">
                       {entry.coverer ? (
                         <span>
                           <span className={`px-1.5 py-0.5 rounded font-semibold ${getRotationColor(entry.covererRotation)}`}>{entry.coverer}</span>
@@ -237,7 +237,7 @@ const CANNOT_COVER_ROTATIONS = [
                       )}
                     </td>
 
-                    <td className="px-2 py-2">
+                    <td className="px-1 py-1">
                       {entry.covererRotation ? (
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(
@@ -251,7 +251,7 @@ const CANNOT_COVER_ROTATIONS = [
                       )}
                     </td>
 
-                    <td className="px-2 py-2 text-center">
+                    <td className="px-1 py-1 text-center">
                       {entry.covererPGY ? (
                         <span
                           className={`px-1 py-0.5 rounded text-[10px] font-bold border ${getPGYColor(
@@ -265,7 +265,7 @@ const CANNOT_COVER_ROTATIONS = [
                       )}
                     </td>
 
-                    <td className="px-2 py-2 text-center font-bold text-gray-600 dark:text-gray-300">
+                    <td className="px-1 py-1 text-center font-bold text-gray-600 dark:text-gray-300">
                       {entry.coverer ? count : "—"}
                     </td>
                   </tr>
@@ -304,18 +304,18 @@ const CANNOT_COVER_ROTATIONS = [
                           : getPGYColor(pgy)
                       }`}
                     >
-                      <div className="font-semibold text-sm dark:text-gray-100">{fellow}</div>
+                      <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">{fellow}</div>
                       <div className="flex items-baseline gap-1">
                         <span
                           className={`text-xl font-bold ${
-                            isOverTarget ? "text-red-600" : isUnderTarget ? "text-yellow-600" : "dark:text-gray-100"
+                            isOverTarget ? "text-red-600" : isUnderTarget ? "text-yellow-600" : "text-gray-900 dark:text-gray-100"
                           }`}
                         >
                           {count}
                         </span>
-                        <span className="text-[11px] text-gray-500 dark:text-gray-400">covers</span>
+                        <span className="text-[11px] text-gray-600 dark:text-gray-400">covers</span>
                       </div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400">
                         Clinic: {clinicDayName(clinicDays[fellow])}
                       </div>
                     </div>

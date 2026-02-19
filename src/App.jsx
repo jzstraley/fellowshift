@@ -663,8 +663,8 @@ function AppContent() {
           )}
         </Suspense>
 
-        {/* Global Import/Export/Reset bar - hidden on vacations */}
-        {activeView !== "vacRequests" && (
+        {/* Global Import/Export/Reset bar - non-dashboard views inline */}
+        {activeView !== "vacRequests" && activeView !== "dashboard" && (
           <div className={`mt-4 p-3 rounded border ${
             darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300"
           }`}>
@@ -680,7 +680,7 @@ function AppContent() {
                 </button>
               </div>
             )}
-            
+
             {/* Import/Export - stacked on mobile */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
               <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
@@ -697,6 +697,26 @@ function AppContent() {
           </div>
         )}
       </div>
+
+      {/* Import/Export bar fixed to bottom on dashboard/home */}
+      {activeView === "dashboard" && (
+        <div className={`fixed bottom-0 left-0 right-0 z-50 p-3 border-t shadow-lg ${
+          darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300"
+        }`}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 max-w-screen-xl mx-auto">
+            <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+              Import/Export
+            </span>
+            <ImportExportBar
+              fellows={fellows}
+              schedule={schedule}
+              setSchedule={setSchedule}
+              resetToDefaults={resetToDefaults}
+              violations={violations}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Idle timeout warning modal */}
       {showIdleWarning && (
