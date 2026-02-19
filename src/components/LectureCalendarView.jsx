@@ -1,5 +1,5 @@
 // src/components/LectureCalendarView.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Calendar,
   Clock,
@@ -35,6 +35,31 @@ export default function LectureCalendarView({
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLecture, setEditingLecture] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1)); // July 2026
+
+  // Listen for keyboard nav events (←/→ arrow keys)
+  useEffect(() => {
+    const handleNav = (e) => {
+      const dir = e.detail?.direction;
+      if (dir) {
+        setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + dir));
+      }
+    };
+    window.addEventListener("fellowshift:nav", handleNav);
+    return () => window.removeEventListener("fellowshift:nav", handleNav);
+  }, []);
+
+  // Listen for escape to close modals
+  useEffect(() => {
+    const handleEscape = () => {
+      if (editingLecture || showAddModal) {
+        setEditingLecture(null);
+        setShowAddModal(false);
+      }
+      if (selectedLecture) setSelectedLecture(null);
+    };
+    window.addEventListener("fellowshift:escape", handleEscape);
+    return () => window.removeEventListener("fellowshift:escape", handleEscape);
+  }, [editingLecture, showAddModal, selectedLecture]);
 
   // Form state for add/edit
   const [formData, setFormData] = useState({

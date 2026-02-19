@@ -46,6 +46,7 @@ export default function HeaderBar({
   };
 
   const views = [
+    { key: "dashboard", label: "Home" },
     { key: "schedule", label: "Schedule" },
     { key: "stats", label: "Stats" },
     { key: "call", label: "Call/Float" },

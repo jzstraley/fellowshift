@@ -11,9 +11,13 @@ import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerato
 import { checkAllWorkHourViolations } from "./engine/workHourChecker";
 import { deriveKey, encryptAndStore, loadAndDecrypt, clearSensitiveStorage } from "./utils/secureStorage";
 
+import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
+import useIdleTimeout from "./hooks/useIdleTimeout";
+
 // ✅ LAZY LOAD ALL VIEWS
 const LoginPage = lazy(() => import("./components/auth/LoginPage"));
 const LandingPage = lazy(() => import("./components/LandingPage"));
+const DashboardView = lazy(() => import("./components/DashboardView"));
 const ScheduleView = lazy(() => import("./components/ScheduleView"));
 const StatsView = lazy(() => import("./components/StatsView"));
 const CallView = lazy(() => import("./components/CallView"));
@@ -88,7 +92,7 @@ function AppContent() {
     }
   }, [darkMode]);
 
-  const [activeView, setActiveView] = useState("schedule");
+  const [activeView, setActiveView] = useState("dashboard");
   const [violations, setViolations] = useState([]);
 
   const fellows = useMemo(() => Object.keys(initialSchedule), []);
@@ -449,6 +453,39 @@ function AppContent() {
   }, [stats, fellows]);
 
 
+  // Build views array for keyboard shortcuts (must stay in sync with HeaderBar)
+  const viewsList = useMemo(() => {
+    const base = [
+      { key: "dashboard", label: "Home" },
+      { key: "schedule", label: "Schedule" },
+      { key: "stats", label: "Stats" },
+      { key: "call", label: "Call/Float" },
+      { key: "calendar", label: "Calendar" },
+      { key: "clinic", label: "Clinic" },
+      { key: "vacRequests", label: "Requests" },
+      { key: "lectures", label: "Lectures" },
+    ];
+    if (!isSupabaseConfigured || canApprove?.()) {
+      base.push({ key: "editSchedule", label: "Edit" });
+      base.push({ key: "violations", label: "Violations" });
+    }
+    return base;
+  }, [isSupabaseConfigured, canApprove]);
+
+  useKeyboardShortcuts({ views: viewsList, setActiveView });
+
+  // Idle timeout — signs out after 15 min of inactivity
+  const handleIdleTimeout = useCallback(async () => {
+    clearSensitiveStorage();
+    await signOut();
+    window.location.reload();
+  }, [signOut]);
+
+  const { showWarning: showIdleWarning, dismissWarning: dismissIdleWarning } = useIdleTimeout({
+    onTimeout: handleIdleTimeout,
+    enabled: !!user,
+  });
+
   const [showLanding, setShowLanding] = useState(true);
 
   // Wait for auth to finish loading before deciding what to show
@@ -489,6 +526,21 @@ function AppContent() {
 
       <div className="p-3 pb-16">
         <Suspense fallback={<ViewLoader />}>
+          {activeView === "dashboard" && (
+            <DashboardView
+              fellows={fellows}
+              schedule={schedule}
+              callSchedule={callSchedule}
+              nightFloatSchedule={nightFloatSchedule}
+              blockDates={blockDates}
+              lectures={lectures}
+              vacations={vacations}
+              swapRequests={swapRequests}
+              workHourViolations={workHourViolations}
+              setActiveView={setActiveView}
+            />
+          )}
+
           {activeView === "schedule" && (
             <ScheduleView
               fellows={fellows}
@@ -577,6 +629,8 @@ function AppContent() {
               fellows={fellows}
               schedule={schedule}
               setSchedule={setSchedule}
+              callSchedule={callSchedule}
+              nightFloatSchedule={nightFloatSchedule}
               dayOverrides={dayOverrides}
               setDayOverrides={setDayOverrides}
               pgyLevels={pgyLevels}
@@ -643,6 +697,24 @@ function AppContent() {
           </div>
         )}
       </div>
+
+      {/* Idle timeout warning modal */}
+      {showIdleWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={dismissIdleWarning}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm mx-4 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-bold mb-2 dark:text-gray-100">Session Expiring</div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              You will be signed out in 2 minutes due to inactivity.
+            </p>
+            <button
+              onClick={dismissIdleWarning}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded"
+            >
+              Stay Signed In
+            </button>
+          </div>
+        </div>
+      )}
 
       <Footer />
       <CookieConsent />

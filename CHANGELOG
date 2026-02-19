@@ -1,5 +1,14 @@
 # Changelog
 
+## Phase 1 — Foundation & Core UX (2026-02-18)
+
+- Added Dashboard home view as the default landing page after login; shows current rotation, upcoming call/float, pending requests, upcoming lectures, and active violations (admin only)
+- Refactored undo system in Schedule Editor to support full undo/redo with dual stacks (max 30 snapshots); added Redo button and Ctrl+Z / Ctrl+Shift+Z keyboard bindings
+- Added Validate button to Schedule Editor that runs conflict detection before saving: checks for double-booked day overrides, coverage gaps (ICU, Floor A/B, Nights), and ACGME violations
+- Added global keyboard shortcuts: 1–9 to switch views, ←/→ arrow keys for month navigation in Lecture Calendar, Escape to close modals, Ctrl+K to focus search (Phase 2)
+- Added session idle timeout: auto-signs out after 15 minutes of inactivity with a warning modal at 13 minutes
+- Added "Home" tab to header navigation as the first entry
+
 ## 2026-02-18
 
 - Added ACGME work hour violation checker engine that builds a day-by-day shift timeline per fellow and flags 80h weekly average, 24+4h max shift, 1-in-7 day off, and other ACGME rule violations

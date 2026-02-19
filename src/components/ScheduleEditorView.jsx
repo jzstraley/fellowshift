@@ -1,8 +1,9 @@
 // src/components/ScheduleEditorView.jsx
-import { useState, useMemo, useCallback, useRef } from "react";
-import { Undo2, AlertTriangle } from "lucide-react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { Undo2, Redo2, AlertTriangle, ShieldCheck, X } from "lucide-react";
 import { allRotationTypes, pgyLevels as defaultPgyLevels } from "../data/scheduleData";
 import { getRotationColor, getPGYColor, formatDate } from "../utils/scheduleUtils";
+import { detectConflicts } from "../engine/conflictDetector";
 
 const MODE_GRID = "grid";
 const MODE_DAY = "day";
@@ -12,6 +13,8 @@ export default function ScheduleEditorView({
   fellows,
   schedule,
   setSchedule,
+  callSchedule = {},
+  nightFloatSchedule = {},
   dayOverrides,
   setDayOverrides,
   pgyLevels = defaultPgyLevels,
@@ -21,24 +24,54 @@ export default function ScheduleEditorView({
   workHourViolations = [],
 }) {
   const [mode, setMode] = useState(MODE_GRID);
+  const [conflictResults, setConflictResults] = useState(null);
 
-  // Undo history: stack of previous schedule snapshots
-  const historyRef = useRef([]);
+  // Undo/Redo: dual stacks of schedule snapshots
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
   const MAX_HISTORY = 30;
 
   const pushHistory = useCallback(() => {
-    historyRef.current = [
+    undoStackRef.current = [
       JSON.stringify(schedule),
-      ...historyRef.current.slice(0, MAX_HISTORY - 1),
+      ...undoStackRef.current.slice(0, MAX_HISTORY - 1),
     ];
+    redoStackRef.current = []; // new edit invalidates redo branch
   }, [schedule]);
 
   const undo = useCallback(() => {
-    if (historyRef.current.length === 0) return;
-    const prev = JSON.parse(historyRef.current[0]);
-    historyRef.current = historyRef.current.slice(1);
+    if (undoStackRef.current.length === 0) return;
+    redoStackRef.current = [JSON.stringify(schedule), ...redoStackRef.current.slice(0, MAX_HISTORY - 1)];
+    const prev = JSON.parse(undoStackRef.current[0]);
+    undoStackRef.current = undoStackRef.current.slice(1);
     setSchedule(prev);
-  }, [setSchedule]);
+  }, [setSchedule, schedule]);
+
+  const redo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    undoStackRef.current = [JSON.stringify(schedule), ...undoStackRef.current.slice(0, MAX_HISTORY - 1)];
+    const next = JSON.parse(redoStackRef.current[0]);
+    redoStackRef.current = redoStackRef.current.slice(1);
+    setSchedule(next);
+  }, [setSchedule, schedule]);
+
+  // Keyboard shortcuts: Ctrl+Z for undo, Ctrl+Shift+Z for redo
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   // Violation lookup
   const violationMap = useMemo(() => {
@@ -75,6 +108,19 @@ export default function ScheduleEditorView({
     [setSchedule, pushHistory]
   );
 
+  const runValidation = useCallback(() => {
+    const results = detectConflicts({
+      schedule,
+      callSchedule,
+      nightFloatSchedule,
+      fellows,
+      blockDates,
+      vacations,
+      dayOverrides,
+    });
+    setConflictResults(results);
+  }, [schedule, callSchedule, nightFloatSchedule, fellows, blockDates, vacations, dayOverrides]);
+
   const modes = [
     { key: MODE_GRID, label: "Grid" },
     { key: MODE_DAY, label: "Day Override" },
@@ -101,15 +147,85 @@ export default function ScheduleEditorView({
           ))}
         </div>
 
-        <button
-          onClick={undo}
-          disabled={historyRef.current.length === 0}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Undo2 className="w-3.5 h-3.5" />
-          Undo
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center">
+            <button
+              onClick={undo}
+              disabled={undoStackRef.current.length === 0}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-l border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+              Undo
+            </button>
+            <button
+              onClick={redo}
+              disabled={redoStackRef.current.length === 0}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-r border border-l-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+              Redo
+            </button>
+          </div>
+          <button
+            onClick={runValidation}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded border border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50"
+            title="Check for conflicts and violations"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Validate
+          </button>
+        </div>
       </div>
+
+      {/* Conflict detection results panel */}
+      {conflictResults && (
+        <div className={`rounded-lg border p-3 text-xs ${
+          conflictResults.total === 0
+            ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20"
+            : "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20"
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-semibold dark:text-gray-200">
+              {conflictResults.total === 0 ? "No issues found" : `${conflictResults.total} issue${conflictResults.total !== 1 ? "s" : ""} detected`}
+            </span>
+            <button onClick={() => setConflictResults(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {conflictResults.doubleBookings.length > 0 && (
+            <div className="mb-2">
+              <div className="font-semibold text-red-600 dark:text-red-400 mb-1">Double Bookings ({conflictResults.doubleBookings.length})</div>
+              {conflictResults.doubleBookings.slice(0, 5).map((d, i) => (
+                <div key={i} className="text-gray-600 dark:text-gray-300 pl-2">{d.detail}</div>
+              ))}
+            </div>
+          )}
+          {conflictResults.coverageGaps.length > 0 && (
+            <div className="mb-2">
+              <div className="font-semibold text-amber-600 dark:text-amber-400 mb-1">Coverage Gaps ({conflictResults.coverageGaps.length})</div>
+              {conflictResults.coverageGaps.slice(0, 5).map((g, i) => (
+                <div key={i} className="text-gray-600 dark:text-gray-300 pl-2">{g.detail}</div>
+              ))}
+              {conflictResults.coverageGaps.length > 5 && (
+                <div className="text-gray-400 pl-2">...and {conflictResults.coverageGaps.length - 5} more</div>
+              )}
+            </div>
+          )}
+          {conflictResults.acgmeViolations.length > 0 && (
+            <div>
+              <div className="font-semibold text-red-600 dark:text-red-400 mb-1">ACGME Violations ({conflictResults.acgmeViolations.length})</div>
+              {conflictResults.acgmeViolations.slice(0, 5).map((v, i) => (
+                <div key={i} className="text-gray-600 dark:text-gray-300 pl-2">{v.fellow}: {v.detail || v.rule}</div>
+              ))}
+              {conflictResults.acgmeViolations.length > 5 && (
+                <div className="text-gray-400 pl-2">...and {conflictResults.acgmeViolations.length - 5} more</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {mode === MODE_GRID && (
         <GridEditor
