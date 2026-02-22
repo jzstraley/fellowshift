@@ -25,7 +25,7 @@ CREATE TABLE profiles (
   institution_id UUID REFERENCES institutions(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT,
-  role TEXT NOT NULL CHECK (role IN ('program_director', 'chief_fellow', 'fellow', 'viewer')),
+  role TEXT NOT NULL CHECK (role IN ('resident', 'fellow', 'chief_fellow', 'program_director', 'admin')),
   program TEXT, -- For chief_fellows: which program they manage
   is_active BOOLEAN DEFAULT TRUE,
   has_migrated BOOLEAN DEFAULT FALSE,
@@ -304,7 +304,7 @@ CREATE POLICY "View fellows in institution"
 ON fellows FOR SELECT
 USING (institution_id = get_user_institution_id());
 
--- Program directors and chief fellows can manage fellows
+-- Program directors, admins, and chief fellows can manage fellows
 CREATE POLICY "Program directors can manage fellows"
 ON fellows FOR ALL
 USING (
@@ -312,7 +312,7 @@ USING (
     SELECT 1 FROM profiles
     WHERE id = auth.uid()
     AND institution_id = fellows.institution_id
-    AND role IN ('program_director', 'chief_fellow')
+    AND role IN ('program_director', 'chief_fellow', 'admin')
   )
 );
 
@@ -327,11 +327,11 @@ USING (
   )
 );
 
--- Program directors can edit all schedules
+-- Program directors and admins can edit all schedules
 CREATE POLICY "Program directors can edit all schedules"
 ON schedule_assignments FOR ALL
 USING (
-  get_user_role() = 'program_director'
+  get_user_role() IN ('program_director', 'admin')
   AND EXISTS (
     SELECT 1 FROM fellows
     WHERE id = schedule_assignments.fellow_id
@@ -363,19 +363,19 @@ USING (
   )
 );
 
--- Fellows can create vacation requests
+-- Fellows and above (not residents) can create vacation requests
 CREATE POLICY "Fellows can create vacation requests"
 ON vacation_requests FOR INSERT
 WITH CHECK (
   requested_by = auth.uid()
-  AND get_user_role() IN ('fellow', 'program_director', 'chief_fellow')
+  AND get_user_role() IN ('fellow', 'program_director', 'chief_fellow', 'admin')
 );
 
--- Program directors and chief fellows can approve/deny
+-- Program directors, chief fellows, and admins can approve/deny
 CREATE POLICY "Program directors can manage vacation requests"
 ON vacation_requests FOR UPDATE
 USING (
-  get_user_role() IN ('program_director', 'chief_fellow')
+  get_user_role() IN ('program_director', 'chief_fellow', 'admin')
   AND EXISTS (
     SELECT 1 FROM fellows
     WHERE id = vacation_requests.fellow_id
@@ -394,19 +394,19 @@ USING (
   )
 );
 
--- Fellows can create swap requests
+-- Fellows and above (not residents) can create swap requests
 CREATE POLICY "Fellows can create swap requests"
 ON swap_requests FOR INSERT
 WITH CHECK (
   requested_by = auth.uid()
-  AND get_user_role() IN ('fellow', 'program_director', 'chief_fellow')
+  AND get_user_role() IN ('fellow', 'program_director', 'chief_fellow', 'admin')
 );
 
--- Program directors and chief fellows can approve/deny swaps
+-- Program directors, chief fellows, and admins can approve/deny swaps
 CREATE POLICY "Program directors can manage swap requests"
 ON swap_requests FOR UPDATE
 USING (
-  get_user_role() IN ('program_director', 'chief_fellow')
+  get_user_role() IN ('program_director', 'chief_fellow', 'admin')
   AND EXISTS (
     SELECT 1 FROM fellows
     WHERE id = swap_requests.requester_fellow_id
@@ -428,7 +428,7 @@ USING (
 CREATE POLICY "Program directors can manage call assignments"
 ON call_assignments FOR ALL
 USING (
-  get_user_role() = 'program_director'
+  get_user_role() IN ('program_director', 'admin')
   AND EXISTS (
     SELECT 1 FROM fellows
     WHERE id = call_assignments.fellow_id
@@ -441,11 +441,11 @@ CREATE POLICY "View lectures in institution"
 ON lectures FOR SELECT
 USING (institution_id = get_user_institution_id());
 
--- Program directors and chief fellows can manage lectures
+-- Program directors, chief fellows, and admins can manage lectures
 CREATE POLICY "Manage lectures"
 ON lectures FOR ALL
 USING (
-  get_user_role() IN ('program_director', 'chief_fellow')
+  get_user_role() IN ('program_director', 'chief_fellow', 'admin')
   AND institution_id = get_user_institution_id()
 );
 
@@ -454,11 +454,11 @@ CREATE POLICY "View block dates in institution"
 ON block_dates FOR SELECT
 USING (institution_id = get_user_institution_id());
 
--- Program directors can manage block dates
+-- Program directors and admins can manage block dates
 CREATE POLICY "Program directors can manage block dates"
 ON block_dates FOR ALL
 USING (
-  get_user_role() = 'program_director'
+  get_user_role() IN ('program_director', 'admin')
   AND institution_id = get_user_institution_id()
 );
 

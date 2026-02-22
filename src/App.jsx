@@ -29,6 +29,7 @@ const VacationsView = lazy(() => import("./components/VacationsView"));
 const ViolationsView = lazy(() => import("./components/ViolationsView"));
 const ScheduleEditorView = lazy(() => import("./components/ScheduleEditorView"));
 const ProfileSettings = lazy(() => import("./components/ProfileSettings"));
+const AdminView = lazy(() => import("./components/AdminView"));
 
 const STORAGE_KEY = "fellowship_scheduler_v1";
 const LECTURE_STORAGE_KEY = "fellowship_lectures_v1";
@@ -48,7 +49,7 @@ const Footer = () => (
 );
 
 function AppContent() {
-  const { signOut, profile, user, loading, isSupabaseConfigured, canApprove } = useAuth();
+  const { signOut, profile, user, loading, isSupabaseConfigured, canApprove, isAdmin } = useAuth();
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("fellowshift_darkmode");
@@ -371,9 +372,19 @@ function AppContent() {
   const debouncedGenerate = useMemo(() => debounce(generateCallAndFloat, 750), [generateCallAndFloat]);
 
   // Debounced stats calculation when schedule changes to avoid frequent heavy work
+  // Preserve call/float counts from the previous stats (set by generateCallAndFloat)
   useEffect(() => {
     const t = setTimeout(() => {
-      setStats(buildCounts(schedule));
+      setStats((prev) => {
+        const fresh = buildCounts(schedule);
+        if (prev) {
+          Object.keys(fresh).forEach((f) => {
+            fresh[f].call = prev[f]?.call ?? 0;
+            fresh[f].float = prev[f]?.float ?? 0;
+          });
+        }
+        return fresh;
+      });
     }, 150);
     return () => clearTimeout(t);
   }, [schedule]);
@@ -469,8 +480,11 @@ function AppContent() {
       base.push({ key: "editSchedule", label: "Edit" });
       base.push({ key: "violations", label: "Violations" });
     }
+    if (isAdmin?.()) {
+      base.push({ key: "admin", label: "Admin" });
+    }
     return base;
-  }, [isSupabaseConfigured, canApprove]);
+  }, [isSupabaseConfigured, canApprove, isAdmin]);
 
   useKeyboardShortcuts({ views: viewsList, setActiveView });
 
@@ -522,6 +536,7 @@ function AppContent() {
         violationCount={workHourViolations.length}
         showViolations={!isSupabaseConfigured || canApprove?.()}
         showEdit={!isSupabaseConfigured || canApprove?.()}
+        showAdmin={isAdmin?.()}
       />
 
       <div className="p-3 pb-16">
@@ -563,6 +578,7 @@ function AppContent() {
               pgyLevels={pgyLevels}
               onOptimize={debouncedGenerate}
               workHourViolations={workHourViolations}
+              showBalanceCheck={['program_director', 'admin'].includes(profile?.role)}
             />
           )}
 
@@ -645,6 +661,10 @@ function AppContent() {
             <ProfileSettings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
           )}
 
+          {activeView === "admin" && isAdmin?.() && (
+            <AdminView darkMode={darkMode} />
+          )}
+
           {activeView === "vacRequests" && (
             <VacationsView
               fellows={fellows}
@@ -668,8 +688,8 @@ function AppContent() {
           <div className={`mt-4 p-3 rounded border ${
             darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300"
           }`}>
-            {/* Check Balance - only on call and clinic */}
-            {(activeView === "call" || activeView === "clinic") && (
+            {/* Check Balance - only on call and clinic, program directors only */}
+            {(activeView === "call" || activeView === "clinic") && ['program_director', 'admin'].includes(profile?.role) && (
               <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                 <button
                   onClick={checkBalance}
@@ -696,27 +716,33 @@ function AppContent() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Import/Export bar fixed to bottom on dashboard/home */}
-      {activeView === "dashboard" && (
-        <div className={`fixed bottom-0 left-0 right-0 z-50 p-3 border-t shadow-lg ${
-          darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300"
-        }`}>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 max-w-screen-xl mx-auto">
-            <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-              Import/Export
-            </span>
-            <ImportExportBar
-              fellows={fellows}
-              schedule={schedule}
-              setSchedule={setSchedule}
-              resetToDefaults={resetToDefaults}
-              violations={violations}
-            />
+        {/* Dashboard Import/Export — admin/PD/chief only, inline card below dashboard grid */}
+        {activeView === "dashboard" && ['admin', 'program_director', 'chief_fellow'].includes(profile?.role) && (
+          <div className="max-w-4xl mx-auto mt-5">
+            <div className={`rounded-xl p-5 shadow-sm border ${
+              darkMode
+                ? "bg-gray-800 border-gray-700"
+                : "bg-white border-gray-200"
+            }`}>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                <span className={`text-xs font-semibold uppercase tracking-wider ${
+                  darkMode ? "text-gray-400" : "text-gray-500"
+                }`}>
+                  Import / Export
+                </span>
+                <ImportExportBar
+                  fellows={fellows}
+                  schedule={schedule}
+                  setSchedule={setSchedule}
+                  resetToDefaults={resetToDefaults}
+                  violations={violations}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Idle timeout warning modal */}
       {showIdleWarning && (

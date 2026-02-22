@@ -17,9 +17,8 @@ export default function VacationsView({
   setSchedule,
   setVacations,
   setSwapRequests,
-  isAdmin = true,
 }) {
-  const { profile, user, canApprove, isFellow, isProgramDirector, isChiefFellow } = useAuth();
+  const { profile, user, canApprove, canRequest, isProgramDirector, isChiefFellow, isAdmin } = useAuth();
 
   // Sub-view toggle: 'timeoff' or 'swaps'
   const [subView, setSubView] = useState('timeoff');
@@ -31,6 +30,7 @@ export default function VacationsView({
   const [loadingDb, setLoadingDb] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [blockDates, setBlockDates] = useState([]);
 
   const useDatabase = isSupabaseConfigured && user && profile;
 
@@ -52,6 +52,16 @@ export default function VacationsView({
 
       if (fellowsErr) throw fellowsErr;
       setDbFellows(fellowsData || []);
+
+      // Fetch block dates for dropdowns
+      const { data: blockDatesData, error: blockDatesErr } = await supabase
+        .from('block_dates')
+        .select('id, block_number, start_date, end_date')
+        .eq('institution_id', profile.institution_id)
+        .order('block_number');
+
+      if (blockDatesErr) throw blockDatesErr;
+      setBlockDates(blockDatesData || []);
 
       // Fetch vacation requests joined with fellow info and block dates
       const { data: requestsData, error: requestsErr } = await supabase
@@ -193,36 +203,19 @@ export default function VacationsView({
   };
 
   // --- Supabase new vacation request ---
-  const [newDbReq, setNewDbReq] = useState({ fellow_id: '', start_block: 1, end_block: 1, reason: 'Vacation' });
+  const [newDbReq, setNewDbReq] = useState({ fellow_id: '', start_block_id: '', end_block_id: '', reason: 'Vacation' });
 
   const submitDbRequest = async () => {
-    if (!newDbReq.fellow_id) return;
+    if (!newDbReq.fellow_id || !newDbReq.start_block_id || !newDbReq.end_block_id) return;
     setSubmitting(true);
     setDbError(null);
     try {
-      const { data: blocks, error: blocksErr } = await supabase
-        .from('block_dates')
-        .select('id, block_number')
-        .eq('institution_id', profile.institution_id)
-        .in('block_number', [newDbReq.start_block, newDbReq.end_block]);
-
-      if (blocksErr) throw blocksErr;
-
-      const startBlockRow = blocks.find(b => b.block_number === newDbReq.start_block);
-      const endBlockRow = blocks.find(b => b.block_number === newDbReq.end_block);
-
-      if (!startBlockRow || !endBlockRow) {
-        setDbError('Could not find block dates. Make sure block dates are configured.');
-        setSubmitting(false);
-        return;
-      }
-
       const { error } = await supabase
         .from('vacation_requests')
         .insert({
           fellow_id: newDbReq.fellow_id,
-          start_block_id: startBlockRow.id,
-          end_block_id: endBlockRow.id,
+          start_block_id: newDbReq.start_block_id,
+          end_block_id: newDbReq.end_block_id,
           reason: newDbReq.reason,
           status: 'pending',
           requested_by: user.id,
@@ -230,7 +223,7 @@ export default function VacationsView({
 
       if (error) throw error;
 
-      setNewDbReq({ fellow_id: '', start_block: 1, end_block: 1, reason: 'Vacation' });
+      setNewDbReq({ fellow_id: '', start_block_id: '', end_block_id: '', reason: 'Vacation' });
       await fetchRequests();
     } catch (err) {
       console.error('Error submitting request:', err);
@@ -456,11 +449,12 @@ export default function VacationsView({
     const deniedSwaps = dbSwapRequests.filter(r => r.status === 'denied');
 
     const userCanApprove = canApprove();
-    const userIsFellow = isFellow();
+    const userCanRequest = canRequest?.() ?? true;
 
-    const selectableFellows = userIsFellow
-      ? dbFellows.filter(f => f.user_id === user.id)
-      : dbFellows;
+    // Admins/approvers can select any fellow; regular fellows can only select themselves
+    const selectableFellows = userCanApprove
+      ? dbFellows
+      : dbFellows.filter(f => f.user_id === user?.id);
 
     const formatBlockRange = (req) => {
       const start = req.start_block?.block_number ?? '?';
@@ -473,7 +467,7 @@ export default function VacationsView({
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold">Requests</h3>
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {isProgramDirector() ? 'Program Director' : isChiefFellow() ? 'Chief Fellow' : profile?.role}
+            {isAdmin?.() ? 'Admin' : isProgramDirector() ? 'Program Director' : isChiefFellow() ? 'Chief Fellow' : profile?.role}
           </div>
         </div>
 
@@ -602,7 +596,7 @@ export default function VacationsView({
             )}
 
             {/* Create New Time Off Request */}
-            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            {userCanRequest && <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
               <div className="mb-2 font-semibold dark:text-gray-100">Create New Time Off Request</div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <select
@@ -617,24 +611,30 @@ export default function VacationsView({
                     </option>
                   ))}
                 </select>
-                <input
-                  type="number"
+                <select
                   className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
-                  min={1}
-                  max={26}
-                  placeholder="Start Block"
-                  value={newDbReq.start_block}
-                  onChange={(e) => setNewDbReq({ ...newDbReq, start_block: Number(e.target.value) })}
-                />
-                <input
-                  type="number"
+                  value={newDbReq.start_block_id}
+                  onChange={(e) => setNewDbReq({ ...newDbReq, start_block_id: e.target.value })}
+                >
+                  <option value="">Start Date</option>
+                  {blockDates.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {new Date(b.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </option>
+                  ))}
+                </select>
+                <select
                   className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
-                  min={1}
-                  max={26}
-                  placeholder="End Block"
-                  value={newDbReq.end_block}
-                  onChange={(e) => setNewDbReq({ ...newDbReq, end_block: Number(e.target.value) })}
-                />
+                  value={newDbReq.end_block_id}
+                  onChange={(e) => setNewDbReq({ ...newDbReq, end_block_id: e.target.value })}
+                >
+                  <option value="">End Date</option>
+                  {blockDates.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {new Date(b.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </option>
+                  ))}
+                </select>
                 <input
                   className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
                   placeholder="Reason"
@@ -645,13 +645,13 @@ export default function VacationsView({
               <div className="mt-2">
                 <button
                   onClick={submitDbRequest}
-                  disabled={submitting || !newDbReq.fellow_id}
+                  disabled={submitting || !newDbReq.fellow_id || !newDbReq.start_block_id || !newDbReq.end_block_id}
                   className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs"
                 >
                   {submitting ? 'Submitting...' : 'Add Request'}
                 </button>
               </div>
-            </div>
+            </div>}
           </>
         ) : (
           /* ============== SWAPS SUB-VIEW (Supabase) ============== */
@@ -767,7 +767,7 @@ export default function VacationsView({
             )}
 
             {/* Create New Swap Request */}
-            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+            {userCanRequest && <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
               <div className="mb-2 font-semibold dark:text-gray-100">Request Schedule Swap</div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <select
@@ -815,7 +815,7 @@ export default function VacationsView({
                   {submitting ? 'Submitting...' : 'Request Swap'}
                 </button>
               </div>
-            </div>
+            </div>}
           </>
         )}
       </div>
@@ -825,6 +825,7 @@ export default function VacationsView({
   // =====================================================================
   // RENDER: Local-only fallback (original behavior)
   // =====================================================================
+  const userCanRequest = canRequest?.() ?? true;
   const pendingVacations = vacations.filter(v => !v.status || v.status === 'pending');
   const approvedVacations = vacations.filter(v => v.status === 'approved');
   const pendingSwapsLocal = swapRequests.filter(s => s.status === 'pending');
@@ -885,7 +886,7 @@ export default function VacationsView({
           </div>
 
           {/* Create New Time Off Request */}
-          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+          {userCanRequest && <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
             <div className="mb-2 font-semibold dark:text-gray-100">Create New Time Off Request</div>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
               <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newReq.fellow} onChange={(e) => setNewReq({ ...newReq, fellow: e.target.value })}>
@@ -898,7 +899,7 @@ export default function VacationsView({
             <div className="mt-2">
               <button onClick={submitNewRequest} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">Add Request</button>
             </div>
-          </div>
+          </div>}
         </>
       ) : (
         /* ============== SWAPS SUB-VIEW (Local) ============== */
@@ -960,7 +961,7 @@ export default function VacationsView({
           </div>
 
           {/* Create New Swap Request */}
-          <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+          {userCanRequest && <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
             <div className="mb-2 font-semibold dark:text-gray-100">Request Schedule Swap</div>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
               <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newSwap.requester} onChange={(e) => setNewSwap({ ...newSwap, requester: e.target.value })}>
@@ -985,7 +986,7 @@ export default function VacationsView({
                 Request Swap
               </button>
             </div>
-          </div>
+          </div>}
         </>
       )}
     </div>

@@ -184,11 +184,7 @@ export default function DashboardView({
               </>
             )}
           </div>
-        ) : (
-          <p className="mt-1 text-sm text-blue-100">
-            Welcome to FellowShift
-          </p>
-        )}
+        ) : null}
 
         {/* Year Progress Bar */}
         {currentBlockIdx >= 0 && (

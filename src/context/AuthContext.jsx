@@ -159,7 +159,7 @@ export const AuthProvider = ({ children }) => {
   // Permission helpers
   const canEdit = (program = null) => {
     if (!profile) return false;
-    if (profile.role === 'program_director') return true;
+    if (profile.role === 'program_director' || profile.role === 'admin') return true;
     if (profile.role === 'chief_fellow') {
       return program ? profile.program === program : true;
     }
@@ -167,15 +167,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   const canApprove = () => {
-    return (
-      profile?.role === 'program_director' || profile?.role === 'chief_fellow'
-    );
+    return ['program_director', 'chief_fellow', 'admin'].includes(profile?.role);
   };
 
-  const isViewer = () => profile?.role === 'viewer';
+  // Can submit time-off and swap requests (fellows and above, not residents)
+  const canRequest = () => {
+    return ['fellow', 'chief_fellow', 'program_director', 'admin'].includes(profile?.role);
+  };
+
+  const isResident = () => profile?.role === 'resident';
   const isFellow = () => profile?.role === 'fellow';
   const isProgramDirector = () => profile?.role === 'program_director';
   const isChiefFellow = () => profile?.role === 'chief_fellow';
+  const isAdmin = () => profile?.role === 'admin';
 
   const value = {
     user,
@@ -188,10 +192,12 @@ export const AuthProvider = ({ children }) => {
     updateProfile,
     canEdit,
     canApprove,
-    isViewer,
+    canRequest,
+    isResident,
     isFellow,
     isProgramDirector,
     isChiefFellow,
+    isAdmin,
     isAuthenticated: Boolean(user),
     isSupabaseConfigured,
   };

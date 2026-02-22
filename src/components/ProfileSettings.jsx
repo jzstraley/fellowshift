@@ -3,10 +3,11 @@ import { User, Save, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const roleLabels = {
+  admin: "Admin",
   program_director: "Program Director",
   chief_fellow: "Chief Fellow",
   fellow: "Fellow",
-  viewer: "Viewer",
+  resident: "Resident",
 };
 
 export default function ProfileSettings({ darkMode, toggleDarkMode }) {

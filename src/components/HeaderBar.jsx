@@ -12,6 +12,7 @@ export default function HeaderBar({
   violationCount = 0,
   showViolations = false,
   showEdit = false,
+  showAdmin = false,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -45,6 +46,14 @@ export default function HeaderBar({
     window.location.reload();
   };
 
+  const roleLabels = {
+    admin: "Admin",
+    program_director: "Program Director",
+    chief_fellow: "Chief Fellow",
+    fellow: "Fellow",
+    resident: "Resident",
+  };
+
   const views = [
     { key: "dashboard", label: "Home" },
     { key: "schedule", label: "Schedule" },
@@ -56,6 +65,7 @@ export default function HeaderBar({
     { key: "lectures", label: "Lectures" },
     ...(showEdit ? [{ key: "editSchedule", label: "Edit" }] : []),
     ...(showViolations ? [{ key: "violations", label: "Violations" }] : []),
+    ...(showAdmin ? [{ key: "admin", label: "Admin" }] : []),
   ];
 
   return (
@@ -85,6 +95,20 @@ export default function HeaderBar({
           >
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
+
+          {/* Username + role */}
+          {user && profile && (
+            <div className="hidden sm:flex flex-col items-end leading-tight text-right">
+              <span className="text-xs font-semibold truncate max-w-[130px]">
+                {profile.full_name || profile.email}
+              </span>
+              {profile.role && (
+                <span className={`text-[10px] ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  {roleLabels[profile.role] || profile.role}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* User menu (hamburger) */}
           <div className="relative" ref={userMenuRef}>

@@ -2,13 +2,6 @@
 
 ## 🔴 Priority Fixes (Must Do)
 
-### App Branding
-
-- [X] Fix app name from "my-app" to "Fellowship Scheduler" in `package.json`
-- [X] Update `<title>` in `index.html`
-- [X] Add logo/icon to header
-- [X] Add footer with copyright, disclaimer, "Created by Straley"
-
 ### Mobile Responsiveness
 
 - [ ] Make all tables horizontally scrollable on mobile
@@ -17,12 +10,6 @@
 - [ ] Replace drag-and-drop with tap-to-select or dropdowns on mobile
 
 ### UI Improvements
-
-- [X] Add PGY dividers on Schedule page (between PGY-4/5/6)
-- [X] Add PGY dividers on Stats page
-- [X] Sticky headers on all table views
-- [X] Highlight function - tap name or rotation to highlight across row/column
-- [X] Vacation blocks - muted/gradient/different color styling
 
 - [X] Move csv exporters to bottom.
 - [X] Need to fix button bar

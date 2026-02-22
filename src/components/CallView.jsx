@@ -96,6 +96,7 @@ export default function CallView({
   onDateCallMap,
   onOptimize,
   workHourViolations = [],
+  showBalanceCheck = false,
 }) {
   const callTargets = { 4: 5, 5: 4, 6: 2 };
   const floatTargets = { 4: 5, 5: 4, 6: 3 };
@@ -382,7 +383,7 @@ const exportCallFloatCSV = () => {
         </div>
       </div>
 
-      {stats && Array.isArray(fellows) && (
+      {showBalanceCheck && stats && Array.isArray(fellows) && (
         <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
           <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
             <h3 className="font-bold text-sm dark:text-gray-100">Call/Float Balance Check</h3>

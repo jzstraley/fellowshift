@@ -1,6 +1,6 @@
 // src/components/ClinicCoverageView.jsx
-import React, { useMemo } from "react";
-import { Calendar, AlertTriangle, CheckCircle } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Calendar, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   optimizeClinicCoverage,
   getWeekRange,
@@ -44,6 +44,69 @@ const CANNOT_COVER_ROTATIONS = [
 
   const { entries: coverageEntries, counts: coverageStats } = clinicCoverage;
 
+  // Month navigation for the clinic calendar
+  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1)); // July 2026
+
+  // Build 42-cell calendar grid (same pattern as lectures view)
+  const calendarDays = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startPad = firstDay.getDay(); // 0=Sun
+    const days = [];
+    for (let i = 0; i < startPad; i++) {
+      days.push({ date: new Date(year, month, -startPad + i + 1), isCurrentMonth: false });
+    }
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push({ date: new Date(year, month, i), isCurrentMonth: true });
+    }
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+      days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
+    }
+    return days;
+  }, [currentMonth]);
+
+  // Build lookup: "YYYY-M-D" → coverage entries whose clinicDate falls on that day
+  const coverageByDate = useMemo(() => {
+    const map = new Map();
+    coverageEntries.forEach((entry) => {
+      const d = entry.clinicDate;
+      if (!d) return;
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(entry);
+    });
+    return map;
+  }, [coverageEntries]);
+
+  // For a given calendar date, compute who is in clinic
+  const getClinicInfoForDate = (date) => {
+    const dow = date.getDay(); // 1=Mon..5=Fri
+    if (dow === 0 || dow === 6) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const dateStr = `${y}-${m}-${d}`;
+    const block = blockDates.find((bd) => dateStr >= bd.start && dateStr <= bd.end);
+    if (!block) return null;
+    const blockIdx = block.block - 1;
+    const coverageKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const coverages = coverageByDate.get(coverageKey) || [];
+    const absentSet = new Set(coverages.map((e) => e.absent));
+    const inClinic = [];
+    fellows.forEach((fellow) => {
+      if (clinicDays[fellow] === dow) {
+        const rotation = schedule[fellow]?.[blockIdx] || "";
+        if (rotation !== "Nights") {
+          inClinic.push({ fellow, pgy: pgyLevels[fellow] });
+        }
+      }
+    });
+    return { inClinic, coverages };
+  };
+
     // clinicDay: 1=Mon..5=Fri (matches JS getDay() for Mon-Fri)
   const clinicDayName = (day) => {
     const names = { 0: "None", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri" };
@@ -70,10 +133,10 @@ const CANNOT_COVER_ROTATIONS = [
   };
 
   const getPGYColor = (pgy) => {
-    if (pgy === 4) return "bg-blue-100 text-blue-800 border-blue-300";
-    if (pgy === 5) return "bg-green-100 text-green-800 border-green-300";
-    if (pgy === 6) return "bg-purple-100 text-purple-800 border-purple-300";
-    return "bg-gray-100 text-gray-800 border-gray-300";
+    if (pgy === 4) return "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 border-blue-300 dark:border-blue-700";
+    if (pgy === 5) return "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 border-green-300 dark:border-green-700";
+    if (pgy === 6) return "bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-100 border-purple-300 dark:border-purple-700";
+    return "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-500";
   };
 
   const noCoverageCount = coverageEntries.filter((e) => !e.coverer).length;
@@ -121,6 +184,127 @@ const CANNOT_COVER_ROTATIONS = [
         </div>
       </div>
 
+      {/* Monthly Clinic Calendar */}
+      <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
+        {/* Month navigation header */}
+        <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
+          <button
+            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+          >
+            <ChevronLeft className="w-4 h-4 dark:text-gray-200" />
+          </button>
+          <h3 className="font-bold text-base flex items-center gap-2 dark:text-gray-100">
+            <Calendar className="w-4 h-4" />
+            {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })} — Clinic
+          </h3>
+          <button
+            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+          >
+            <ChevronRight className="w-4 h-4 dark:text-gray-200" />
+          </button>
+        </div>
+
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 border-b border-gray-300 dark:border-gray-600">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <div key={day} className="p-1 text-center text-xs font-bold text-gray-500 dark:text-gray-400">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7">
+          {calendarDays.map((day, idx) => {
+            const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+            const info = day.isCurrentMonth && !isWeekend ? getClinicInfoForDate(day.date) : null;
+
+            return (
+              <div
+                key={idx}
+                className={`min-h-[64px] p-1 border-r border-b border-gray-200 dark:border-gray-700 ${
+                  !day.isCurrentMonth
+                    ? "opacity-30 bg-gray-50 dark:bg-gray-900"
+                    : isWeekend
+                    ? "bg-gray-50 dark:bg-gray-900"
+                    : ""
+                }`}
+              >
+                <div className={`text-xs font-semibold mb-0.5 ${isWeekend ? "text-gray-400 dark:text-gray-600" : "dark:text-gray-200"}`}>
+                  {day.date.getDate()}
+                </div>
+
+                {info && (
+                  <div className="space-y-0.5">
+                    {/* Fellows normally in clinic */}
+                    {info.inClinic.map(({ fellow, pgy }) => (
+                      <div
+                        key={fellow}
+                        className={`text-[10px] px-1 py-0.5 rounded truncate font-semibold ${getPGYColor(pgy)}`}
+                        title={`${fellow} (PGY-${pgy}) — regular clinic`}
+                      >
+                        {fellow}
+                      </div>
+                    ))}
+                    {/* Coverage entries: coverer (or uncovered) for nights fellows */}
+                    {info.coverages.map((entry, i) =>
+                      entry.coverer ? (
+                        <div
+                          key={i}
+                          className="text-[10px] px-1 py-0.5 rounded truncate font-semibold bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300"
+                          title={`${entry.coverer} covers clinic for ${entry.absent} (on Nights)`}
+                        >
+                          {entry.coverer}*
+                        </div>
+                      ) : (
+                        <div
+                          key={i}
+                          className="text-[10px] px-1 py-0.5 rounded truncate font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                          title={`${entry.absent} on Nights — no coverage assigned`}
+                        >
+                          !{entry.absent}
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+
+                {/* No block (outside academic year) */}
+                {day.isCurrentMonth && !isWeekend && !info && (
+                  <div className="text-[9px] text-gray-300 dark:text-gray-600">—</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400">
+          <span className="flex items-center gap-1">
+            <span className="px-1 rounded bg-blue-100 text-blue-800 border border-blue-300 text-[10px] font-semibold">Name</span>
+            PGY-4
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="px-1 rounded bg-green-100 text-green-800 border border-green-300 text-[10px] font-semibold">Name</span>
+            PGY-5
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="px-1 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-semibold">Name</span>
+            PGY-6
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="px-1 rounded bg-amber-100 text-amber-900 text-[10px] font-semibold">Name*</span>
+            covering for nights fellow
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="px-1 rounded bg-red-100 text-red-700 text-[10px] font-semibold">!Name</span>
+            uncovered
+          </span>
+        </div>
+      </div>
+
       {/* Coverage Table */}
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
@@ -134,11 +318,10 @@ const CANNOT_COVER_ROTATIONS = [
         </div>
 
         <div
-          className="overflow-x-auto max-h-[400px] overflow-y-auto"
-          style={{ WebkitOverflowScrolling: "touch" }}
+          className="overflow-x-auto"
         >
           <table className="min-w-full text-xs">
-            <thead className="sticky top-0 bg-gray-200 dark:bg-gray-700 z-10">
+            <thead className="bg-gray-200 dark:bg-gray-700">
               <tr className="border-b border-gray-400 dark:border-gray-600">
                 <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Blk</th>
                 <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Week</th>

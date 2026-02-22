@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-02-21 — Call/Float Balance Check gated to Program Directors
+
+- Call/Float Balance Check table in the Call/Float view is now only visible to program directors
+- "Check Balance" button in the toolbar is now only rendered for program directors
+- Fixed a race condition where the schedule recalculation effect (150ms debounce) would overwrite call/float counts with zeros after `generateCallAndFloat()` ran on mount — call/float values now persist across schedule re-renders
+
+## 2026-02-21 — Monthly Clinic Calendar
+
+- Added a monthly calendar above the Weekly Clinic Coverage for Nights table in the Clinic Coverage view, similar in style to the Lecture Calendar
+- Calendar shows all fellows in clinic each weekday: PGY-colored badges for regular clinic, amber badges (Name*) for fellows covering a nights fellow's clinic slot, and red badges (!Name) for uncovered slots
+- Month navigation arrows (‹ ›) allow browsing through the academic year
+- Removed the ▼ clinic day indicator that was previously shown in each schedule cell in the Schedule view
+
+## 2026-02-21 — Schedule View Block Selector
+
+- Replaced horizontal-scroll block table in Schedule view with a block selector dropdown showing all 26 blocks with date ranges
+- Table now displays only the selected block's column — no horizontal scrolling needed
+- App auto-detects today's date on load and pre-selects the current block; falls back to Block 1 if before the schedule year
+- Current block is marked with a ★ in the dropdown and a blue header with "Current" badge in the table
+- Rotation filter and fellow/rotation click-to-highlight remain fully functional in the single-block view
+
+## 2026-02-21
+
+- Added username and access level display in the top-right header bar beside the hamburger menu, showing the user's full name and formatted role (Program Director, Chief Fellow, Fellow, Viewer)
+- Replaced "Start Block" and "End Block" number inputs in the time off request creator with "Start Date" and "End Date" dropdowns showing actual calendar dates from configured block dates
+
 ## 2026-02-18 — Dashboard Redesign
 
 - Redesigned Dashboard with time-of-day greeting and gradient hero banner showing current block, days remaining, and year progress bar
