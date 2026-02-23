@@ -25,6 +25,7 @@ export default function ScheduleEditorView({
 }) {
   const [mode, setMode] = useState(MODE_GRID);
   const [conflictResults, setConflictResults] = useState(null);
+  const [changeLog, setChangeLog] = useState([]);
 
   // Undo/Redo: dual stacks of schedule snapshots
   const undoStackRef = useRef([]);
@@ -42,9 +43,27 @@ export default function ScheduleEditorView({
   const undo = useCallback(() => {
     if (undoStackRef.current.length === 0) return;
     redoStackRef.current = [JSON.stringify(schedule), ...redoStackRef.current.slice(0, MAX_HISTORY - 1)];
-    const prev = JSON.parse(undoStackRef.current[0]);
+    const prevState = JSON.parse(undoStackRef.current[0]);
     undoStackRef.current = undoStackRef.current.slice(1);
-    setSchedule(prev);
+    setSchedule(prevState);
+    setChangeLog((log) => log.slice(1));
+  }, [setSchedule, schedule]);
+
+  // Undo back to a specific entry in the change log (index 0 = most recent)
+  const undoTo = useCallback((logIndex) => {
+    const stepsBack = logIndex + 1;
+    const steps = Math.min(stepsBack, undoStackRef.current.length);
+    if (steps === 0) return;
+    const targetState = JSON.parse(undoStackRef.current[steps - 1]);
+    const intermediateStates = undoStackRef.current.slice(0, steps - 1).reverse();
+    redoStackRef.current = [
+      ...intermediateStates,
+      JSON.stringify(schedule),
+      ...redoStackRef.current,
+    ].slice(0, MAX_HISTORY);
+    undoStackRef.current = undoStackRef.current.slice(steps);
+    setSchedule(targetState);
+    setChangeLog((log) => log.slice(steps));
   }, [setSchedule, schedule]);
 
   const redo = useCallback(() => {
@@ -97,7 +116,13 @@ export default function ScheduleEditorView({
 
   const handleCellChange = useCallback(
     (fellow, blockIdx, newRotation) => {
+      const oldRotation = schedule[fellow]?.[blockIdx] || '';
+      if (oldRotation === newRotation) return;
       pushHistory();
+      setChangeLog((prev) => [
+        { id: Date.now(), fellow, blockNumber: blockIdx + 1, from: oldRotation, to: newRotation },
+        ...prev,
+      ].slice(0, 20));
       setSchedule((prev) => {
         const next = {};
         for (const f of Object.keys(prev)) next[f] = [...prev[f]];
@@ -105,7 +130,7 @@ export default function ScheduleEditorView({
         return next;
       });
     },
-    [setSchedule, pushHistory]
+    [setSchedule, pushHistory, schedule]
   );
 
   const runValidation = useCallback(() => {
@@ -260,6 +285,38 @@ export default function ScheduleEditorView({
           pushHistory={pushHistory}
         />
       )}
+
+      {/* Change History */}
+      {changeLog.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-600 p-3">
+          <div className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">Recent Changes</div>
+          <div className="space-y-1">
+            {changeLog.map((entry, i) => (
+              <div key={entry.id} className="flex items-center justify-between text-xs py-0.5 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                <span className="text-gray-600 dark:text-gray-300">
+                  <span className="font-medium">{entry.fellow}</span>
+                  {' · Block '}
+                  <span className="font-medium">{entry.blockNumber}</span>
+                  {': '}
+                  <span className={`px-1 rounded text-[10px] font-semibold ${getRotationColor(entry.from)}`}>
+                    {entry.from || '(empty)'}
+                  </span>
+                  {' → '}
+                  <span className={`px-1 rounded text-[10px] font-semibold ${getRotationColor(entry.to)}`}>
+                    {entry.to || '(empty)'}
+                  </span>
+                </span>
+                <button
+                  onClick={() => undoTo(i)}
+                  className="ml-3 flex items-center gap-1 px-2 py-0.5 text-[10px] rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 shrink-0"
+                >
+                  <Undo2 className="w-3 h-3" /> Undo
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -365,7 +422,7 @@ function GridEditor({
   return (
     <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
       <div
-        className="overflow-auto max-h-[calc(100vh-260px)]"
+        className="overflow-x-auto"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         <table className="min-w-full text-[10px] border-separate border-spacing-0">

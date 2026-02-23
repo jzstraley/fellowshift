@@ -32,17 +32,26 @@ export default function HeaderBar({
 
   const handleSignOut = async () => {
     setUserMenuOpen(false);
-    const { error: signOutError } = await signOut();
-    if (signOutError) {
-      console.error('Sign out error:', signOutError);
+    // Race signOut against a timeout so the button never hangs if Supabase is slow
+    try {
+      await Promise.race([
+        signOut(),
+        new Promise(resolve => setTimeout(resolve, 3000)),
+      ]);
+    } catch (_) {
+      // ignore
     }
-    // Clear persisted session so reload won't restore it
+    // Clear all Supabase auth data from localStorage
     try {
       const host = new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0];
       localStorage.removeItem(`sb-${host}-auth-token`);
     } catch (_) {
-      // ignore if URL parsing or removal fails
+      // ignore if URL parsing fails
     }
+    // Fallback: clear any remaining sb-* keys
+    Object.keys(localStorage)
+      .filter(key => key.startsWith('sb-'))
+      .forEach(key => localStorage.removeItem(key));
     window.location.reload();
   };
 

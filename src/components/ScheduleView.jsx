@@ -8,10 +8,10 @@ import {
   formatDate,
 } from "../utils/scheduleUtils";
 
-const PGYDividerRow = ({ pgy }) => (
+const PGYDividerRow = ({ pgy, colSpan }) => (
   <tr>
     <td
-      colSpan={2}
+      colSpan={colSpan}
       className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-sm font-extrabold text-gray-700 dark:text-gray-200"
     >
       PGY-{pgy}
@@ -50,9 +50,8 @@ export default function ScheduleView({
   const isRowHot = (f) => highlight?.type === "fellow" && highlight.fellow === f;
   const isRotHot = (r) => highlight?.type === "rotation" && highlight.rotation === r;
 
-  // Block selection: detect current block from today's date
+  // Current block for column highlight
   const currentBlockIdx = useMemo(() => getInitialBlockIdx(blockDates), [blockDates]);
-  const [selectedBlockIdx, setSelectedBlockIdx] = useState(() => getInitialBlockIdx(blockDates));
 
   // Precompute vacation set for O(1) checks: keys like "Fellow#blockNumber"
   const vacationSet = useMemo(() => {
@@ -81,7 +80,6 @@ export default function ScheduleView({
     return m;
   }, [workHourViolations]);
 
-
   // Collect unique rotation names from the schedule for the rotation filter dropdown
   const allRotations = useMemo(() => {
     const rotSet = new Set();
@@ -93,6 +91,20 @@ export default function ScheduleView({
     return Array.from(rotSet).sort();
   }, [schedule]);
 
+  // Group consecutive blocks by rotation number for the header
+  const rotationGroups = useMemo(() => {
+    const groups = [];
+    let i = 0;
+    while (i < blockDates.length) {
+      const rot = blockDates[i].rotation;
+      let j = i;
+      while (j < blockDates.length && blockDates[j].rotation === rot) j++;
+      groups.push({ rotation: rot, startIdx: i, count: j - i });
+      i = j;
+    }
+    return groups;
+  }, [blockDates]);
+
   // Group fellows by PGY
   const fellowsByPGY = useMemo(
     () => ({
@@ -103,27 +115,12 @@ export default function ScheduleView({
     [fellows]
   );
 
-  const selectedBd = blockDates[selectedBlockIdx];
-  const isCurrentBlock = selectedBlockIdx === currentBlockIdx;
+  const totalCols = 1 + blockDates.length;
 
   const renderFellowRow = (fellow, isLastInGroup) => {
     const pgy = pgyLevels[fellow];
     const hotRow = isRowHot(fellow);
     const fadeRow = highlight && !hotRow && highlight.type === "fellow";
-
-    const idx = selectedBlockIdx;
-    const blockNumber = idx + 1;
-    const rot = schedule[fellow]?.[idx] ?? "";
-    const isVac = isBlockInVacationFast(fellow, blockNumber);
-    const hotRot = isRotHot(rot);
-    const hotCell =
-      (highlight?.type === "fellow" && hotRow) ||
-      (highlight?.type === "rotation" && hotRot);
-    const fadeCell = highlight && !hotCell;
-
-    const vacStyle = isVac
-      ? "bg-gradient-to-br from-gray-200 to-gray-100 dark:from-gray-600 dark:to-gray-700 text-gray-700 dark:text-gray-200 opacity-95"
-      : "";
 
     return (
       <tr
@@ -139,41 +136,59 @@ export default function ScheduleView({
           onClick={() => toggleHighlight({ type: "fellow", fellow })}
           title="Click to highlight this fellow (click again to clear)"
         >
-          <div className="flex items-center gap-1">
-            <span className="truncate">{fellow}</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">PGY{pgy}</span>
-          </div>
+          <span className="truncate text-center w-full block">{fellow}</span>
         </td>
 
-        <td
-          className={`border-r border-gray-200 dark:border-gray-700 px-1 py-1 text-center transition-opacity ${
-            fadeCell ? "opacity-30" : "opacity-100"
-          } cursor-pointer`}
-        >
-          <div
-            className={`relative px-2 py-1.5 rounded text-[12px] font-semibold whitespace-nowrap transition-all ${
-              isVac ? "" : getRotationColor(rot)
-            } ${vacStyle} ${hotRot ? "ring-2 ring-amber-400" : ""}`}
-            title="Click to highlight this rotation"
-            onClick={(e) => {
-              toggleHighlight({ type: "rotation", rotation: rot });
-              e.stopPropagation();
-            }}
-          >
-            <div className="relative">
-              {getBlockDisplay(fellow, idx, schedule, vacations)}
-              {violationMap.has(`${fellow}#${blockNumber}`) && (
-                <span
-                  className="absolute -top-1 -right-1 w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent"
-                  title={violationMap
-                    .get(`${fellow}#${blockNumber}`)
-                    .map((v) => v.detail)
-                    .join("\n")}
-                />
-              )}
-            </div>
-          </div>
-        </td>
+        {blockDates.map((_, idx) => {
+          const blockNumber = idx + 1;
+          const rot = schedule[fellow]?.[idx] ?? "";
+          const isVac = isBlockInVacationFast(fellow, blockNumber);
+          const hotRot = isRotHot(rot);
+          const hotCell =
+            (highlight?.type === "fellow" && hotRow) ||
+            (highlight?.type === "rotation" && hotRot);
+          const fadeCell = highlight && !hotCell;
+          const isCurrentCol = idx === currentBlockIdx;
+
+          const vacStyle = isVac
+            ? "bg-gradient-to-br from-gray-200 to-gray-100 dark:from-gray-600 dark:to-gray-700 text-gray-700 dark:text-gray-200 opacity-95"
+            : "";
+
+          return (
+            <td
+              key={idx}
+              className={`border-r border-gray-200 dark:border-gray-700 px-1 py-1 text-center transition-opacity ${
+                fadeCell ? "opacity-30" : "opacity-100"
+              } cursor-pointer ${
+                isCurrentCol ? "bg-blue-50 dark:bg-blue-900/10" : ""
+              }`}
+            >
+              <div
+                className={`relative px-2 py-1.5 rounded text-[11px] font-semibold whitespace-nowrap transition-all ${
+                  isVac ? "" : getRotationColor(rot)
+                } ${vacStyle} ${hotRot ? "ring-2 ring-amber-400" : ""}`}
+                title="Click to highlight this rotation"
+                onClick={(e) => {
+                  toggleHighlight({ type: "rotation", rotation: rot });
+                  e.stopPropagation();
+                }}
+              >
+                <div className="relative">
+                  {getBlockDisplay(fellow, idx, schedule, vacations)}
+                  {violationMap.has(`${fellow}#${blockNumber}`) && (
+                    <span
+                      className="absolute -top-1 -right-1 w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent"
+                      title={violationMap
+                        .get(`${fellow}#${blockNumber}`)
+                        .map((v) => v.detail)
+                        .join("\n")}
+                    />
+                  )}
+                </div>
+              </div>
+            </td>
+          );
+        })}
       </tr>
     );
   };
@@ -202,25 +217,6 @@ export default function ScheduleView({
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap">
-        {/* Block selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-            Block:
-          </label>
-          <select
-            value={selectedBlockIdx}
-            onChange={(e) => setSelectedBlockIdx(Number(e.target.value))}
-            className="px-3 py-2 text-sm font-semibold rounded border min-h-[44px] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
-          >
-            {blockDates.map((bd, i) => (
-              <option key={i} value={i}>
-                Block {bd.block} · {formatDate(bd.start)}–{formatDate(bd.end)}
-                {i === currentBlockIdx ? " ★ Current" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Rotation filter */}
         <div className="flex items-center gap-2 sm:ml-auto">
           <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
@@ -250,7 +246,7 @@ export default function ScheduleView({
 
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div
-          className="overflow-auto max-h-[calc(100vh-260px)]"
+          className="overflow-x-auto"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           <table className="min-w-full text-xs border-separate border-spacing-0">
@@ -258,9 +254,15 @@ export default function ScheduleView({
               {/* Rotation group header row */}
               <tr className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-30">
                 <th className="sticky top-0 left-0 z-40 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 w-24 min-w-[96px]" />
-                <th className="sticky top-0 z-30 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-1 text-center font-bold dark:text-gray-200">
-                  Rotation {selectedBd.rotation}
-                </th>
+                {rotationGroups.map((g) => (
+                  <th
+                    key={g.rotation}
+                    colSpan={g.count}
+                    className="sticky top-0 z-30 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-1 text-center font-bold dark:text-gray-200"
+                  >
+                    Rotation {g.rotation}
+                  </th>
+                ))}
               </tr>
 
               {/* Block header row */}
@@ -268,40 +270,46 @@ export default function ScheduleView({
                 <th className="sticky left-0 top-[26px] z-40 bg-gray-200 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-left font-bold min-w-[96px] dark:text-gray-100">
                   Fellow
                 </th>
-                <th
-                  className={`sticky top-[26px] z-30 border-r border-gray-300 dark:border-gray-600 px-2 py-1 text-center min-w-[120px] ${
-                    isCurrentBlock
-                      ? "bg-blue-100 dark:bg-blue-900/40"
-                      : "bg-gray-200 dark:bg-gray-700"
-                  }`}
-                >
-                  <div className="font-bold dark:text-gray-100">
-                    Block {selectedBd.block}
-                  </div>
-                  <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap font-semibold">
-                    {formatDate(selectedBd.start)}–{formatDate(selectedBd.end)}
-                  </div>
-                  {isCurrentBlock && (
-                    <div className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
-                      Current
-                    </div>
-                  )}
-                </th>
+                {blockDates.map((bd, i) => {
+                  const isCurrentCol = i === currentBlockIdx;
+                  return (
+                    <th
+                      key={i}
+                      className={`sticky top-[26px] z-30 border-r border-gray-300 dark:border-gray-600 px-1 py-1 text-center min-w-[90px] ${
+                        isCurrentCol
+                          ? "bg-blue-100 dark:bg-blue-900/40"
+                          : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                    >
+                      <div className="font-bold dark:text-gray-100 text-[11px]">
+                        Block {bd.block}
+                      </div>
+                      <div className="text-[9px] text-gray-700 dark:text-gray-300 whitespace-nowrap font-semibold">
+                        {formatDate(bd.start)}–{formatDate(bd.end)}
+                      </div>
+                      {isCurrentCol && (
+                        <div className="text-[9px] text-blue-600 dark:text-blue-400 font-semibold">
+                          Current
+                        </div>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
 
             <tbody>
-              <PGYDividerRow pgy={4} />
+              <PGYDividerRow pgy={4} colSpan={totalCols} />
               {fellowsByPGY[4].map((fellow, idx) =>
                 renderFellowRow(fellow, idx === fellowsByPGY[4].length - 1)
               )}
 
-              <PGYDividerRow pgy={5} />
+              <PGYDividerRow pgy={5} colSpan={totalCols} />
               {fellowsByPGY[5].map((fellow, idx) =>
                 renderFellowRow(fellow, idx === fellowsByPGY[5].length - 1)
               )}
 
-              <PGYDividerRow pgy={6} />
+              <PGYDividerRow pgy={6} colSpan={totalCols} />
               {fellowsByPGY[6].map((fellow, idx) =>
                 renderFellowRow(fellow, idx === fellowsByPGY[6].length - 1)
               )}

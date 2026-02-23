@@ -112,7 +112,7 @@ function buildTimeline(fellow, schedule, callSchedule, nightFloatSchedule, block
     const end = parseDate(block.end);
     for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
       const iso = toISO(d);
-      const entry = { hours: 0, shifts: [], isNight: false, block: blockNum, date: iso };
+      const entry = { hours: 0, shifts: [], isNight: false, block: blockNum, date: iso, isVacation };
 
       if (!isVacation) {
         // Add rotation shift
@@ -194,55 +194,70 @@ function buildTimeline(fellow, schedule, callSchedule, nightFloatSchedule, block
 // ─── ACGME Rule Checks ─────────────────────────────────────────────────────
 
 /**
- * Rule 1: 80-hour weekly limit (averaged over 4 weeks)
+ * Rule 1: 80-hour weekly limit averaged over the rotation period (or 4 weeks, whichever is shorter).
+ * ACGME prohibits rolling averages — each rotation is checked independently.
+ * Vacation/leave days are excluded from both numerator and denominator.
  */
 function check80HourRule(fellow, timeline, blockDates) {
   const violations = [];
-  const dates = Array.from(timeline.keys()).sort();
-  if (dates.length === 0) return violations;
 
-  // Calculate weekly hours for each 7-day period starting each Monday
-  const firstDate = parseDate(dates[0]);
-  // Find first Monday on or before the first date
-  const startDow = firstDate.getDay();
-  const mondayOffset = startDow === 0 ? -6 : 1 - startDow;
-  const firstMonday = addDays(firstDate, mondayOffset);
-
-  const weeklyHours = [];
-  let weekStart = new Date(firstMonday);
-  const lastDate = parseDate(dates[dates.length - 1]);
-
-  while (weekStart <= lastDate) {
-    let hours = 0;
-    for (let i = 0; i < 7; i++) {
-      const iso = toISO(addDays(weekStart, i));
-      const entry = timeline.get(iso);
-      if (entry) hours += entry.hours;
-    }
-    weeklyHours.push({ start: new Date(weekStart), hours });
-    weekStart = addDays(weekStart, 7);
+  // Group blockDates by rotation number
+  const rotationGroups = new Map();
+  for (const block of blockDates) {
+    if (!rotationGroups.has(block.rotation)) rotationGroups.set(block.rotation, []);
+    rotationGroups.get(block.rotation).push(block);
   }
 
-  // Check 4-week rolling averages
-  for (let i = 0; i <= weeklyHours.length - 4; i++) {
-    const fourWeekTotal = weeklyHours[i].hours + weeklyHours[i+1].hours +
-                          weeklyHours[i+2].hours + weeklyHours[i+3].hours;
-    const avg = fourWeekTotal / 4;
-    if (avg > 80) {
-      const startISO = toISO(weeklyHours[i].start);
-      const endISO = toISO(addDays(weeklyHours[i+3].start, 6));
-      const block = findBlockForDate(startISO, blockDates);
-      violations.push({
-        rule: '80hr_weekly_avg',
-        ruleLabel: '80-Hour Weekly Average',
-        severity: 'error',
-        fellow,
-        block,
-        startDate: startISO,
-        endDate: endISO,
-        hours: Math.round(avg * 10) / 10,
-        detail: `${Math.round(avg * 10) / 10}h/wk average over 4 weeks (${startISO} to ${endISO}). Limit: 80h.`,
-      });
+  for (const [rotNum, blocks] of rotationGroups) {
+    blocks.sort((a, b) => a.block - b.block);
+
+    const rotStartDate = parseDate(blocks[0].start);
+    const rotEndDate = parseDate(blocks[blocks.length - 1].end);
+    const rotDays = Math.round((rotEndDate - rotStartDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    // If rotation > 28 days, split into 28-day periods; otherwise use the full rotation
+    const chunkSize = 28;
+    const numChunks = Math.ceil(rotDays / chunkSize);
+
+    for (let chunk = 0; chunk < numChunks; chunk++) {
+      const chunkStart = addDays(rotStartDate, chunk * chunkSize);
+      const chunkEnd = addDays(rotStartDate, Math.min((chunk + 1) * chunkSize, rotDays) - 1);
+
+      let totalHours = 0;
+      let nonVacationDays = 0;
+
+      for (let d = new Date(chunkStart); d <= chunkEnd; d = addDays(d, 1)) {
+        const iso = toISO(d);
+        const entry = timeline.get(iso);
+        if (!entry) continue;
+        // Exclude vacation days from both numerator and denominator
+        if (entry.isVacation && entry.hours === 0) continue;
+        nonVacationDays++;
+        totalHours += entry.hours;
+      }
+
+      if (nonVacationDays === 0) continue;
+
+      // Average weekly hours = total hours / (non-vacation days / 7)
+      const numWeeks = nonVacationDays / 7;
+      const avg = totalHours / numWeeks;
+
+      if (avg > 80) {
+        const startISO = toISO(chunkStart);
+        const endISO = toISO(chunkEnd);
+        const block = findBlockForDate(startISO, blockDates);
+        violations.push({
+          rule: '80hr_weekly_avg',
+          ruleLabel: '80-Hour Weekly Average',
+          severity: 'error',
+          fellow,
+          block,
+          startDate: startISO,
+          endDate: endISO,
+          hours: Math.round(avg * 10) / 10,
+          detail: `${Math.round(avg * 10) / 10}h/wk average for rotation ${rotNum} (${startISO} to ${endISO}). Limit: 80h.`,
+        });
+      }
     }
   }
 
@@ -339,29 +354,56 @@ function check8HourRestRule(fellow, timeline, blockDates) {
 }
 
 /**
- * Rule 4: One day off in 7 (averaged over 4 weeks)
- * Must have at least 4 days off in every 28-day window.
+ * Rule 4: One day off in 7, averaged over the rotation period (or 4 weeks if shorter).
+ * ACGME prohibits rolling averages — each rotation is checked independently.
+ * Vacation/leave days are excluded from both numerator and denominator.
  */
 function checkOneDayOffRule(fellow, timeline, blockDates) {
   const violations = [];
-  const dates = Array.from(timeline.keys()).sort();
-  if (dates.length < 28) return violations;
 
-  for (let i = 0; i <= dates.length - 28; i++) {
-    let daysOff = 0;
-    for (let j = i; j < i + 28; j++) {
-      const entry = timeline.get(dates[j]);
-      if (!entry || entry.hours === 0) daysOff++;
-    }
-    if (daysOff < 4) {
-      const startISO = dates[i];
-      const endISO = dates[i + 27];
-      const block = findBlockForDate(startISO, blockDates);
-      // Deduplicate: skip if we already have a violation for this fellow in an overlapping window
-      const isDuplicate = violations.some(v =>
-        v.rule === '1_day_off_in_7' && v.startDate >= startISO && v.startDate <= endISO
-      );
-      if (!isDuplicate) {
+  // Group blockDates by rotation number
+  const rotationGroups = new Map();
+  for (const block of blockDates) {
+    if (!rotationGroups.has(block.rotation)) rotationGroups.set(block.rotation, []);
+    rotationGroups.get(block.rotation).push(block);
+  }
+
+  for (const [rotNum, blocks] of rotationGroups) {
+    blocks.sort((a, b) => a.block - b.block);
+
+    const rotStartDate = parseDate(blocks[0].start);
+    const rotEndDate = parseDate(blocks[blocks.length - 1].end);
+    const rotDays = Math.round((rotEndDate - rotStartDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    // If rotation > 28 days, split into 28-day periods; otherwise use the full rotation
+    const chunkSize = 28;
+    const numChunks = Math.ceil(rotDays / chunkSize);
+
+    for (let chunk = 0; chunk < numChunks; chunk++) {
+      const chunkStart = addDays(rotStartDate, chunk * chunkSize);
+      const chunkEnd = addDays(rotStartDate, Math.min((chunk + 1) * chunkSize, rotDays) - 1);
+
+      let nonVacationDays = 0;
+      let daysOff = 0;
+
+      for (let d = new Date(chunkStart); d <= chunkEnd; d = addDays(d, 1)) {
+        const iso = toISO(d);
+        const entry = timeline.get(iso);
+        if (!entry) continue;
+        // Exclude vacation days from both numerator and denominator
+        if (entry.isVacation && entry.hours === 0) continue;
+        nonVacationDays++;
+        if (entry.hours === 0) daysOff++;
+      }
+
+      if (nonVacationDays === 0) continue;
+
+      // Require at least 1 day off per 7 scheduled (non-vacation) days
+      const requiredDaysOff = Math.floor(nonVacationDays / 7);
+      if (requiredDaysOff > 0 && daysOff < requiredDaysOff) {
+        const startISO = toISO(chunkStart);
+        const endISO = toISO(chunkEnd);
+        const block = findBlockForDate(startISO, blockDates);
         violations.push({
           rule: '1_day_off_in_7',
           ruleLabel: '1 Day Off per 7 Days',
@@ -371,7 +413,7 @@ function checkOneDayOffRule(fellow, timeline, blockDates) {
           startDate: startISO,
           endDate: endISO,
           hours: null,
-          detail: `Only ${daysOff} days off in 28-day window (${startISO} to ${endISO}). Minimum: 4 days.`,
+          detail: `Only ${daysOff} days off in ${nonVacationDays} scheduled days for rotation ${rotNum} (${startISO} to ${endISO}). Minimum: ${requiredDaysOff}.`,
         });
       }
     }

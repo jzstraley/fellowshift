@@ -1,7 +1,7 @@
 // src/components/CalendarView.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { blockDates, pgyLevels } from "../data/scheduleData";
-import { getRotationColor } from "../utils/scheduleUtils";
+import { getRotationColor, formatDate } from "../utils/scheduleUtils";
 
 // --- helpers ---
 const toISODate = (d) => {
@@ -68,11 +68,21 @@ const PGYDividerRow = ({ pgy, colSpan }) => (
   </tr>
 );
 
+function getInitialBlockIdx() {
+  const today = new Date().toISOString().split("T")[0];
+  const idx = blockDates.findIndex((bd) => today >= bd.start && today <= bd.end);
+  return idx >= 0 ? idx : 0;
+}
+
 export default function CalendarView({ fellows, schedule, dateCallMap }) {
   const startDate = new Date(2026, 6, 1, 12); // Jul 1 2026
   const endDate = new Date(2027, 5, 30, 12); // Jun 30 2027
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const [selectedBlockIdx, setSelectedBlockIdx] = useState(getInitialBlockIdx);
+
+  const selectedBd = blockDates[selectedBlockIdx];
 
   // Build all days once
   const allDays = useMemo(() => {
@@ -87,10 +97,17 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
     return out;
   }, []);
 
-  // Group days by month once
+  // Filter days to only those within the selected block
+  const blockDays = useMemo(() => {
+    const start = new Date(selectedBd.start + "T00:00:00");
+    const end = new Date(selectedBd.end + "T23:59:59");
+    return allDays.filter((day) => day >= start && day <= end);
+  }, [allDays, selectedBlockIdx]);
+
+  // Group block days by month
   const months = useMemo(() => {
     const m = {};
-    allDays.forEach((day) => {
+    blockDays.forEach((day) => {
       const monthKey = day.toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
@@ -99,7 +116,7 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
       m[monthKey].push(day);
     });
     return m;
-  }, [allDays]);
+  }, [blockDays]);
 
   const fellowsByPGY = useMemo(
     () => ({
@@ -185,15 +202,32 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
 
   return (
     <div className="space-y-4">
-      {/* Legend */}
-      <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 p-2">
-        <div className="flex flex-wrap gap-2 text-[9px] items-center dark:text-gray-200">
-          <span className="font-bold">Legend:</span>
+      {/* Block selector toolbar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          Block:
+        </label>
+        <select
+          value={selectedBlockIdx}
+          onChange={(e) => setSelectedBlockIdx(Number(e.target.value))}
+          className="px-3 py-2 text-sm font-semibold rounded border min-h-[44px] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
+        >
+          {blockDates.map((bd, i) => (
+            <option key={i} value={i}>
+              Block {bd.block} · {formatDate(bd.start)}–{formatDate(bd.end)}
+              {i === getInitialBlockIdx() ? " ★ Current" : ""}
+            </option>
+          ))}
+        </select>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-2 text-[9px] items-center dark:text-gray-200 sm:ml-auto">
+          <span className="font-bold text-sm text-gray-700 dark:text-gray-300">Legend:</span>
           <span className="px-2 py-1 bg-red-500 text-white rounded font-semibold">Call</span>
           <span className="px-2 py-1 bg-purple-600 text-white rounded font-semibold">Float</span>
           <span className="px-2 py-1 bg-black text-white rounded font-semibold">Nights</span>
           <span className="border-l border-gray-300 dark:border-gray-600 pl-2 ml-1 text-gray-600 dark:text-gray-400">
-            Nights = Sun-Fri (6 nights)
+            Nights = Sun–Fri
           </span>
         </div>
       </div>
@@ -203,13 +237,11 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
 
         return (
           <div key={month} className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
-            {/* Sticky-ish month title for readability */}
             <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
               <h3 className="font-bold text-sm dark:text-gray-100">{month}</h3>
             </div>
 
-            {/* One scroll container per month, supports sticky header + sticky first col */}
-            <div className="overflow-auto max-h-[calc(100vh-320px)]">
+            <div className="overflow-auto max-h-[calc(100vh-260px)]">
               <table className="w-full text-[9px] border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 sticky top-0 z-30">
@@ -246,13 +278,11 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                         <span className="text-blue-600 dark:text-blue-400">{fellow}</span>
                         <span className="text-[7px] text-blue-400 dark:text-blue-500 ml-0.5">4</span>
                       </td>
-
                       {days.map((day, dayIdx) => {
                         const dow = day.getDay();
                         const isWeekend = dow === 0 || dow === 6;
                         const isSunday = dow === 0;
                         const cellInfo = getCellInfo(fellow, day);
-
                         return (
                           <td
                             key={dayIdx}
@@ -283,13 +313,11 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                         <span className="text-green-600">{fellow}</span>
                         <span className="text-[7px] text-green-400 ml-0.5">5</span>
                       </td>
-
                       {days.map((day, dayIdx) => {
                         const dow = day.getDay();
                         const isWeekend = dow === 0 || dow === 6;
                         const isSunday = dow === 0;
                         const cellInfo = getCellInfo(fellow, day);
-
                         return (
                           <td
                             key={dayIdx}
@@ -320,13 +348,11 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
                         <span className="text-purple-600">{fellow}</span>
                         <span className="text-[7px] text-purple-400 ml-0.5">6</span>
                       </td>
-
                       {days.map((day, dayIdx) => {
                         const dow = day.getDay();
                         const isWeekend = dow === 0 || dow === 6;
                         const isSunday = dow === 0;
                         const cellInfo = getCellInfo(fellow, day);
-
                         return (
                           <td
                             key={dayIdx}

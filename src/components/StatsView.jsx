@@ -68,8 +68,8 @@ export default function StatsView({ stats, fellows }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
-      {/* One long scroll container, sticky header works inside this */}
-      <div className="overflow-auto max-h-[calc(100vh-260px)]">
+      {/* Table without its own scroll container so page scrolls instead */}
+      <div className="w-full">
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr className="bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 sticky top-0 z-30">
