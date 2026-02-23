@@ -10,6 +10,7 @@ export default function HeaderBar({
   toggleDarkMode,
   onLogoClick,
   violationCount = 0,
+  showStats = false,
   showViolations = false,
   showEdit = false,
   showAdmin = false,
@@ -17,7 +18,10 @@ export default function HeaderBar({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, isSupabaseConfigured } = useAuth();
+
+  // Show nav tabs only when authenticated, or in demo mode (no Supabase configured)
+  const showNavTabs = !!user || !isSupabaseConfigured;
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -66,7 +70,7 @@ export default function HeaderBar({
   const views = [
     { key: "dashboard", label: "Home" },
     { key: "schedule", label: "Schedule" },
-    { key: "stats", label: "Stats" },
+    ...(showStats ? [{ key: "stats", label: "Stats" }] : []),
     { key: "call", label: "Call/Float" },
     { key: "calendar", label: "Calendar" },
     { key: "clinic", label: "Clinic" },
@@ -208,41 +212,45 @@ export default function HeaderBar({
             )}
           </div>
 
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          {showNavTabs && (
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Desktop Tabs */}
-      <div className="hidden md:flex px-3 py-2 justify-center gap-1">
-        {views.map((v) => (
-          <button
-            key={v.key}
-            onClick={() => setActiveView(v.key)}
-            className={`relative px-3 py-1.5 text-xs font-semibold rounded ${
-              activeView === v.key
-                ? "bg-blue-600 text-white"
-                : darkMode
-                ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
-          >
-            {v.label}
-            {v.key === "violations" && violationCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-bold text-white bg-red-500 rounded-full">
-                {violationCount > 99 ? '99+' : violationCount}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {showNavTabs && (
+        <div className="hidden md:flex px-3 py-2 justify-center gap-1">
+          {views.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setActiveView(v.key)}
+              className={`relative px-3 py-1.5 text-xs font-semibold rounded ${
+                activeView === v.key
+                  ? "bg-blue-600 text-white"
+                  : darkMode
+                  ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              {v.label}
+              {v.key === "violations" && violationCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-bold text-white bg-red-500 rounded-full">
+                  {violationCount > 99 ? '99+' : violationCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Mobile Menu */}
-      {mobileMenuOpen && (
+      {showNavTabs && mobileMenuOpen && (
         <div className="md:hidden p-2 grid grid-cols-3 gap-2">
           {views.map((v) => (
             <button

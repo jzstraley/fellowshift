@@ -5,6 +5,7 @@ import {
   optimizeClinicCoverage,
   getWeekRange,
 } from "../utils/clinicUtils";
+import { useAuth } from "../context/AuthContext";
 
 // PGY-4 fellows who can't cover clinic in blocks 1-4 (first 8 weeks)
 const FIRST_YEAR_EXCLUSION_BLOCKS = 4; // Blocks 1-4
@@ -19,7 +20,9 @@ export default function ClinicCoverageView({
   pgyLevels,
   blockDates,
 }) {
-    
+  const { canApprove, isSupabaseConfigured } = useAuth();
+  const showPrivileged = !isSupabaseConfigured || canApprove?.();
+
 const CANNOT_COVER_ROTATIONS = [
   "Cath","Cath 2","Cath 3","ICU","Floor A","Floor B","Nights","Vac","Vacation",""
 ];
@@ -459,8 +462,8 @@ const CANNOT_COVER_ROTATIONS = [
         </div>
       </div>
 
-      {/* Coverage Stats by PGY */}
-      <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
+      {/* Coverage Stats by PGY - chiefs/PDs/admins only */}
+      {showPrivileged && <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
           <h3 className="font-bold text-base dark:text-gray-100">Coverage Load Distribution</h3>
           <p className="text-xs text-gray-600 dark:text-gray-400">Target: 4 per fellow</p>
@@ -515,7 +518,7 @@ const CANNOT_COVER_ROTATIONS = [
             B2B avoided unless needed • Same clinic day avoided unless needed
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

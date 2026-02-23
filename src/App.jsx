@@ -352,25 +352,6 @@ function AppContent() {
     setStats(fresh);
   }, [fellows, schedule]);
 
-  // Small debounce utility for UI-triggered heavy actions so users can't spam-run generator
-  const debounce = (fn, wait = 500) => {
-    let timer = null;
-    return (...args) => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        try {
-          fn(...args);
-        } catch (e) {
-          console.error('Debounced function error', e);
-        }
-      }, wait);
-    };
-  };
-
-  // Expose a debounced version for UI hooks (so clicking optimize repeatedly won't spam the generator)
-  const debouncedGenerate = useMemo(() => debounce(generateCallAndFloat, 750), [generateCallAndFloat]);
-
   // Debounced stats calculation when schedule changes to avoid frequent heavy work
   // Preserve call/float counts from the previous stats (set by generateCallAndFloat)
   useEffect(() => {
@@ -469,7 +450,6 @@ function AppContent() {
     const base = [
       { key: "dashboard", label: "Home" },
       { key: "schedule", label: "Schedule" },
-      { key: "stats", label: "Stats" },
       { key: "call", label: "Call/Float" },
       { key: "calendar", label: "Calendar" },
       { key: "clinic", label: "Clinic" },
@@ -477,6 +457,7 @@ function AppContent() {
       { key: "lectures", label: "Lectures" },
     ];
     if (!isSupabaseConfigured || canApprove?.()) {
+      base.splice(2, 0, { key: "stats", label: "Stats" });
       base.push({ key: "editSchedule", label: "Edit" });
       base.push({ key: "violations", label: "Violations" });
     }
@@ -534,6 +515,7 @@ function AppContent() {
         toggleDarkMode={toggleDarkMode}
         onLogoClick={() => setShowLanding(true)}
         violationCount={workHourViolations.length}
+        showStats={!isSupabaseConfigured || canApprove?.()}
         showViolations={!isSupabaseConfigured || canApprove?.()}
         showEdit={!isSupabaseConfigured || canApprove?.()}
         showAdmin={isAdmin?.()}
@@ -567,7 +549,7 @@ function AppContent() {
             />
           )}
 
-          {activeView === "stats" && <StatsView stats={stats} fellows={fellows} />}
+          {activeView === "stats" && (!isSupabaseConfigured || canApprove?.()) && <StatsView stats={stats} fellows={fellows} />}
 
           {activeView === "call" && (
             <CallView
@@ -576,7 +558,6 @@ function AppContent() {
               stats={stats}
               fellows={fellows}
               pgyLevels={pgyLevels}
-              onOptimize={debouncedGenerate}
               workHourViolations={workHourViolations}
               showBalanceCheck={['program_director', 'admin'].includes(profile?.role)}
             />

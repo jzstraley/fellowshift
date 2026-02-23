@@ -1,6 +1,6 @@
 // src/components/CallView.jsx
 import React, { useMemo, useEffect } from 'react';
-import { TrendingUp, Download, CheckCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertTriangle } from 'lucide-react';
 import { blockDates } from '../data/scheduleData';
 
 // ----- date helpers (local time, DST-safe) -----
@@ -94,7 +94,6 @@ export default function CallView({
   fellows,
   pgyLevels,
   onDateCallMap,
-  onOptimize,
   workHourViolations = [],
   showBalanceCheck = false,
 }) {
@@ -240,17 +239,6 @@ const exportCallFloatCSV = () => {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <button
-          onClick={() => onOptimize?.()}
-          className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded"
-          type="button"
-        >
-          <TrendingUp className="w-3 h-3" />
-          Optimize
-        </button>
-      </div>
-
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
           <h3 className="font-bold text-sm dark:text-gray-100">Call Weekend & Saturday Night Float Assignments</h3>

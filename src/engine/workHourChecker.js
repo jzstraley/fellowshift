@@ -231,7 +231,7 @@ function check80HourRule(fellow, timeline, blockDates) {
         const entry = timeline.get(iso);
         if (!entry) continue;
         // Exclude vacation days from both numerator and denominator
-        if (entry.isVacation && entry.hours === 0) continue;
+        if (entry.isVacation) continue;
         nonVacationDays++;
         totalHours += entry.hours;
       }
@@ -391,7 +391,7 @@ function checkOneDayOffRule(fellow, timeline, blockDates) {
         const entry = timeline.get(iso);
         if (!entry) continue;
         // Exclude vacation days from both numerator and denominator
-        if (entry.isVacation && entry.hours === 0) continue;
+        if (entry.isVacation) continue;
         nonVacationDays++;
         if (entry.hours === 0) daysOff++;
       }

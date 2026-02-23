@@ -1,5 +1,6 @@
 -- FellowShift Multi-User Database Schema
 -- Run this in your Supabase SQL Editor
+-- Safe to re-run: uses IF NOT EXISTS throughout
 
 -- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -9,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================================
 
 -- Institutions (multi-tenancy)
-CREATE TABLE institutions (
+CREATE TABLE IF NOT EXISTS institutions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
@@ -17,10 +18,10 @@ CREATE TABLE institutions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_institutions_slug ON institutions(slug);
+CREATE INDEX IF NOT EXISTS idx_institutions_slug ON institutions(slug);
 
 -- User profiles with roles
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   institution_id UUID REFERENCES institutions(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -34,12 +35,12 @@ CREATE TABLE profiles (
   UNIQUE(email, institution_id)
 );
 
-CREATE INDEX idx_profiles_institution ON profiles(institution_id);
-CREATE INDEX idx_profiles_role ON profiles(role);
-CREATE INDEX idx_profiles_email ON profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_institution ON profiles(institution_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
 
 -- Fellows
-CREATE TABLE fellows (
+CREATE TABLE IF NOT EXISTS fellows (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
   program TEXT NOT NULL,
@@ -53,12 +54,12 @@ CREATE TABLE fellows (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_fellows_institution ON fellows(institution_id);
-CREATE INDEX idx_fellows_program ON fellows(program);
-CREATE INDEX idx_fellows_pgy ON fellows(pgy_level);
+CREATE INDEX IF NOT EXISTS idx_fellows_institution ON fellows(institution_id);
+CREATE INDEX IF NOT EXISTS idx_fellows_program ON fellows(program);
+CREATE INDEX IF NOT EXISTS idx_fellows_pgy ON fellows(pgy_level);
 
 -- Block dates (academic calendar)
-CREATE TABLE block_dates (
+CREATE TABLE IF NOT EXISTS block_dates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
   program TEXT NOT NULL,
@@ -72,12 +73,12 @@ CREATE TABLE block_dates (
   UNIQUE(institution_id, program, academic_year, block_number)
 );
 
-CREATE INDEX idx_block_dates_institution_program ON block_dates(institution_id, program);
-CREATE INDEX idx_block_dates_academic_year ON block_dates(academic_year);
-CREATE INDEX idx_block_dates_dates ON block_dates(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_block_dates_institution_program ON block_dates(institution_id, program);
+CREATE INDEX IF NOT EXISTS idx_block_dates_academic_year ON block_dates(academic_year);
+CREATE INDEX IF NOT EXISTS idx_block_dates_dates ON block_dates(start_date, end_date);
 
 -- Schedule assignments
-CREATE TABLE schedule_assignments (
+CREATE TABLE IF NOT EXISTS schedule_assignments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
   block_date_id UUID NOT NULL REFERENCES block_dates(id) ON DELETE CASCADE,
@@ -90,12 +91,12 @@ CREATE TABLE schedule_assignments (
   UNIQUE(fellow_id, block_date_id)
 );
 
-CREATE INDEX idx_schedule_fellow ON schedule_assignments(fellow_id);
-CREATE INDEX idx_schedule_block ON schedule_assignments(block_date_id);
-CREATE INDEX idx_schedule_rotation ON schedule_assignments(rotation);
+CREATE INDEX IF NOT EXISTS idx_schedule_fellow ON schedule_assignments(fellow_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_block ON schedule_assignments(block_date_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_rotation ON schedule_assignments(rotation);
 
 -- Call assignments (call and night float)
-CREATE TABLE call_assignments (
+CREATE TABLE IF NOT EXISTS call_assignments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
   block_date_id UUID NOT NULL REFERENCES block_dates(id) ON DELETE CASCADE,
@@ -107,12 +108,12 @@ CREATE TABLE call_assignments (
   UNIQUE(block_date_id, week_number, assignment_type)
 );
 
-CREATE INDEX idx_call_fellow ON call_assignments(fellow_id);
-CREATE INDEX idx_call_block ON call_assignments(block_date_id);
-CREATE INDEX idx_call_type ON call_assignments(assignment_type);
+CREATE INDEX IF NOT EXISTS idx_call_fellow ON call_assignments(fellow_id);
+CREATE INDEX IF NOT EXISTS idx_call_block ON call_assignments(block_date_id);
+CREATE INDEX IF NOT EXISTS idx_call_type ON call_assignments(assignment_type);
 
 -- Vacation requests
-CREATE TABLE vacation_requests (
+CREATE TABLE IF NOT EXISTS vacation_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
   start_block_id UUID NOT NULL REFERENCES block_dates(id) ON DELETE CASCADE,
@@ -127,11 +128,11 @@ CREATE TABLE vacation_requests (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_vacation_fellow ON vacation_requests(fellow_id);
-CREATE INDEX idx_vacation_status ON vacation_requests(status);
+CREATE INDEX IF NOT EXISTS idx_vacation_fellow ON vacation_requests(fellow_id);
+CREATE INDEX IF NOT EXISTS idx_vacation_status ON vacation_requests(status);
 
 -- Swap requests (rotation trades between fellows)
-CREATE TABLE swap_requests (
+CREATE TABLE IF NOT EXISTS swap_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   requester_fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
   target_fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
@@ -146,16 +147,16 @@ CREATE TABLE swap_requests (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_swap_requester ON swap_requests(requester_fellow_id);
-CREATE INDEX idx_swap_target ON swap_requests(target_fellow_id);
-CREATE INDEX idx_swap_status ON swap_requests(status);
+CREATE INDEX IF NOT EXISTS idx_swap_requester ON swap_requests(requester_fellow_id);
+CREATE INDEX IF NOT EXISTS idx_swap_target ON swap_requests(target_fellow_id);
+CREATE INDEX IF NOT EXISTS idx_swap_status ON swap_requests(status);
 
 -- ============================================================================
 -- LECTURE SYSTEM TABLES
 -- ============================================================================
 
 -- Lecture topics
-CREATE TABLE lecture_topics (
+CREATE TABLE IF NOT EXISTS lecture_topics (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -165,10 +166,10 @@ CREATE TABLE lecture_topics (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_topics_institution ON lecture_topics(institution_id);
+CREATE INDEX IF NOT EXISTS idx_topics_institution ON lecture_topics(institution_id);
 
 -- Speakers
-CREATE TABLE speakers (
+CREATE TABLE IF NOT EXISTS speakers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -179,10 +180,10 @@ CREATE TABLE speakers (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_speakers_institution ON speakers(institution_id);
+CREATE INDEX IF NOT EXISTS idx_speakers_institution ON speakers(institution_id);
 
 -- Lectures
-CREATE TABLE lectures (
+CREATE TABLE IF NOT EXISTS lectures (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
   program TEXT NOT NULL,
@@ -203,12 +204,12 @@ CREATE TABLE lectures (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_lectures_institution ON lectures(institution_id);
-CREATE INDEX idx_lectures_date ON lectures(date);
-CREATE INDEX idx_lectures_series ON lectures(series);
+CREATE INDEX IF NOT EXISTS idx_lectures_institution ON lectures(institution_id);
+CREATE INDEX IF NOT EXISTS idx_lectures_date ON lectures(date);
+CREATE INDEX IF NOT EXISTS idx_lectures_series ON lectures(series);
 
 -- Lecture RSVPs
-CREATE TABLE lecture_rsvps (
+CREATE TABLE IF NOT EXISTS lecture_rsvps (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   lecture_id UUID NOT NULL REFERENCES lectures(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -218,11 +219,11 @@ CREATE TABLE lecture_rsvps (
   UNIQUE(lecture_id, user_id)
 );
 
-CREATE INDEX idx_rsvps_lecture ON lecture_rsvps(lecture_id);
-CREATE INDEX idx_rsvps_user ON lecture_rsvps(user_id);
+CREATE INDEX IF NOT EXISTS idx_rsvps_lecture ON lecture_rsvps(lecture_id);
+CREATE INDEX IF NOT EXISTS idx_rsvps_user ON lecture_rsvps(user_id);
 
 -- Fellow emails (for Gmail integration)
-CREATE TABLE fellow_emails (
+CREATE TABLE IF NOT EXISTS fellow_emails (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fellow_id UUID NOT NULL REFERENCES fellows(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -231,13 +232,13 @@ CREATE TABLE fellow_emails (
   UNIQUE(fellow_id)
 );
 
-CREATE INDEX idx_fellow_emails_fellow ON fellow_emails(fellow_id);
+CREATE INDEX IF NOT EXISTS idx_fellow_emails_fellow ON fellow_emails(fellow_id);
 
 -- ============================================================================
 -- AUDIT LOG
 -- ============================================================================
 
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
   user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
@@ -249,16 +250,16 @@ CREATE TABLE audit_log (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_audit_institution ON audit_log(institution_id);
-CREATE INDEX idx_audit_user ON audit_log(user_id);
-CREATE INDEX idx_audit_resource ON audit_log(resource_type, resource_id);
-CREATE INDEX idx_audit_created ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_institution ON audit_log(institution_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_log(resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================================================
 
--- Enable RLS on all tables
+-- Enable RLS on all tables (safe to run multiple times)
 ALTER TABLE institutions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fellows ENABLE ROW LEVEL SECURITY;
@@ -290,21 +291,28 @@ RETURNS TEXT AS $$
   SELECT program FROM profiles WHERE id = auth.uid() LIMIT 1;
 $$ LANGUAGE sql SECURITY DEFINER;
 
--- Profiles: Users can view and update their own profile
+-- ============================================================================
+-- RLS POLICIES (drop-and-recreate for idempotency)
+-- ============================================================================
+
+-- Profiles
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile"
 ON profiles FOR SELECT
 USING (id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile"
 ON profiles FOR UPDATE
 USING (id = auth.uid());
 
--- Fellows: All authenticated users can view fellows in their institution
+-- Fellows
+DROP POLICY IF EXISTS "View fellows in institution" ON fellows;
 CREATE POLICY "View fellows in institution"
 ON fellows FOR SELECT
 USING (institution_id = get_user_institution_id());
 
--- Program directors, admins, and chief fellows can manage fellows
+DROP POLICY IF EXISTS "Program directors can manage fellows" ON fellows;
 CREATE POLICY "Program directors can manage fellows"
 ON fellows FOR ALL
 USING (
@@ -316,7 +324,8 @@ USING (
   )
 );
 
--- Schedule assignments: View policies
+-- Schedule assignments
+DROP POLICY IF EXISTS "View schedules in institution" ON schedule_assignments;
 CREATE POLICY "View schedules in institution"
 ON schedule_assignments FOR SELECT
 USING (
@@ -327,7 +336,7 @@ USING (
   )
 );
 
--- Program directors and admins can edit all schedules
+DROP POLICY IF EXISTS "Program directors can edit all schedules" ON schedule_assignments;
 CREATE POLICY "Program directors can edit all schedules"
 ON schedule_assignments FOR ALL
 USING (
@@ -339,7 +348,7 @@ USING (
   )
 );
 
--- Chief fellows can edit their program's schedules
+DROP POLICY IF EXISTS "Chief fellows can edit their program schedules" ON schedule_assignments;
 CREATE POLICY "Chief fellows can edit their program schedules"
 ON schedule_assignments FOR ALL
 USING (
@@ -352,7 +361,8 @@ USING (
   )
 );
 
--- Vacation requests: View policies
+-- Vacation requests
+DROP POLICY IF EXISTS "View vacation requests in institution" ON vacation_requests;
 CREATE POLICY "View vacation requests in institution"
 ON vacation_requests FOR SELECT
 USING (
@@ -363,7 +373,7 @@ USING (
   )
 );
 
--- Fellows and above (not residents) can create vacation requests
+DROP POLICY IF EXISTS "Fellows can create vacation requests" ON vacation_requests;
 CREATE POLICY "Fellows can create vacation requests"
 ON vacation_requests FOR INSERT
 WITH CHECK (
@@ -371,7 +381,7 @@ WITH CHECK (
   AND get_user_role() IN ('fellow', 'program_director', 'chief_fellow', 'admin')
 );
 
--- Program directors, chief fellows, and admins can approve/deny
+DROP POLICY IF EXISTS "Program directors can manage vacation requests" ON vacation_requests;
 CREATE POLICY "Program directors can manage vacation requests"
 ON vacation_requests FOR UPDATE
 USING (
@@ -383,7 +393,8 @@ USING (
   )
 );
 
--- Swap requests: View policies
+-- Swap requests
+DROP POLICY IF EXISTS "View swap requests in institution" ON swap_requests;
 CREATE POLICY "View swap requests in institution"
 ON swap_requests FOR SELECT
 USING (
@@ -394,7 +405,7 @@ USING (
   )
 );
 
--- Fellows and above (not residents) can create swap requests
+DROP POLICY IF EXISTS "Fellows can create swap requests" ON swap_requests;
 CREATE POLICY "Fellows can create swap requests"
 ON swap_requests FOR INSERT
 WITH CHECK (
@@ -402,7 +413,7 @@ WITH CHECK (
   AND get_user_role() IN ('fellow', 'program_director', 'chief_fellow', 'admin')
 );
 
--- Program directors, chief fellows, and admins can approve/deny swaps
+DROP POLICY IF EXISTS "Program directors can manage swap requests" ON swap_requests;
 CREATE POLICY "Program directors can manage swap requests"
 ON swap_requests FOR UPDATE
 USING (
@@ -414,7 +425,8 @@ USING (
   )
 );
 
--- Call assignments: Same pattern as schedules
+-- Call assignments
+DROP POLICY IF EXISTS "View call assignments in institution" ON call_assignments;
 CREATE POLICY "View call assignments in institution"
 ON call_assignments FOR SELECT
 USING (
@@ -425,6 +437,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Program directors can manage call assignments" ON call_assignments;
 CREATE POLICY "Program directors can manage call assignments"
 ON call_assignments FOR ALL
 USING (
@@ -436,12 +449,13 @@ USING (
   )
 );
 
--- Lectures: All authenticated users in institution can view
+-- Lectures
+DROP POLICY IF EXISTS "View lectures in institution" ON lectures;
 CREATE POLICY "View lectures in institution"
 ON lectures FOR SELECT
 USING (institution_id = get_user_institution_id());
 
--- Program directors, chief fellows, and admins can manage lectures
+DROP POLICY IF EXISTS "Manage lectures" ON lectures;
 CREATE POLICY "Manage lectures"
 ON lectures FOR ALL
 USING (
@@ -449,12 +463,13 @@ USING (
   AND institution_id = get_user_institution_id()
 );
 
--- Block dates: All users can view
+-- Block dates
+DROP POLICY IF EXISTS "View block dates in institution" ON block_dates;
 CREATE POLICY "View block dates in institution"
 ON block_dates FOR SELECT
 USING (institution_id = get_user_institution_id());
 
--- Program directors and admins can manage block dates
+DROP POLICY IF EXISTS "Program directors can manage block dates" ON block_dates;
 CREATE POLICY "Program directors can manage block dates"
 ON block_dates FOR ALL
 USING (
@@ -474,22 +489,41 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_institutions_updated_at ON institutions;
 CREATE TRIGGER update_institutions_updated_at BEFORE UPDATE ON institutions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_fellows_updated_at ON fellows;
 CREATE TRIGGER update_fellows_updated_at BEFORE UPDATE ON fellows FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_block_dates_updated_at ON block_dates;
 CREATE TRIGGER update_block_dates_updated_at BEFORE UPDATE ON block_dates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_schedule_assignments_updated_at ON schedule_assignments;
 CREATE TRIGGER update_schedule_assignments_updated_at BEFORE UPDATE ON schedule_assignments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_call_assignments_updated_at ON call_assignments;
 CREATE TRIGGER update_call_assignments_updated_at BEFORE UPDATE ON call_assignments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_vacation_requests_updated_at ON vacation_requests;
 CREATE TRIGGER update_vacation_requests_updated_at BEFORE UPDATE ON vacation_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_swap_requests_updated_at ON swap_requests;
 CREATE TRIGGER update_swap_requests_updated_at BEFORE UPDATE ON swap_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_lectures_updated_at ON lectures;
 CREATE TRIGGER update_lectures_updated_at BEFORE UPDATE ON lectures FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- SAMPLE DATA (for testing)
 -- ============================================================================
 
--- Insert a test institution
-INSERT INTO institutions (name, slug) VALUES ('Test Cardiology Program', 'test-cardiology');
+-- Insert a test institution (skip if already exists)
+INSERT INTO institutions (name, slug)
+VALUES ('Test Cardiology Program', 'test-cardiology')
+ON CONFLICT (slug) DO NOTHING;
 
 -- Note: After creating a user via Supabase Auth, manually insert their profile:
 -- INSERT INTO profiles (id, institution_id, email, full_name, role, program)
