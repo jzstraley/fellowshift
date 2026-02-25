@@ -121,10 +121,18 @@ export default function ViolationsView({
       });
     } else if (suggestion.type === 'callReassign') {
       const { weekendKey, toFellow } = suggestion.apply;
-      setCallSchedule(prev => ({ ...prev, [weekendKey]: toFellow }));
+      setCallSchedule(prev => {
+        const prevEntry = prev?.[weekendKey];
+        const relaxed = (typeof prevEntry === 'object' && prevEntry?.relaxed) ? true : false;
+        return { ...prev, [weekendKey]: { name: toFellow, relaxed } };
+      });
     } else if (suggestion.type === 'floatReassign') {
       const { weekendKey, toFellow } = suggestion.apply;
-      setNightFloatSchedule(prev => ({ ...prev, [weekendKey]: toFellow }));
+      setNightFloatSchedule(prev => {
+        const prevEntry = prev?.[weekendKey];
+        const relaxed = (typeof prevEntry === 'object' && prevEntry?.relaxed) ? true : false;
+        return { ...prev, [weekendKey]: { name: toFellow, relaxed } };
+      });
     }
     // Clear cache and collapse since violations will recompute
     setSuggestionsCache({});

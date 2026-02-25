@@ -40,3 +40,29 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Responsive tweaks for narrow screens */
+@media (max-width: 480px) {
+  #root {
+    width: 100%;
+    max-width: 100%;
+    padding: 1rem;
+  }
+
+  .logo {
+    height: 3.5em;
+    padding: 0.75em;
+  }
+
+  img, .logo {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Ensure form controls and interactive elements don't overflow */
+  button, input, select, textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}

@@ -167,6 +167,21 @@ function AppContent() {
 
   const [stats, setStats] = useState(null);
 
+  // Debounced inputs for expensive violation checks to avoid recomputing on every keystroke
+  const [debouncedInputs, setDebouncedInputs] = useState({
+    schedule,
+    callSchedule,
+    nightFloatSchedule,
+    vacations,
+  });
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedInputs({ schedule, callSchedule, nightFloatSchedule, vacations });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [schedule, callSchedule, nightFloatSchedule, vacations]);
+
   // Build dateCallMap from callSchedule and nightFloatSchedule
   const dateCallMap = useMemo(() => {
     const map = {};
@@ -256,13 +271,13 @@ function AppContent() {
   const workHourViolations = useMemo(() => {
     return checkAllWorkHourViolations({
       fellows,
-      schedule,
-      callSchedule,
-      nightFloatSchedule,
+      schedule: debouncedInputs.schedule,
+      callSchedule: debouncedInputs.callSchedule,
+      nightFloatSchedule: debouncedInputs.nightFloatSchedule,
       blockDates,
-      vacations,
+      vacations: debouncedInputs.vacations,
     });
-  }, [fellows, schedule, callSchedule, nightFloatSchedule, vacations]);
+  }, [fellows, debouncedInputs.schedule, debouncedInputs.callSchedule, debouncedInputs.nightFloatSchedule, debouncedInputs.vacations]);
 
   // Save schedule data (encrypted)
   useEffect(() => {
@@ -314,6 +329,20 @@ function AppContent() {
       if (schedResult.schedule) setSchedule(schedResult.schedule);
       if (callFloatResult.callSchedule) setCallSchedule(callFloatResult.callSchedule);
       if (callFloatResult.nightFloatSchedule) setNightFloatSchedule(callFloatResult.nightFloatSchedule);
+
+      // Update stats to include call/float counts read from Supabase
+      if (callFloatResult.callSchedule || callFloatResult.nightFloatSchedule) {
+        const fresh = buildCounts(schedResult.schedule || schedule);
+        const callCounts = {};
+        const floatCounts = {};
+        fellows.forEach(f => { callCounts[f] = 0; floatCounts[f] = 0; });
+        const cs = callFloatResult.callSchedule || {};
+        const fs = callFloatResult.nightFloatSchedule || {};
+        Object.values(cs).forEach(e => { if (e?.name && callCounts[e.name] !== undefined) callCounts[e.name] += 1; });
+        Object.values(fs).forEach(e => { if (e?.name && floatCounts[e.name] !== undefined) floatCounts[e.name] += 1; });
+        fellows.forEach(f => { fresh[f].call = callCounts[f] ?? 0; fresh[f].float = floatCounts[f] ?? 0; });
+        setStats(fresh);
+      }
       if (vacResult.vacations) setVacations(vacResult.vacations);
       if (swapResult.swapRequests) setSwapRequests(swapResult.swapRequests);
       if (lectResult.lectures) setLectures(lectResult.lectures);
@@ -386,6 +415,19 @@ function AppContent() {
     if (clinicResult.clinicDays) setClinicDays(clinicResult.clinicDays);
     const loaded = !!(schedResult.schedule || callFloatResult.callSchedule || callFloatResult.nightFloatSchedule
       || vacResult.vacations || swapResult.swapRequests || lectResult.lectures || clinicResult.clinicDays);
+    // Ensure stats reflect call/float counts from Supabase after a manual pull
+    if (callFloatResult.callSchedule || callFloatResult.nightFloatSchedule) {
+      const fresh = buildCounts(schedResult.schedule || schedule);
+      const callCounts = {};
+      const floatCounts = {};
+      fellows.forEach(f => { callCounts[f] = 0; floatCounts[f] = 0; });
+      const cs = callFloatResult.callSchedule || {};
+      const fs = callFloatResult.nightFloatSchedule || {};
+      Object.values(cs).forEach(e => { if (e?.name && callCounts[e.name] !== undefined) callCounts[e.name] += 1; });
+      Object.values(fs).forEach(e => { if (e?.name && floatCounts[e.name] !== undefined) floatCounts[e.name] += 1; });
+      fellows.forEach(f => { fresh[f].call = callCounts[f] ?? 0; fresh[f].float = floatCounts[f] ?? 0; });
+      setStats(fresh);
+    }
     return { error: null, loaded };
   // fellows and blockDates are stable
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -757,6 +799,8 @@ function AppContent() {
               swapRequests={swapRequests}
               callSchedule={callSchedule}
               nightFloatSchedule={nightFloatSchedule}
+              setCallSchedule={setCallSchedule}
+              setNightFloatSchedule={setNightFloatSchedule}
               clinicDays={clinicDays}
               pgyLevels={pgyLevels}
               setSchedule={setSchedule}

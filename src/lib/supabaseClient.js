@@ -2,14 +2,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { clearSensitiveStorage } from '../utils/secureStorage';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Prefer Vite's import.meta.env in browser builds, but allow Node process.env
+const supabaseUrl = (import.meta && import.meta.env && import.meta.env.VITE_SUPABASE_URL)
+  || (typeof process !== 'undefined' && process.env && process.env.VITE_SUPABASE_URL) || null;
+const supabaseAnonKey = (import.meta && import.meta.env && import.meta.env.VITE_SUPABASE_ANON_KEY)
+  || (typeof process !== 'undefined' && process.env && process.env.VITE_SUPABASE_ANON_KEY) || null;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
-    'Missing Supabase environment variables. Please create .env.local with:\n' +
-    'VITE_SUPABASE_URL=your-project-url\n' +
-    'VITE_SUPABASE_ANON_KEY=your-anon-key'
+    'Missing Supabase environment variables. Provide them via .env.local for dev or process.env for Node:\n' +
+    'VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'
   );
 }
 

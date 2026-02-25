@@ -36,7 +36,16 @@ export default function ScheduleEditorView({
   const redoStackRef = useRef([]);
   const MAX_HISTORY = 30;
 
+  // Rate-limit snapshotting to avoid serializing the whole schedule on every keystroke.
+  // Take a snapshot at most once per SNAPSHOT_COOLDOWN ms.
+  const SNAPSHOT_COOLDOWN = 300; // ms
+  const lastSnapshotRef = useRef(0);
+
   const pushHistory = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSnapshotRef.current < SNAPSHOT_COOLDOWN) return;
+    lastSnapshotRef.current = now;
+
     undoStackRef.current = [
       JSON.stringify(schedule),
       ...undoStackRef.current.slice(0, MAX_HISTORY - 1),

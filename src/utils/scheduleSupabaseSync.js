@@ -229,6 +229,9 @@ export async function pushScheduleToSupabase({ schedule, fellows, blockDates, in
       name,
       institution_id: institutionId,
       is_active: true,
+      // The DB schema requires a non-null `program` column. Use empty string
+      // as a safe default when auto-seeding from local data.
+      program: '',
       pgy_level: pgyLevels[name] ?? null,
     }));
     const { data: seeded, error: seedErr } = await supabase
