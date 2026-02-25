@@ -1,6 +1,6 @@
 // src/components/AdminView.jsx
 import { useState, useEffect, useCallback } from "react";
-import { Shield, Users, UserPlus, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { Shield, Users, UserPlus, CheckCircle, AlertCircle, RefreshCw, Calendar } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 
@@ -21,8 +21,9 @@ const ROLE_COLORS = {
 };
 
 const EMPTY_FORM = { email: "", full_name: "", role: "fellow", program: "", password: "" };
+const CLINIC_DAY_LABELS = { 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday" };
 
-export default function AdminView({ darkMode }) {
+export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clinicDays = {}, setClinicDays }) {
   const { profile } = useAuth();
   const [tab, setTab] = useState("users");
   const [users, setUsers] = useState([]);
@@ -127,6 +128,7 @@ export default function AdminView({ darkMode }) {
         {[
           { key: "users", label: "Users", Icon: Users },
           { key: "create", label: "Create User", Icon: UserPlus },
+          { key: "clinic", label: "Clinic Days", Icon: Calendar },
         ].map(({ key, label, Icon }) => (
           <button
             key={key}
@@ -209,6 +211,52 @@ export default function AdminView({ darkMode }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Clinic Days tab ───────────────────────────────────────────── */}
+      {tab === "clinic" && (
+        <div className={card}>
+          <p className={`text-xs mb-4 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+            Set each fellow's assigned clinic day. Changes are saved locally and pushed to Supabase
+            when you click <strong>Validate</strong> in the Edit Schedule view.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {fellows.map(fellow => (
+              <div key={fellow} className={`flex items-center justify-between gap-3 px-3 py-2 rounded border ${
+                darkMode ? "border-gray-700 bg-gray-700/40" : "border-gray-200 bg-gray-50"
+              }`}>
+                <div>
+                  <span className="text-sm font-medium">{fellow}</span>
+                  <span className={`ml-2 text-xs ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
+                    PGY-{pgyLevels[fellow] ?? "?"}
+                  </span>
+                </div>
+                <select
+                  className={`text-sm rounded border px-2 py-1 ${
+                    darkMode
+                      ? "bg-gray-700 border-gray-600 text-gray-100"
+                      : "bg-white border-gray-300 text-gray-800"
+                  }`}
+                  value={clinicDays[fellow] ?? ""}
+                  onChange={e => {
+                    const val = e.target.value ? Number(e.target.value) : undefined;
+                    setClinicDays(prev => {
+                      const next = { ...prev };
+                      if (val !== undefined) next[fellow] = val;
+                      else delete next[fellow];
+                      return next;
+                    });
+                  }}
+                >
+                  <option value="">— none —</option>
+                  {[1, 2, 3, 4].map(d => (
+                    <option key={d} value={d}>{CLINIC_DAY_LABELS[d]}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

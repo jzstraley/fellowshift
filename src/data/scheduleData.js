@@ -6,7 +6,7 @@ export const pgyLevels = {
   'Mahmoud': 6, 'Straley': 6, 'Yousafzai': 6
 };
 
-export const clinicDays = {
+export const initialClinicDays = {
   // PGY-4
   'Elkholy': 1,    // Monday
   'Naeem': 3,      // Wednesday

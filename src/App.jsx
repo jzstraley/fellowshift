@@ -1,16 +1,23 @@
 // src/App.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import CheckCircle from "lucide-react/dist/esm/icons/check-circle";
+import Shuffle from "lucide-react/dist/esm/icons/shuffle";
 import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
 import CookieConsent from "./components/CookieConsent";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { initialSchedule, initialVacations, initialSwapRequests, pgyLevels, clinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule, allRotationTypes } from "./data/scheduleData";
+import { initialSchedule, initialVacations, initialSwapRequests, pgyLevels, initialClinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule, allRotationTypes } from "./data/scheduleData";
 import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
 import { checkAllWorkHourViolations } from "./engine/workHourChecker";
 import { deriveKey, encryptAndStore, loadAndDecrypt, clearSensitiveStorage } from "./utils/secureStorage";
-import { pushScheduleToSupabase, pullScheduleFromSupabase } from "./utils/scheduleSupabaseSync";
+import {
+  pushScheduleToSupabase, pullScheduleFromSupabase,
+  pushCallFloatToSupabase, pullCallFloatFromSupabase,
+  pullVacationsFromSupabase, pullSwapRequestsFromSupabase,
+  pushLecturesToSupabase, pullLecturesFromSupabase,
+  pushClinicDaysToSupabase, pullClinicDaysFromSupabase,
+} from "./utils/scheduleSupabaseSync";
 
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 import useIdleTimeout from "./hooks/useIdleTimeout";
@@ -105,6 +112,7 @@ function AppContent() {
   // Prevents the one-shot Supabase initial load from running more than once per session
   const supabaseInitLoadDoneRef = useRef(false);
 
+  const [clinicDays, setClinicDays] = useState(initialClinicDays);
   const [schedule, setSchedule] = useState(initialSchedule);
   const [vacations, setVacations] = useState(initialVacations);
   const [swapRequests, setSwapRequests] = useState(initialSwapRequests);
@@ -144,6 +152,7 @@ function AppContent() {
       if (persisted?.callSchedule && typeof persisted.callSchedule === "object" && Object.keys(persisted.callSchedule).length > 0) setCallSchedule(persisted.callSchedule);
       if (persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object" && Object.keys(persisted.nightFloatSchedule).length > 0) setNightFloatSchedule(persisted.nightFloatSchedule);
       if (persisted?.dayOverrides && typeof persisted.dayOverrides === "object") setDayOverrides(persisted.dayOverrides);
+      if (persisted?.clinicDays && typeof persisted.clinicDays === "object" && Object.keys(persisted.clinicDays).length > 0) setClinicDays(persisted.clinicDays);
 
       if (Array.isArray(persistedLectures?.lectures)) setLectures(persistedLectures.lectures);
       if (Array.isArray(persistedLectures?.speakers)) setSpeakers(persistedLectures.speakers);
@@ -266,11 +275,12 @@ function AppContent() {
         callSchedule,
         nightFloatSchedule,
         dayOverrides,
+        clinicDays,
       });
     }, 150);
 
     return () => clearTimeout(t);
-  }, [schedule, vacations, swapRequests, callSchedule, nightFloatSchedule, dayOverrides, dataReady]);
+  }, [schedule, vacations, swapRequests, callSchedule, nightFloatSchedule, dayOverrides, clinicDays, dataReady]);
 
   // Save lecture data (encrypted)
   useEffect(() => {
@@ -293,10 +303,24 @@ function AppContent() {
     if (supabaseInitLoadDoneRef.current) return;
     supabaseInitLoadDoneRef.current = true;
 
-    pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id })
-      .then(({ schedule: remote }) => {
-        if (remote) setSchedule(remote);
-      });
+    Promise.all([
+      pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
+      pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
+      pullVacationsFromSupabase({ institutionId: profile.institution_id }),
+      pullSwapRequestsFromSupabase({ institutionId: profile.institution_id }),
+      pullLecturesFromSupabase({ institutionId: profile.institution_id }),
+      pullClinicDaysFromSupabase({ institutionId: profile.institution_id }),
+    ]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
+      if (schedResult.schedule) setSchedule(schedResult.schedule);
+      if (callFloatResult.callSchedule) setCallSchedule(callFloatResult.callSchedule);
+      if (callFloatResult.nightFloatSchedule) setNightFloatSchedule(callFloatResult.nightFloatSchedule);
+      if (vacResult.vacations) setVacations(vacResult.vacations);
+      if (swapResult.swapRequests) setSwapRequests(swapResult.swapRequests);
+      if (lectResult.lectures) setLectures(lectResult.lectures);
+      if (lectResult.speakers) setSpeakers(lectResult.speakers);
+      if (lectResult.topics) setTopics(lectResult.topics);
+      if (clinicResult.clinicDays) setClinicDays(clinicResult.clinicDays);
+    });
   // fellows and blockDates are stable module-level constants
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataReady, profile?.institution_id]);
@@ -304,28 +328,65 @@ function AppContent() {
   // Push the full schedule to Supabase — called by ScheduleEditorView's Validate button.
   const onSaveToSupabase = useCallback(async () => {
     if (!isSupabaseConfigured || !profile?.institution_id) return { error: 'Supabase not available' };
-    return pushScheduleToSupabase({
+    // Push schedule first so it seeds the fellows table if empty, then run the rest in parallel.
+    const schedResult = await pushScheduleToSupabase({
       schedule,
       fellows,
       blockDates,
       institutionId: profile.institution_id,
       userId: user?.id,
+      pgyLevels,
     });
-  }, [schedule, fellows, profile?.institution_id, user?.id]);
+    if (schedResult.error) return { error: schedResult.error, count: 0 };
+    const [callFloatResult, lectResult, clinicResult] = await Promise.all([
+      pushCallFloatToSupabase({
+        callSchedule,
+        nightFloatSchedule,
+        institutionId: profile.institution_id,
+        userId: user?.id,
+      }),
+      pushLecturesToSupabase({
+        lectures,
+        speakers,
+        topics,
+        institutionId: profile.institution_id,
+        userId: user?.id,
+      }),
+      pushClinicDaysToSupabase({
+        clinicDays,
+        institutionId: profile.institution_id,
+      }),
+    ]);
+    const error = callFloatResult.error || lectResult.error || clinicResult.error || null;
+    const count = (schedResult.count ?? 0) + (callFloatResult.count ?? 0) + (lectResult.count ?? 0);
+    return { error, count };
+  }, [schedule, callSchedule, nightFloatSchedule, lectures, speakers, topics, clinicDays, fellows, pgyLevels, profile?.institution_id, user?.id]);
 
   // Pull schedule from Supabase on demand — called by ScheduleEditorView's Sync button.
   const onPullFromSupabase = useCallback(async () => {
     if (!isSupabaseConfigured || !profile?.institution_id) return { error: 'Supabase not available', loaded: false };
-    const { error, schedule: remote } = await pullScheduleFromSupabase({
-      fellows,
-      blockDates,
-      institutionId: profile.institution_id,
-    });
-    if (!error && remote) {
-      setSchedule(remote);
-      return { error: null, loaded: true };
-    }
-    return { error: error || null, loaded: false };
+    const [schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult] = await Promise.all([
+      pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
+      pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
+      pullVacationsFromSupabase({ institutionId: profile.institution_id }),
+      pullSwapRequestsFromSupabase({ institutionId: profile.institution_id }),
+      pullLecturesFromSupabase({ institutionId: profile.institution_id }),
+      pullClinicDaysFromSupabase({ institutionId: profile.institution_id }),
+    ]);
+    const error = schedResult.error || callFloatResult.error || null;
+    if (error) return { error, loaded: false };
+    if (schedResult.schedule) setSchedule(schedResult.schedule);
+    if (callFloatResult.callSchedule) setCallSchedule(callFloatResult.callSchedule);
+    if (callFloatResult.nightFloatSchedule) setNightFloatSchedule(callFloatResult.nightFloatSchedule);
+    if (vacResult.vacations) setVacations(vacResult.vacations);
+    if (swapResult.swapRequests) setSwapRequests(swapResult.swapRequests);
+    if (lectResult.lectures) setLectures(lectResult.lectures);
+    if (lectResult.speakers) setSpeakers(lectResult.speakers);
+    if (lectResult.topics) setTopics(lectResult.topics);
+    if (clinicResult.clinicDays) setClinicDays(clinicResult.clinicDays);
+    const loaded = !!(schedResult.schedule || callFloatResult.callSchedule || callFloatResult.nightFloatSchedule
+      || vacResult.vacations || swapResult.swapRequests || lectResult.lectures || clinicResult.clinicDays);
+    return { error: null, loaded };
   // fellows and blockDates are stable
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.institution_id]);
@@ -418,12 +479,6 @@ function AppContent() {
     return () => clearTimeout(t);
   }, [schedule]);
 
-  // Run generator once on mount to produce initial call/float base output.
-  // Users can still optimize manually; this prevents repeated automatic runs.
-  useEffect(() => {
-    generateCallAndFloat();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
 
   const checkBalance = useCallback(() => {
@@ -549,6 +604,7 @@ function AppContent() {
         darkMode={darkMode}
         toggleDarkMode={toggleDarkMode}
         onLogoClick={() => setShowLanding(true)}
+        onSignOut={() => { clearSensitiveStorage(); setShowLanding(true); }}
         violationCount={workHourViolations.length}
         showStats={!isSupabaseConfigured || canApprove?.()}
         showViolations={!isSupabaseConfigured || canApprove?.()}
@@ -624,6 +680,7 @@ function AppContent() {
               topics={topics}
               fellows={fellows}
               darkMode={darkMode}
+              canManageLectures={!isSupabaseConfigured || canApprove?.()}
               onSendReminder={(lecture) => {
                 console.log("Send reminder for:", lecture);
               }}
@@ -662,7 +719,9 @@ function AppContent() {
               schedule={schedule}
               setSchedule={setSchedule}
               callSchedule={callSchedule}
+              setCallSchedule={setCallSchedule}
               nightFloatSchedule={nightFloatSchedule}
+              setNightFloatSchedule={setNightFloatSchedule}
               dayOverrides={dayOverrides}
               setDayOverrides={setDayOverrides}
               pgyLevels={pgyLevels}
@@ -681,7 +740,13 @@ function AppContent() {
           )}
 
           {activeView === "admin" && isAdmin?.() && (
-            <AdminView darkMode={darkMode} />
+            <AdminView
+              darkMode={darkMode}
+              fellows={fellows}
+              pgyLevels={pgyLevels}
+              clinicDays={clinicDays}
+              setClinicDays={setClinicDays}
+            />
           )}
 
           {activeView === "vacRequests" && (
@@ -707,9 +772,9 @@ function AppContent() {
           <div className={`mt-4 p-3 rounded border ${
             darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300"
           }`}>
-            {/* Check Balance - only on call and clinic, program directors only */}
-            {(activeView === "call" || activeView === "clinic") && ['program_director', 'admin'].includes(profile?.role) && (
-              <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+            {/* Check Balance + Optimize Call/Float - admin/PD/chief only */}
+            {(activeView === "call" || activeView === "clinic") && ['program_director', 'admin', 'chief_fellow'].includes(profile?.role) && (
+              <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-2">
                 <button
                   onClick={checkBalance}
                   className="w-full sm:w-auto flex items-center justify-center gap-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded"
@@ -717,6 +782,15 @@ function AppContent() {
                   <CheckCircle className="w-3 h-3" />
                   Check Balance
                 </button>
+                {activeView === "call" && (
+                  <button
+                    onClick={generateCallAndFloat}
+                    className="w-full sm:w-auto flex items-center justify-center gap-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded"
+                  >
+                    <Shuffle className="w-3 h-3" />
+                    Optimize Call/Float
+                  </button>
+                )}
               </div>
             )}
 

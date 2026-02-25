@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { CheckCircle, AlertTriangle, Loader2, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { blockDates as localBlockDates } from '../data/scheduleData';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -43,7 +44,7 @@ export default function VacationsView({
 
     try {
       // Fetch fellows for this institution
-      const { data: fellowsData, error: fellowsErr } = await supabase
+      let { data: fellowsData, error: fellowsErr } = await supabase
         .from('fellows')
         .select('id, name, pgy_level, program, user_id')
         .eq('institution_id', profile.institution_id)
@@ -51,16 +52,49 @@ export default function VacationsView({
         .order('name');
 
       if (fellowsErr) throw fellowsErr;
+
+      // Auto-seed fellows from local data if the table is empty
+      if (!fellowsData?.length && canApprove?.()) {
+        const toInsert = fellows.map(name => ({
+          name,
+          pgy_level: pgyLevels[name] ?? null,
+          institution_id: profile.institution_id,
+          is_active: true,
+        }));
+        const { data: seeded, error: seedErr } = await supabase
+          .from('fellows')
+          .insert(toInsert)
+          .select('id, name, pgy_level, program, user_id');
+        if (seedErr) throw new Error(`Could not auto-populate fellows list: ${seedErr.message}`);
+        if (seeded?.length) fellowsData = seeded;
+      }
+
       setDbFellows(fellowsData || []);
 
       // Fetch block dates for dropdowns
-      const { data: blockDatesData, error: blockDatesErr } = await supabase
+      let { data: blockDatesData, error: blockDatesErr } = await supabase
         .from('block_dates')
         .select('id, block_number, start_date, end_date')
         .eq('institution_id', profile.institution_id)
         .order('block_number');
 
       if (blockDatesErr) throw blockDatesErr;
+
+      // Auto-seed block_dates from local scheduleData if the table is empty
+      if (!blockDatesData?.length && canApprove?.()) {
+        const toInsert = localBlockDates.map(b => ({
+          block_number: b.block,
+          start_date: b.start,
+          end_date: b.end,
+          institution_id: profile.institution_id,
+        }));
+        const { data: seeded, error: seedErr } = await supabase
+          .from('block_dates')
+          .insert(toInsert)
+          .select('id, block_number, start_date, end_date');
+        if (!seedErr && seeded?.length) blockDatesData = seeded;
+      }
+
       setBlockDates(blockDatesData || []);
 
       // Fetch vacation requests joined with fellow info and block dates

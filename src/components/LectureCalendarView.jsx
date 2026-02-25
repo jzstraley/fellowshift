@@ -28,6 +28,7 @@ export default function LectureCalendarView({
   fellows,
   onSendReminder,
   darkMode,
+  canManageLectures = false,
 }) {
   const [viewMode, setViewMode] = useState("calendar"); // calendar, list, manage
   const [selectedDate, setSelectedDate] = useState(null);
@@ -266,13 +267,15 @@ export default function LectureCalendarView({
             ))}
           </div>
 
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded"
-          >
-            <Plus className="w-3 h-3" />
-            Add Lecture
-          </button>
+          {canManageLectures && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded"
+            >
+              <Plus className="w-3 h-3" />
+              Add Lecture
+            </button>
+          )}
         </div>
       </div>
 
@@ -650,25 +653,27 @@ export default function LectureCalendarView({
 
               {/* Actions */}
               <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      openEditModal(selectedLecture);
-                      setSelectedLecture(null);
-                    }}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs font-semibold rounded"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteLecture(selectedLecture.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 hover:bg-red-200 text-xs font-semibold rounded"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Delete
-                  </button>
-                </div>
+                {canManageLectures ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        openEditModal(selectedLecture);
+                        setSelectedLecture(null);
+                      }}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs font-semibold rounded"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteLecture(selectedLecture.id)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 hover:bg-red-200 text-xs font-semibold rounded"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Delete
+                    </button>
+                  </div>
+                ) : <div />}
                 <button
                   onClick={() => onSendReminder?.(selectedLecture)}
                   className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded"
@@ -683,7 +688,7 @@ export default function LectureCalendarView({
       )}
 
       {/* Add/Edit Modal */}
-      {(showAddModal || editingLecture) && (
+      {canManageLectures && (showAddModal || editingLecture) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div
             className={`w-full max-w-lg rounded-lg shadow-xl max-h-[90vh] overflow-y-auto ${

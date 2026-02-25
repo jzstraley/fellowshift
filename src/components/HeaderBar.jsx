@@ -9,6 +9,7 @@ export default function HeaderBar({
   darkMode,
   toggleDarkMode,
   onLogoClick,
+  onSignOut,
   violationCount = 0,
   showStats = false,
   showViolations = false,
@@ -34,17 +35,10 @@ export default function HeaderBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSignOut = async () => {
+  const handleSignOut = () => {
     setUserMenuOpen(false);
-    // Race signOut against a timeout so the button never hangs if Supabase is slow
-    try {
-      await Promise.race([
-        signOut(),
-        new Promise(resolve => setTimeout(resolve, 3000)),
-      ]);
-    } catch (_) {
-      // ignore
-    }
+    // Navigate to landing immediately — no flash, no reload
+    onSignOut?.();
     // Clear all Supabase auth data from localStorage
     try {
       const host = new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0];
@@ -56,7 +50,8 @@ export default function HeaderBar({
     Object.keys(localStorage)
       .filter(key => key.startsWith('sb-'))
       .forEach(key => localStorage.removeItem(key));
-    window.location.reload();
+    // Fire-and-forget — revoke server session without blocking UI
+    signOut().catch(() => {});
   };
 
   const roleLabels = {
