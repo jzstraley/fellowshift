@@ -32,7 +32,8 @@ export default function VacationsView({
   const [dbRequests, setDbRequests] = useState([]);
   const [dbSwapRequests, setDbSwapRequests] = useState([]);
   const [dbFellows, setDbFellows] = useState([]);
-  const [loadingDb, setLoadingDb] = useState(false);
+  // Start in loading state when Supabase is ready so the empty-state doesn't flash before the spinner
+  const [loadingDb, setLoadingDb] = useState(!!(isSupabaseConfigured && user && profile));
   const [dbError, setDbError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [blockDates, setBlockDates] = useState([]);
@@ -665,7 +666,7 @@ export default function VacationsView({
   }, [newDbSwap.target_id, newDbSwap.block_number, newDbSwap.swap_type, dbFellows]);
 
   // --- Local-only fallback (original logic) ---
-  const [newReq, setNewReq] = useState({ fellow: fellows[0] || '', startBlock: 1, endBlock: 1, reason: 'Vacation', status: 'pending' });
+  const [newReq, setNewReq] = useState({ fellow: fellows[0] || '', startBlock: '', endBlock: '', reason: 'Vacation', status: 'pending' });
   const [newSwap, setNewSwap] = useState({ requester: fellows[0] || '', target: fellows[1] || '', block: 1, reason: '', swap_type: 'call', weekend: 1 });
 
   // Helper: return available weekend numbers [1,2] where `name` holds call/float for `blockNum`
@@ -774,7 +775,7 @@ export default function VacationsView({
     if (!newReq.fellow || !newReq.startBlock) return;
     const req = { ...newReq, endBlock: newReq.startBlock };
     setVacations([...(vacations || []), req]);
-    setNewReq({ fellow: fellows[0] || '', startBlock: 1, endBlock: 1, reason: 'Vacation', status: 'pending' });
+    setNewReq({ fellow: fellows[0] || '', startBlock: '', endBlock: '', reason: 'Vacation', status: 'pending' });
   };
 
   // --- Local swap logic ---
@@ -936,10 +937,13 @@ export default function VacationsView({
     const userCanApprove = canApprove();
     const userCanRequest = canRequest?.() ?? true;
 
-    // Admins/approvers can select any fellow; regular fellows can only select themselves
+    // Admins/approvers can select any fellow.
+    // Fellows filter to their own linked record; fall back to all institution fellows when
+    // user_id hasn't been linked yet (e.g., auto-seeded records have no user_id).
+    const linkedFellows = dbFellows.filter(f => f.user_id === user?.id);
     const selectableFellows = userCanApprove
       ? dbFellows
-      : dbFellows.filter(f => f.user_id === user?.id);
+      : (linkedFellows.length > 0 ? linkedFellows : dbFellows);
     const newDbSwapTargetName = dbFellows.find(f => f.id === newDbSwap.target_id)?.name;
     const newDbSwapAvailableWeekends = getAvailableWeekendsFor(
       newDbSwapTargetName,
@@ -1402,7 +1406,8 @@ export default function VacationsView({
   const availableLocalBlocks = (localBlockDates && localBlockDates.length)
     ? splitLocalWeeks.map(w => ({ block: w.block, start: w.start, end: w.end }))
     : weeklyBlocks;
-  const userCanRequest = canRequest?.() ?? true;
+  // In local fallback mode there is no real auth, so default to allowing requests
+  const userCanRequest = profile ? (canRequest?.() ?? true) : true;
   const pendingVacations = vacations.filter(v => !v.status || v.status === 'pending');
   const approvedVacations = vacations.filter(v => v.status === 'approved');
   const pendingSwapsLocal = swapRequests.filter(s => s.status === 'pending');
@@ -1416,7 +1421,9 @@ export default function VacationsView({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold">Requests</h3>
-        <div className="text-sm text-gray-600 dark:text-gray-400">Admin controls enabled</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          {profile ? (isAdmin?.() ? 'Admin' : isProgramDirector() ? 'Program Director' : isChiefFellow() ? 'Chief Fellow' : profile.role) : 'Local mode'}
+        </div>
       </div>
 
       <SubViewTabs />
@@ -1474,37 +1481,19 @@ export default function VacationsView({
                 {fellows.map((f) => <option key={f} value={f}>{f}</option>)}
               </select>
               {availableLocalBlocks && availableLocalBlocks.length ? (
-                <>
-                  <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={String(newReq.startBlock)} onChange={(e) => setNewReq({ ...newReq, startBlock: Number(e.target.value) })}>
-                    <option value="">Start Week</option>
-                    {availableLocalBlocks.map((b) => (
-                      <option key={b.block} value={String(b.block)}>
-                        {formatPretty(b.start)} — {formatPretty(b.end)} (Week {b.block})
-                      </option>
-                    ))}
-                  </select>
-                  <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={String(newReq.endBlock)} onChange={(e) => setNewReq({ ...newReq, endBlock: Number(e.target.value) })}>
-                    <option value="">End Week</option>
-                    {availableLocalBlocks.map((b) => (
-                      <option key={b.block} value={String(b.block)}>
-                        {formatPretty(b.start)} — {formatPretty(b.end)} (Week {b.block})
-                      </option>
-                    ))}
-                  </select>
-                </>
+                <select className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={String(newReq.startBlock)} onChange={(e) => setNewReq({ ...newReq, startBlock: e.target.value, endBlock: e.target.value })}>
+                  <option value="">Select Week</option>
+                  {availableLocalBlocks.map((b) => (
+                    <option key={b.block} value={String(b.block)}>
+                      {formatPretty(b.start)} — {formatPretty(b.end)} (Week {b.block})
+                    </option>
+                  ))}
+                </select>
               ) : (
-                <>
-                  <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} value={newReq.startBlock} onChange={(e) => setNewReq({ ...newReq, startBlock: Number(e.target.value) })} />
-                  <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} value={newReq.endBlock} onChange={(e) => setNewReq({ ...newReq, endBlock: Number(e.target.value) })} />
-                </>
+                <input type="number" className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" min={1} max={26} placeholder="Block #" value={newReq.startBlock} onChange={(e) => setNewReq({ ...newReq, startBlock: e.target.value, endBlock: e.target.value })} />
               )}
-              <input className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newReq.reason} onChange={(e) => setNewReq({ ...newReq, reason: e.target.value })} />
+              <input className="p-2 border dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" placeholder="Reason" value={newReq.reason} onChange={(e) => setNewReq({ ...newReq, reason: e.target.value })} />
             </div>
-            {availableLocalBlocks && availableLocalBlocks.length && newReq.startBlock && newReq.endBlock && (
-              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Selected: {formatPretty(availableLocalBlocks.find(b => b.block === newReq.startBlock)?.start)} — {formatPretty(availableLocalBlocks.find(b => b.block === newReq.endBlock)?.end)}
-              </div>
-            )}
             <div className="mt-2">
               <button onClick={submitNewRequest} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">Add Request</button>
             </div>

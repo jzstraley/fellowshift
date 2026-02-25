@@ -170,9 +170,9 @@ export const AuthProvider = ({ children }) => {
     return ['program_director', 'chief_fellow', 'admin'].includes(profile?.role);
   };
 
-  // Can submit time-off and swap requests (fellows and above, not residents)
+  // Can submit time-off and swap requests (fellows, residents, and above)
   const canRequest = () => {
-    return ['fellow', 'chief_fellow', 'program_director', 'admin'].includes(profile?.role);
+    return ['resident', 'fellow', 'chief_fellow', 'program_director', 'admin'].includes(profile?.role);
   };
 
   const isResident = () => profile?.role === 'resident';

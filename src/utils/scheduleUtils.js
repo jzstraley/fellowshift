@@ -38,32 +38,49 @@ const abbreviateRotation = (rot) => {
   return rot;
 };
 
-export const getBlockDisplay = (fellow, blockIdx, schedule, vacations) => {
+export const getBlockDisplay = (fellow, blockIdx, schedule, vacations, blockDates = []) => {
   const rotation = schedule[fellow]?.[blockIdx];
-  
-  const vacation = vacations.find(v => 
-    v.fellow === fellow && 
-    v.startBlock <= blockIdx + 1 && 
-    v.endBlock >= blockIdx + 1
+  const currentBlock = blockIdx + 1;
+
+  // Only approved vacations affect the schedule view
+  const vacation = vacations.find(v =>
+    v.fellow === fellow &&
+    v.status === 'approved' &&
+    v.startBlock <= currentBlock &&
+    v.endBlock >= currentBlock
   );
-  
+
   if (!vacation) return rotation || '-';
-  
+
   const vacStart = vacation.startBlock;
   const vacEnd = vacation.endBlock;
-  const currentBlock = blockIdx + 1;
-  
-  if (vacStart === currentBlock && vacEnd === currentBlock) {
+
+  // Multi-block vacation: entire block is vacation
+  if (vacEnd - vacStart >= 1) {
     return 'VAC';
   }
-  
+
+  // Single-block vacation: show which week of the 2-block rotation is vacation
   const abbrev = abbreviateRotation(rotation);
-  
-  if (vacStart === currentBlock) {
-    return `${abbrev}/V`;
-  } else {
-    return `V/${abbrev}`;
+
+  if (blockDates.length > 0) {
+    const currentBD = blockDates[blockIdx];
+    if (currentBD) {
+      const rotationBlocks = blockDates
+        .filter(bd => bd.rotation === currentBD.rotation)
+        .sort((a, b) => a.block - b.block);
+      const positionInRotation = rotationBlocks.findIndex(bd => bd.block === currentBD.block);
+      if (positionInRotation === 0) {
+        // First week of rotation is vacation
+        return abbrev ? `VAC/${abbrev}` : 'VAC';
+      } else {
+        // Second week of rotation is vacation
+        return abbrev ? `${abbrev}/VAC` : 'VAC';
+      }
+    }
   }
+
+  return 'VAC';
 };
 
 export const formatDate = (dateStr) => {

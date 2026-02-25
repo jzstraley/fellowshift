@@ -54,10 +54,12 @@ export default function ScheduleView({
   const currentBlockIdx = useMemo(() => getInitialBlockIdx(blockDates), [blockDates]);
 
   // Precompute vacation set for O(1) checks: keys like "Fellow#blockNumber"
+  // Only approved vacations are shown on the schedule view
   const vacationSet = useMemo(() => {
     const s = new Set();
     (vacations || []).forEach((v) => {
       if (v.reason !== "Vacation") return;
+      if (v.status !== "approved") return;
       for (let b = v.startBlock; b <= v.endBlock; b++) {
         s.add(`${v.fellow}#${b}`);
       }
@@ -174,7 +176,7 @@ export default function ScheduleView({
                 }}
               >
                 <div className="relative">
-                  {getBlockDisplay(fellow, idx, schedule, vacations)}
+                  {getBlockDisplay(fellow, idx, schedule, vacations, blockDates)}
                   {violationMap.has(`${fellow}#${blockNumber}`) && (
                     <span
                       className="absolute -top-1 -right-1 w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent"
@@ -214,35 +216,6 @@ export default function ScheduleView({
           </button>
         </div>
       )}
-
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap">
-        {/* Rotation filter */}
-        <div className="flex items-center gap-2 sm:ml-auto">
-          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-            Filter rotation:
-          </label>
-          <select
-            value={highlight?.type === "rotation" ? highlight.rotation : ""}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val) {
-                setHighlight({ type: "rotation", rotation: val });
-              } else {
-                setHighlight(null);
-              }
-            }}
-            className="px-3 py-2 text-sm font-semibold rounded border min-h-[44px] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
-          >
-            <option value="">All Rotations</option>
-            {allRotations.map((rot) => (
-              <option key={rot} value={rot}>
-                {rot}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
 
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div
@@ -316,6 +289,32 @@ export default function ScheduleView({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Rotation filter — bottom right */}
+      <div className="flex justify-end items-center gap-2">
+        <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          Filter rotation:
+        </label>
+        <select
+          value={highlight?.type === "rotation" ? highlight.rotation : ""}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val) {
+              setHighlight({ type: "rotation", rotation: val });
+            } else {
+              setHighlight(null);
+            }
+          }}
+          className="px-3 py-1.5 text-xs font-semibold rounded border bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
+        >
+          <option value="">All Rotations</option>
+          {allRotations.map((rot) => (
+            <option key={rot} value={rot}>
+              {rot}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );

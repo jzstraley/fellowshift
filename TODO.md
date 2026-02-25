@@ -7,7 +7,6 @@
 - [ ] Make all tables horizontally scrollable on mobile
 - [ ] Touch-friendly buttons and controls
 - [ ] Test on various screen sizes
-- [ ] Replace drag-and-drop with tap-to-select or dropdowns on mobile
 
 ### UI Improvements
 
@@ -15,22 +14,38 @@
 - [X] Need to fix button bar
 - [ ] Change IMport background dark
 - [ ] Dark light icon not centered
-- [ ] Background for tables not dark
-- [ ] Remove inport/export/reset from vacations tab
-- [ ] New color Drag to swap rotations. 
-- [ ] Click a name, header, or cell to highlight. 
+- [X] Background for tables not dark
+- [X] Remove inport/export/reset from vacations tab
+- [X] Click a name, header, or cell to highlight. 
 - [ ] Toggle Vacation Mode to paint vacation blocks.
+- [X] Remove PGY year on Clinic schedule
+    - [X] Fix UI for Clinic on mobile, just equal space
+- [ ] Could not find the table public.lecture_speaker when submitting a change request
+- [ ] Fellow View TODO
+    - [ ] when logging back in, login should end up on home page
+    - [ ] Unable to request time off/page not available for fellows
+- [ ] Currently there is a vacation request for fellow Ali, for some reason it appears he is on vacation already on the schedule view. Maybe Ali and Alkhawlani got switched around because Alkhawlani already has two weeks of vacation approved. Also on the schedule view, Alkhawlani is not on vacation. Also if vacation is only one week of a 2 week block, the schedule view should show like "AI/VAC" or "VAC/AI" depending on which week was chosen. The schedule view should not update with vacations until they are approved.
+- [ ] admins should be able to create requests for anyone. users should be able to only create time off requests for themselves. I also want the specific username "fellow" to be able to create requests for anyone. that is my tester person and has fellow-like priveldges.
+- [ ] Local mode?
+- [ ] Also should have an option for an individual day off like a sick day on the requests tab Can be a different tab in the requests page
+- [ ] on the requests tab, fellows/residents should not have the option to approve or deny pending requests. They should only be able to see what has been requested. Also currently showes like "Blocks 2-1–2-1 — Vacation" that is terrible. Please make it appear pretteir, can be dates, shbould have timestamp
 
 ---
 
 ## 🟡 Logic Fixes
+
+### Access control
+
+- [X] Fellows see their own program's schedule
+- [X] Chiefs can edit their program
+- [X] Program directors see all
 
 ### Call/Float Generator
 
 - [X] Constraint: Cannot do call weekend same weekend as night float
 - [X] Prioritize even float distribution
 - [X] PGY-4 targets prioritized over PGY-5 targets
-- [ ] No night floats for PGy-6s last 3 months.
+- [X] No night floats for PGy-6s last 3 months.
 
 ### Clinic Coverage
 
@@ -64,7 +79,7 @@
 - [ ] Export to Google Calendar / iCal
 - [X] Print-friendly views
 - [X] Dark mode
-- [ ] Undo/redo for schedule changes
+- [X] Undo/redo for schedule changes
 - [ ] Conflict detection warnings
 - [ ] Fellow preferences input (vacation requests, rotation preferences)
 - [ ] Analytics dashboard (workload metrics over time)
@@ -74,14 +89,6 @@
 
 ---
 
-For 50 fellowship users with team schedules, here's what I'd recommend:
-Architecture:
-
-React frontend with calendar/scheduler component
-Supabase or Postgres database
-Role-based access (fellows, chiefs, admins)
-Real-time updates when schedules change
-
 Data structure:
 Users table: user_id, name, fellowship_program, role
 Schedules table: schedule_id, program_id, date, user_id, shift_type, location
@@ -89,9 +96,6 @@ Programs table: program_id, program_name (cardiology, etc.)
 Key features for medical scheduling:
 
 Calendar view (monthly/weekly)
-Shift types (call, clinic, cath lab, CCU, consults)
-Rotation tracking
-Swap requests between fellows
 Export to personal calendar (iCal)
 Duty hour tracking (ACGME compliance)
 
@@ -100,14 +104,3 @@ React scheduler libraries:
 FullCalendar - most feature-rich
 React Big Calendar - simpler, good for basic needs
 DayPilot - medical-specific features
-
-Access control:
-
-Fellows see their own program's schedule
-Chiefs can edit their program
-Program directors see all
-
-Tech stack:
-React + FullCalendar + Supabase + Vercel
-This handles 50 users easily and scales well. Real-time updates mean everyone sees schedule changes immediately.
-Want help setting up the database schema or picking a calendar component?

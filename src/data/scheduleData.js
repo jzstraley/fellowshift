@@ -14,8 +14,8 @@ export const initialClinicDays = {
   'Selvam': 2,     // Tuesday
   'Varga': 4,      // Thursday
   // PGY-5
-  'Alkhawlani': 3, // Wednesday 
-  'Ali': 3,        // Wednesday 
+  'Ali': 3, // Wednesday 
+  'Alkhawlani': 3,        // Wednesday 
   'Elsayed': 1,    // Monday 
   'Ezaldin': 2,    // Tuesday
   'Sharma': 4,     // Thursday 

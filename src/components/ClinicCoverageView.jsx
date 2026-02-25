@@ -154,37 +154,35 @@ const CANNOT_COVER_ROTATIONS = [
 
   return (
     <div className="space-y-4">
-      {/* Summary */}
-      <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 p-3">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="text-base dark:text-gray-200">
-              <span className="font-bold">{coverageEntries.length}</span> weekly coverage slots
-            </div>
-
-            <div className="text-base text-gray-600 dark:text-gray-400">
-              Assigned: <span className="font-bold">{totalAssignments}</span> (Target total:{" "}
-              <span className="font-bold">{targetTotal}</span>)
-            </div>
-
-            {noCoverageCount > 0 ? (
-              <div className="flex items-center gap-1 text-red-600 text-base font-bold">
-                <AlertTriangle className="w-4 h-4" />
-                {noCoverageCount} missing
+      {/* Summary — admins/chiefs/PDs only */}
+      {showPrivileged && (
+        <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 p-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="text-base dark:text-gray-200">
+                <span className="font-bold">{coverageEntries.length}</span> weekly coverage slots
               </div>
-            ) : (
-              <div className="flex items-center gap-1 text-green-600 text-base font-bold">
-                <CheckCircle className="w-4 h-4" />
-                All covered
-              </div>
-            )}
-          </div>
 
-          <div className="text-xs text-gray-500">
-            Optimized toward 4 per fellow, relaxations flagged
+              <div className="text-base text-gray-600 dark:text-gray-400">
+                Assigned: <span className="font-bold">{totalAssignments}</span> (Target total:{" "}
+                <span className="font-bold">{targetTotal}</span>)
+              </div>
+
+              {noCoverageCount > 0 ? (
+                <div className="flex items-center gap-1 text-red-600 text-base font-bold">
+                  <AlertTriangle className="w-4 h-4" />
+                  {noCoverageCount} missing
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-green-600 text-base font-bold">
+                  <CheckCircle className="w-4 h-4" />
+                  All covered
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Monthly Clinic Calendar */}
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
@@ -248,7 +246,7 @@ const CANNOT_COVER_ROTATIONS = [
                           <div
                             key={fellow}
                             className={`text-[10px] px-1 py-0.5 rounded truncate font-semibold ${getPGYColor(pgy)}`}
-                            title={`${fellow} (PGY-${pgy}) — regular clinic`}
+                            title={`${fellow} — regular clinic`}
                           >
                             {fellow}
                           </div>
@@ -291,15 +289,9 @@ const CANNOT_COVER_ROTATIONS = [
         <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400">
           <span className="flex items-center gap-1">
             <span className="px-1 rounded bg-blue-100 text-blue-800 border border-blue-300 text-[10px] font-semibold">Name</span>
-            PGY-4
-          </span>
-          <span className="flex items-center gap-1">
             <span className="px-1 rounded bg-green-100 text-green-800 border border-green-300 text-[10px] font-semibold">Name</span>
-            PGY-5
-          </span>
-          <span className="flex items-center gap-1">
             <span className="px-1 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-semibold">Name</span>
-            PGY-6
+            regular clinic
           </span>
           <span className="flex items-center gap-1">
             <span className="px-1 rounded bg-amber-100 text-amber-900 text-[10px] font-semibold">Name*</span>
@@ -333,7 +325,6 @@ const CANNOT_COVER_ROTATIONS = [
               entry.week
             );
             const clinicDate = entry.clinicDate;
-            const count = entry.coverer ? (coverageStats?.[entry.coverer] || 0) : null;
 
             const cardBorder = !entry.coverer
               ? "border-red-300 dark:border-red-700"
@@ -373,37 +364,35 @@ const CANNOT_COVER_ROTATIONS = [
                 </div>
 
                 {/* Card body: absent → covered */}
-                <div className={`px-2 py-1.5 flex items-center justify-between flex-wrap gap-y-1 ${cardBg}`}>
+                <div className={`px-2 py-1.5 grid grid-cols-2 gap-x-2 items-center ${cardBg}`}>
                   {/* Left: absent fellow + clinic date */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold">{entry.absent}</span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  <div className="flex flex-col min-w-0">
+                    <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold truncate self-start max-w-full">
+                      {entry.absent}
+                    </span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                       Nights → {clinicDayName(entry.absentClinicDay)}
                       {clinicDate ? ` ${clinicDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
                     </span>
                   </div>
 
                   {/* Right: coverer info */}
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-col min-w-0">
                     {entry.coverer ? (
                       <>
-                        <span className={`px-1.5 py-0.5 rounded font-semibold ${getRotationColor(entry.covererRotation)}`}>
+                        <span className={`px-1.5 py-0.5 rounded font-semibold truncate self-start max-w-full ${getRotationColor(entry.covererRotation)}`}>
                           {entry.coverer}
                         </span>
-                        <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                          ({clinicDayName(entry.covererClinicDay)})
-                        </span>
-                        {entry.covererRotation && (
-                          <span className={`px-1 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(entry.covererRotation)}`}>
-                            {entry.covererRotation}
+                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                            ({clinicDayName(entry.covererClinicDay)})
                           </span>
-                        )}
-                        {entry.covererPGY && (
-                          <span className={`px-1 py-0.5 rounded text-[10px] font-bold border ${getPGYColor(entry.covererPGY)}`}>
-                            {entry.covererPGY}
-                          </span>
-                        )}
-                        <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">#{count}</span>
+                          {entry.covererRotation && (
+                            <span className={`px-1 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(entry.covererRotation)}`}>
+                              {entry.covererRotation}
+                            </span>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <span className="flex items-center gap-1 text-red-600 font-bold">
@@ -430,8 +419,6 @@ const CANNOT_COVER_ROTATIONS = [
                 <th className="px-1 py-1 text-center font-bold dark:text-gray-100">→</th>
                 <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Covered By</th>
                 <th className="px-1 py-1 text-left font-bold dark:text-gray-100">Their Rot</th>
-                <th className="px-1 py-1 text-center font-bold dark:text-gray-100">PGY</th>
-                <th className="px-1 py-1 text-center font-bold dark:text-gray-100">#</th>
               </tr>
             </thead>
 
@@ -454,8 +441,6 @@ const CANNOT_COVER_ROTATIONS = [
                 );
 
                 const clinicDate = entry.clinicDate;
-
-                const count = entry.coverer ? (coverageStats?.[entry.coverer] || 0) : null;
 
                 return (
                   <tr key={idx} className={`border-b border-gray-200 dark:border-gray-700 ${rowBg}`}>
@@ -534,23 +519,6 @@ const CANNOT_COVER_ROTATIONS = [
                       )}
                     </td>
 
-                    <td className="px-1 py-1 text-center">
-                      {entry.covererPGY ? (
-                        <span
-                          className={`px-1 py-0.5 rounded text-[10px] font-bold border ${getPGYColor(
-                            entry.covererPGY
-                          )}`}
-                        >
-                          {entry.covererPGY}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-
-                    <td className="px-1 py-1 text-center font-bold text-gray-600 dark:text-gray-300">
-                      {entry.coverer ? count : "—"}
-                    </td>
                   </tr>
                 );
               })}

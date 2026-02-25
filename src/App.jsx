@@ -326,7 +326,21 @@ function AppContent() {
       pullLecturesFromSupabase({ institutionId: profile.institution_id }),
       pullClinicDaysFromSupabase({ institutionId: profile.institution_id }),
     ]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
-      if (schedResult.schedule) setSchedule(schedResult.schedule);
+      if (schedResult.schedule) {
+        // Merge: apply non-empty Supabase rotations on top of current schedule.
+        // Avoids wiping local data when Supabase only has partial records (e.g. vacation approvals).
+        setSchedule(prev => {
+          const merged = {};
+          fellows.forEach(f => {
+            const supaBlocks = schedResult.schedule[f] || [];
+            const prevBlocks = prev[f] || [];
+            merged[f] = prevBlocks.map((prevRot, idx) =>
+              supaBlocks[idx] !== undefined && supaBlocks[idx] !== '' ? supaBlocks[idx] : prevRot
+            );
+          });
+          return merged;
+        });
+      }
       if (callFloatResult.callSchedule) setCallSchedule(callFloatResult.callSchedule);
       if (callFloatResult.nightFloatSchedule) setNightFloatSchedule(callFloatResult.nightFloatSchedule);
 
@@ -404,7 +418,20 @@ function AppContent() {
     ]);
     const error = schedResult.error || callFloatResult.error || null;
     if (error) return { error, loaded: false };
-    if (schedResult.schedule) setSchedule(schedResult.schedule);
+    if (schedResult.schedule) {
+      // Merge: apply non-empty Supabase rotations on top of current schedule.
+      setSchedule(prev => {
+        const merged = {};
+        fellows.forEach(f => {
+          const supaBlocks = schedResult.schedule[f] || [];
+          const prevBlocks = prev[f] || [];
+          merged[f] = prevBlocks.map((prevRot, idx) =>
+            supaBlocks[idx] !== undefined && supaBlocks[idx] !== '' ? supaBlocks[idx] : prevRot
+          );
+        });
+        return merged;
+      });
+    }
     if (callFloatResult.callSchedule) setCallSchedule(callFloatResult.callSchedule);
     if (callFloatResult.nightFloatSchedule) setNightFloatSchedule(callFloatResult.nightFloatSchedule);
     if (vacResult.vacations) setVacations(vacResult.vacations);

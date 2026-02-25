@@ -59,7 +59,7 @@ return (
 
         <button
           onClick={onPickFile}
-          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 md:py-1 min-h-[32px] bg-gray-800 hover:bg-gray-900 text-white text-[11px] font-semibold rounded whitespace-nowrap"
+          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 md:py-1 min-h-[32px] bg-gray-800 hover:bg-gray-900 dark:bg-gray-600 dark:hover:bg-gray-500 text-white text-[11px] font-semibold rounded whitespace-nowrap"
           type="button"
           title="Import CSV/TSV: Fellow, Block 1..26"
         >
@@ -69,7 +69,7 @@ return (
 
         <button
           onClick={exportSchedule}
-          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 md:py-1 min-h-[30px] bg-gray-800 hover:bg-gray-900 text-white text-[11px] font-semibold rounded whitespace-nowrap"
+          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 md:py-1 min-h-[30px] bg-gray-800 hover:bg-gray-900 dark:bg-gray-600 dark:hover:bg-gray-500 text-white text-[11px] font-semibold rounded whitespace-nowrap"
           type="button"
         >
           <Download className="w-3 h-3 shrink-0" />
@@ -79,7 +79,7 @@ return (
         {showExportViolations && (
           <button
             onClick={exportViolations}
-            className="w-full flex items-center justify-center gap-1 px-2 py-1.5 md:py-1 min-h-[30px] bg-gray-700 hover:bg-gray-800 text-white text-[11px] font-semibold rounded whitespace-nowrap col-span-2 md:col-span-1"
+            className="w-full flex items-center justify-center gap-1 px-2 py-1.5 md:py-1 min-h-[30px] bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white text-[11px] font-semibold rounded whitespace-nowrap col-span-2 md:col-span-1"
             type="button"
           >
             <Download className="w-3 h-3 shrink-0" />
