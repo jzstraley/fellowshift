@@ -63,7 +63,7 @@ const getFloatEntry = (nightFloatSchedule, key) => {
 
 // ---------- UI helpers ----------
 const missingBadge = (
-  <span className="px-2 py-0.5 bg-red-600 text-white rounded font-bold">
+  <span className="px-2 py-0.5 bg-red-600 text-white rounded font-bold text-[11px]">
     MISSING
   </span>
 );
@@ -123,6 +123,25 @@ export default function CallView({
     }
     return -1;
   }, []);
+
+  // Pre-compute all 26 block rows (used by both mobile cards and desktop table)
+  const blockRows = useMemo(() => {
+    return Array.from({ length: 26 }, (_, i) => {
+      const blockStart = new Date(blockDates[i].start);
+      const { sat1, sat2 } = getBlockWeekendSaturdays(blockStart);
+      const w1Key = `B${i + 1}-W1`;
+      const w2Key = `B${i + 1}-W2`;
+      return {
+        i,
+        sat1,
+        sat2,
+        c1: getCallEntry(callSchedule, w1Key),
+        c2: getCallEntry(callSchedule, w2Key),
+        f1: getFloatEntry(nightFloatSchedule, w1Key),
+        f2: getFloatEntry(nightFloatSchedule, w2Key),
+      };
+    });
+  }, [callSchedule, nightFloatSchedule]);
 
   // Build date-indexed map: { "YYYY-MM-DD": { call, float, callRelaxed?, floatRelaxed? } }
   const dateCallMap = useMemo(() => {
@@ -237,6 +256,15 @@ const exportCallFloatCSV = () => {
   URL.revokeObjectURL(url);
 };
 
+  // Shared violation indicator
+  const ViolationDot = ({ name, block }) =>
+    violationByFellowBlock.has(`${name}#${block}`) ? (
+      <span
+        className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent"
+        title={violationByFellowBlock.get(`${name}#${block}`).map(v => v.detail).join('\n')}
+      />
+    ) : null;
+
   return (
     <div className="space-y-3">
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
@@ -248,7 +276,94 @@ const exportCallFloatCSV = () => {
         </div>
 
         <div className="p-2">
-          <div className="overflow-x-auto">
+          {/* ── Mobile: one card per block ── */}
+          <div className="md:hidden space-y-1.5">
+            {blockRows.map(({ i, sat1, sat2, c1, c2, f1, f2 }) => {
+              const isCurrent = i === currentBlockIndex;
+              return (
+                <div
+                  key={i}
+                  className={`rounded border overflow-hidden ${
+                    isCurrent
+                      ? 'border-yellow-500'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                >
+                  {/* Block header */}
+                  <div className={`px-2 py-1 text-xs font-bold flex items-center gap-2 ${
+                    isCurrent
+                      ? 'bg-yellow-200 dark:bg-yellow-800/50 text-yellow-900 dark:text-yellow-100'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100'
+                  }`}>
+                    Block {i + 1}
+                    {isCurrent && (
+                      <span className="text-[10px] font-normal text-yellow-700 dark:text-yellow-300">← current</span>
+                    )}
+                  </div>
+
+                  {/* Two weekends side-by-side */}
+                  <div className="grid grid-cols-2 divide-x divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                    {/* Weekend 1 */}
+                    <div className="px-2 py-1.5">
+                      <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                        W1 · {formatMD(sat1)}/{formatMD(addDays(sat1, 1))}
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-400 w-6 shrink-0">Call</span>
+                          {c1.name ? (
+                            <span className="inline-flex items-center gap-0.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[11px] ${callBadgeClass(c1.relaxed)}`}>{c1.name}</span>
+                              <ViolationDot name={c1.name} block={i + 1} />
+                            </span>
+                          ) : missingBadge}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-400 w-6 shrink-0">Float</span>
+                          {f1.name ? (
+                            <span className="inline-flex items-center gap-0.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[11px] ${floatBadgeClass(f1.relaxed)}`}>{f1.name}</span>
+                              <ViolationDot name={f1.name} block={i + 1} />
+                            </span>
+                          ) : missingBadge}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Weekend 2 */}
+                    <div className="px-2 py-1.5">
+                      <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                        W2 · {formatMD(sat2)}/{formatMD(addDays(sat2, 1))}
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-400 w-6 shrink-0">Call</span>
+                          {c2.name ? (
+                            <span className="inline-flex items-center gap-0.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[11px] ${callBadgeClass(c2.relaxed)}`}>{c2.name}</span>
+                              <ViolationDot name={c2.name} block={i + 1} />
+                            </span>
+                          ) : missingBadge}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-400 w-6 shrink-0">Float</span>
+                          {f2.name ? (
+                            <span className="inline-flex items-center gap-0.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[11px] ${floatBadgeClass(f2.relaxed)}`}>{f2.name}</span>
+                              <ViolationDot name={f2.name} block={i + 1} />
+                            </span>
+                          ) : missingBadge}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Desktop: full table ── */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-200 dark:bg-gray-700 border-b border-gray-400 dark:border-gray-600">
@@ -263,108 +378,86 @@ const exportCallFloatCSV = () => {
               </thead>
 
               <tbody>
-                {Array.from({ length: 26 }, (_, i) => {
-                  const blockStart = new Date(blockDates[i].start);
-                  const { sat1, sat2 } = getBlockWeekendSaturdays(blockStart);
+                {blockRows.map(({ i, sat1, sat2, c1, c2, f1, f2 }) => (
+                  <tr
+                    key={i}
+                    className={`border-b border-gray-200 dark:border-gray-700 ${
+                      i === currentBlockIndex
+                        ? 'bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-l-yellow-500'
+                        : i % 2 === 0
+                          ? 'bg-white dark:bg-gray-900'
+                          : 'bg-gray-50 dark:bg-gray-800'
+                    }`}
+                  >
+                    <td className="px-2 py-1 font-semibold dark:text-gray-100">Block {i + 1}</td>
 
-                  const w1Key = `B${i + 1}-W1`;
-                  const w2Key = `B${i + 1}-W2`;
+                    <td className="px-2 py-1 text-gray-900 dark:text-gray-200 font-semibold">
+                      {formatMD(sat1)} / {formatMD(addDays(sat1, 1))}
+                    </td>
 
-                  const c1 = getCallEntry(callSchedule, w1Key);
-                  const c2 = getCallEntry(callSchedule, w2Key);
-
-                  const f1 = getFloatEntry(nightFloatSchedule, w1Key);
-                  const f2 = getFloatEntry(nightFloatSchedule, w2Key);
-
-                  return (
-                    <tr
-                      key={i}
-                      className={`border-b border-gray-200 dark:border-gray-700 ${
-                        i === currentBlockIndex
-                          ? 'bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-l-yellow-500'
-                          : i % 2 === 0
-                            ? 'bg-white dark:bg-gray-900'
-                            : 'bg-gray-50 dark:bg-gray-800'
-                      }`}
-                    >
-                      <td className="px-2 py-1 font-semibold dark:text-gray-100">Block {i + 1}</td>
-
-                      <td className="px-2 py-1 text-gray-900 dark:text-gray-200 font-semibold">
-                        {formatMD(sat1)} / {formatMD(addDays(sat1, 1))}
-                      </td>
-
-                      <td className="px-2 py-1">
-                        {c1.name ? (
-                          <span className="inline-flex items-center gap-1">
-                            <span className={`px-2 py-0.5 rounded ${callBadgeClass(c1.relaxed)}`}>
-                              {c1.name}
-                            </span>
-                            {violationByFellowBlock.has(`${c1.name}#${i + 1}`) && (
-                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${c1.name}#${i + 1}`).map(v => v.detail).join('\n')} />
-                            )}
+                    <td className="px-2 py-1">
+                      {c1.name ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span className={`px-2 py-0.5 rounded ${callBadgeClass(c1.relaxed)}`}>
+                            {c1.name}
                           </span>
-                        ) : (
-                          missingBadge
-                        )}
-                      </td>
+                          <ViolationDot name={c1.name} block={i + 1} />
+                        </span>
+                      ) : (
+                        missingBadge
+                      )}
+                    </td>
 
-                      <td className="px-2 py-1">
-                        {f1.name ? (
-                          <span className="inline-flex items-center gap-1">
-                            <span
-                              className={`px-2 py-0.5 rounded ${floatBadgeClass(f1.relaxed)}`}
-                              title={f1.relaxed ? 'relaxed fallback' : 'strict'}
-                            >
-                              {f1.name}
-                            </span>
-                            {violationByFellowBlock.has(`${f1.name}#${i + 1}`) && (
-                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${f1.name}#${i + 1}`).map(v => v.detail).join('\n')} />
-                            )}
+                    <td className="px-2 py-1">
+                      {f1.name ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span
+                            className={`px-2 py-0.5 rounded ${floatBadgeClass(f1.relaxed)}`}
+                            title={f1.relaxed ? 'relaxed fallback' : 'strict'}
+                          >
+                            {f1.name}
                           </span>
-                        ) : (
-                          missingBadge
-                        )}
-                      </td>
+                          <ViolationDot name={f1.name} block={i + 1} />
+                        </span>
+                      ) : (
+                        missingBadge
+                      )}
+                    </td>
 
-                      <td className="px-2 py-1 text-gray-900 dark:text-gray-200 font-semibold">
-                        {formatMD(sat2)} / {formatMD(addDays(sat2, 1))}
-                      </td>
+                    <td className="px-2 py-1 text-gray-900 dark:text-gray-200 font-semibold">
+                      {formatMD(sat2)} / {formatMD(addDays(sat2, 1))}
+                    </td>
 
-                      <td className="px-2 py-1">
-                        {c2.name ? (
-                          <span className="inline-flex items-center gap-1">
-                            <span className={`px-2 py-0.5 rounded ${callBadgeClass(c2.relaxed)}`}>
-                              {c2.name}
-                            </span>
-                            {violationByFellowBlock.has(`${c2.name}#${i + 1}`) && (
-                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${c2.name}#${i + 1}`).map(v => v.detail).join('\n')} />
-                            )}
+                    <td className="px-2 py-1">
+                      {c2.name ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span className={`px-2 py-0.5 rounded ${callBadgeClass(c2.relaxed)}`}>
+                            {c2.name}
                           </span>
-                        ) : (
-                          missingBadge
-                        )}
-                      </td>
+                          <ViolationDot name={c2.name} block={i + 1} />
+                        </span>
+                      ) : (
+                        missingBadge
+                      )}
+                    </td>
 
-                      <td className="px-2 py-1">
-                        {f2.name ? (
-                          <span className="inline-flex items-center gap-1">
-                            <span
-                              className={`px-2 py-0.5 rounded ${floatBadgeClass(f2.relaxed)}`}
-                              title={f2.relaxed ? 'relaxed fallback' : 'strict'}
-                            >
-                              {f2.name}
-                            </span>
-                            {violationByFellowBlock.has(`${f2.name}#${i + 1}`) && (
-                              <span className="w-0 h-0 border-t-[6px] border-t-red-500 border-l-[6px] border-l-transparent" title={violationByFellowBlock.get(`${f2.name}#${i + 1}`).map(v => v.detail).join('\n')} />
-                            )}
+                    <td className="px-2 py-1">
+                      {f2.name ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span
+                            className={`px-2 py-0.5 rounded ${floatBadgeClass(f2.relaxed)}`}
+                            title={f2.relaxed ? 'relaxed fallback' : 'strict'}
+                          >
+                            {f2.name}
                           </span>
-                        ) : (
-                          missingBadge
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                          <ViolationDot name={f2.name} block={i + 1} />
+                        </span>
+                      ) : (
+                        missingBadge
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -381,60 +474,106 @@ const exportCallFloatCSV = () => {
           </div>
 
           <div className="p-2">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gray-200 dark:bg-gray-700 border-b border-gray-400 dark:border-gray-600">
-                  <th className="px-2 py-1 text-left font-bold dark:text-gray-100">Fellow</th>
-                  <th className="px-2 py-1 text-center font-bold dark:text-gray-100">PGY</th>
-                  <th className="px-2 py-1 text-center font-bold bg-blue-100 dark:bg-blue-900 dark:text-blue-200">Call Target</th>
-                  <th className="px-2 py-1 text-center font-bold bg-blue-50 dark:bg-blue-950 dark:text-blue-100">Call Actual</th>
-                  <th className="px-2 py-1 text-center font-bold">Status</th>
-                  <th className="px-2 py-1 text-center font-bold bg-gray-100 dark:bg-gray-700 dark:text-gray-200">Float Target</th>
-                  <th className="px-2 py-1 text-center font-bold bg-gray-50 dark:bg-gray-800 dark:text-gray-200">Float Actual</th>
-                  <th className="px-2 py-1 text-center font-bold">Status</th>
-                </tr>
-              </thead>
+            {/* ── Mobile: fellow rows ── */}
+            <div className="md:hidden space-y-1">
+              {fellows.map((f, idx) => {
+                const pgy = pgyLevels[f];
+                const callTarget = callTargets[pgy] ?? 0;
+                const floatTarget = floatTargets[pgy] ?? 0;
+                const callActual = stats[f]?.call ?? 0;
+                const floatActual = stats[f]?.float ?? 0;
+                const cStat = statusMeta(callActual, callTarget);
+                const fStat = statusMeta(floatActual, floatTarget);
 
-              <tbody>
-                {fellows.map((f, idx) => {
-                  const pgy = pgyLevels[f];
-                  const callTarget = callTargets[pgy] ?? 0;
-                  const floatTarget = floatTargets[pgy] ?? 0;
+                return (
+                  <div
+                    key={f}
+                    className={`flex items-center justify-between px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-xs ${
+                      idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <span className="font-semibold dark:text-gray-100">{f}</span>
+                      <span className="text-[10px] text-gray-400 ml-1">PGY-{pgy}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <div className="text-center">
+                        <div className="text-[10px] text-gray-400">Call</div>
+                        <div className={`font-bold leading-none ${cStat.cls}`}>
+                          {callActual}<span className="text-[10px] text-gray-400">/{callTarget}</span>
+                        </div>
+                      </div>
+                      <StatusIcon tone={cStat.tone} />
+                      <div className="text-center">
+                        <div className="text-[10px] text-gray-400">Float</div>
+                        <div className={`font-bold leading-none ${fStat.cls}`}>
+                          {floatActual}<span className="text-[10px] text-gray-400">/{floatTarget}</span>
+                        </div>
+                      </div>
+                      <StatusIcon tone={fStat.tone} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
-                  const callActual = stats[f]?.call ?? 0;
-                  const floatActual = stats[f]?.float ?? 0;
+            {/* ── Desktop: full table ── */}
+            <div className="hidden md:block">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-200 dark:bg-gray-700 border-b border-gray-400 dark:border-gray-600">
+                    <th className="px-2 py-1 text-left font-bold dark:text-gray-100">Fellow</th>
+                    <th className="px-2 py-1 text-center font-bold dark:text-gray-100">PGY</th>
+                    <th className="px-2 py-1 text-center font-bold bg-blue-100 dark:bg-blue-900 dark:text-blue-200">Call Target</th>
+                    <th className="px-2 py-1 text-center font-bold bg-blue-50 dark:bg-blue-950 dark:text-blue-100">Call Actual</th>
+                    <th className="px-2 py-1 text-center font-bold">Status</th>
+                    <th className="px-2 py-1 text-center font-bold bg-gray-100 dark:bg-gray-700 dark:text-gray-200">Float Target</th>
+                    <th className="px-2 py-1 text-center font-bold bg-gray-50 dark:bg-gray-800 dark:text-gray-200">Float Actual</th>
+                    <th className="px-2 py-1 text-center font-bold">Status</th>
+                  </tr>
+                </thead>
 
-                  const cStat = statusMeta(callActual, callTarget);
-                  const fStat = statusMeta(floatActual, floatTarget);
+                <tbody>
+                  {fellows.map((f, idx) => {
+                    const pgy = pgyLevels[f];
+                    const callTarget = callTargets[pgy] ?? 0;
+                    const floatTarget = floatTargets[pgy] ?? 0;
 
-                  return (
-                    <tr
-                      key={f}
-                      className={`border-b border-gray-200 dark:border-gray-700 ${idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'}`}
-                    >
-                      <td className="px-2 py-1 font-semibold dark:text-gray-100">{f}</td>
-                      <td className="px-2 py-1 text-center dark:text-gray-200">{pgy}</td>
+                    const callActual = stats[f]?.call ?? 0;
+                    const floatActual = stats[f]?.float ?? 0;
 
-                      <td className="px-2 py-1 text-center bg-blue-100 dark:bg-blue-900 dark:text-blue-200">{callTarget}</td>
-                      <td className={`px-2 py-1 text-center font-bold ${cStat.cls}`}>
-                        {callActual}
-                      </td>
-                      <td className="px-2 py-1 text-center">
-                        <StatusIcon tone={cStat.tone} />
-                      </td>
+                    const cStat = statusMeta(callActual, callTarget);
+                    const fStat = statusMeta(floatActual, floatTarget);
 
-                      <td className="px-2 py-1 text-center bg-gray-100 dark:bg-gray-700 dark:text-gray-200">{floatTarget}</td>
-                      <td className={`px-2 py-1 text-center font-bold ${fStat.cls}`}>
-                        {floatActual}
-                      </td>
-                      <td className="px-2 py-1 text-center">
-                        <StatusIcon tone={fStat.tone} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    return (
+                      <tr
+                        key={f}
+                        className={`border-b border-gray-200 dark:border-gray-700 ${idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'}`}
+                      >
+                        <td className="px-2 py-1 font-semibold dark:text-gray-100">{f}</td>
+                        <td className="px-2 py-1 text-center dark:text-gray-200">{pgy}</td>
+
+                        <td className="px-2 py-1 text-center bg-blue-100 dark:bg-blue-900 dark:text-blue-200">{callTarget}</td>
+                        <td className={`px-2 py-1 text-center font-bold ${cStat.cls}`}>
+                          {callActual}
+                        </td>
+                        <td className="px-2 py-1 text-center">
+                          <StatusIcon tone={cStat.tone} />
+                        </td>
+
+                        <td className="px-2 py-1 text-center bg-gray-100 dark:bg-gray-700 dark:text-gray-200">{floatTarget}</td>
+                        <td className={`px-2 py-1 text-center font-bold ${fStat.cls}`}>
+                          {floatActual}
+                        </td>
+                        <td className="px-2 py-1 text-center">
+                          <StatusIcon tone={fStat.tone} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
             <div className="mt-2 text-[10px] text-gray-600 dark:text-gray-400">
               Floats are counted per Saturday night assignment (W1 and W2). Red badges indicate relaxed fallback.

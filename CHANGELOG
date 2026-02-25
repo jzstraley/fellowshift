@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-02-24 — Mobile-Friendly Call Weekend & Clinic Coverage Views
+
+- Call weekend/float and clinic coverage tables now render as stacked cards on mobile; calendar scrolls horizontally instead of squishing
+
+## 2026-02-24 — Idle Timeout Redirects to Landing Page
+
+- Timeout now navigates to the landing page instead of reloading to the demo/base screen
+
+## 2026-02-24 — Mobile Header Icon Differentiation
+
+- Replaced duplicate hamburger icon on user menu with a CircleUser icon to visually distinguish it from the nav menu toggle
+
+## 2026-02-24 — Vacation Request Fellow Dropdown Fix
+
+- Fixed time off request form: fellows query now fetches `user_id` so regular fellows correctly see themselves in the Fellow dropdown (previously always empty for non-admin users)
+
+## 2026-02-22 — Navigation Gating & Stats Permissions
+
+- Stats view is now gated to approvers/admins when Supabase is configured; hidden for regular fellows
+- HeaderBar nav tabs are hidden entirely for unauthenticated users; shown in demo mode (no Supabase configured)
+- Stats tab added via splice to preserve correct tab ordering
+- Removed debounced call/float generator (debouncedGenerate); optimize button calls generator directly
+
+## 2026-02-22 — Schedule View & Violations Overhaul
+
+- ScheduleView: block header now groups consecutive blocks by rotation number with a spanning header row
+- ScheduleView: PGY divider rows separate fellows by PGY level
+- ScheduleView: current block column is highlighted; view uses full block list from blockDates (not single-block selector)
+- ViolationsView: redesigned table with severity dot indicators, styled badges per rule type, and date range display (single date or range)
+- CalendarView: block selector auto-detects today's block on load; days filtered to selected block and grouped by month
+- ScheduleEditorView: added change log panel showing recent edits; `undoTo(index)` allows jumping to any prior state in history
+
+## 2026-02-21 — Admin View & Role-Based Access
+
+- Added AdminView component (admin-only tab) for managing institution users: list all profiles, change roles, invite new users by email
+- Admin tab appears in navigation only for users with `admin` role
+- Import/Export bar on Dashboard now gated to admin/program_director/chief_fellow only
+- Check Balance button and table gated to program_director/admin roles
+- Added `supabase_migration_roles.sql` with role-based RLS policy migrations
+
+## 2026-02-24 — Mobile Overscroll Background Fix
+
+- Fixed white overscroll area on mobile: `html` and `body` now have explicit background colors matching the app theme (`gray-50` in light mode, `gray-900` in dark mode)
+
 ## 2026-02-21 — Call/Float Balance Check gated to Program Directors
 
 - Call/Float Balance Check table in the Call/Float view is now only visible to program directors

@@ -379,7 +379,7 @@ export default function DashboardView({
             <div className="space-y-2">
               {upcomingLectures.map((lec) => (
                 <div key={lec.id} className="flex items-start gap-2.5 text-xs">
-                  <span className="shrink-0 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 font-medium">
+                  <span className="shrink-0 w-16 text-center px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 font-medium">
                     {fmtDate(lec.date)}
                   </span>
                   <span className="text-gray-600 dark:text-gray-300 truncate">

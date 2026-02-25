@@ -71,8 +71,7 @@ export const blockDates = [
 ];
 
 export const initialVacations = [
-  { fellow: 'Alkhawlani', startBlock: 3, endBlock: 3, reason: 'Vacation', status: 'approved' },
-  { fellow: 'Nor', startBlock: 9, endBlock: 10, reason: 'Family vacation', status: 'pending' }
+  { fellow: 'Alkhawlani', startBlock: 3, endBlock: 3, reason: 'Vacation', status: 'approved' }
 ];
 
 // Initial call and night-float base provided by user
@@ -135,7 +134,6 @@ export const initialNightFloatSchedule = {
 };
 
 export const initialSwapRequests = [
-  { requester: 'Sharma', target: 'Straley', block: 5, reason: 'Conference conflict', status: 'pending' }
 ];
 
 export const allRotationTypes = [

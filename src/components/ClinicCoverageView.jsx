@@ -97,7 +97,6 @@ const CANNOT_COVER_ROTATIONS = [
     const blockIdx = block.block - 1;
     const coverageKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
     const coverages = coverageByDate.get(coverageKey) || [];
-    const absentSet = new Set(coverages.map((e) => e.absent));
     const inClinic = [];
     fellows.forEach((fellow) => {
       if (clinicDays[fellow] === dow) {
@@ -209,78 +208,83 @@ const CANNOT_COVER_ROTATIONS = [
           </button>
         </div>
 
-        {/* Weekday headers */}
-        <div className="grid grid-cols-7 border-b border-gray-300 dark:border-gray-600">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div key={day} className="p-1 text-center text-xs font-bold text-gray-500 dark:text-gray-400">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7">
-          {calendarDays.map((day, idx) => {
-            const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
-            const info = day.isCurrentMonth && !isWeekend ? getClinicInfoForDate(day.date) : null;
-
-            return (
-              <div
-                key={idx}
-                className={`min-h-[64px] p-1 border-r border-b border-gray-200 dark:border-gray-700 ${
-                  !day.isCurrentMonth
-                    ? "opacity-30 bg-gray-50 dark:bg-gray-900"
-                    : isWeekend
-                    ? "bg-gray-50 dark:bg-gray-900"
-                    : ""
-                }`}
-              >
-                <div className={`text-xs font-semibold mb-0.5 ${isWeekend ? "text-gray-400 dark:text-gray-600" : "dark:text-gray-200"}`}>
-                  {day.date.getDate()}
+        {/* Calendar — scrollable on narrow screens */}
+        <div className="overflow-x-auto">
+          <div className="min-w-[420px]">
+            {/* Weekday headers */}
+            <div className="grid grid-cols-7 border-b border-gray-300 dark:border-gray-600">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <div key={day} className="p-1 text-center text-xs font-bold text-gray-500 dark:text-gray-400">
+                  {day}
                 </div>
+              ))}
+            </div>
 
-                {info && (
-                  <div className="space-y-0.5">
-                    {/* Fellows normally in clinic */}
-                    {info.inClinic.map(({ fellow, pgy }) => (
-                      <div
-                        key={fellow}
-                        className={`text-[10px] px-1 py-0.5 rounded truncate font-semibold ${getPGYColor(pgy)}`}
-                        title={`${fellow} (PGY-${pgy}) — regular clinic`}
-                      >
-                        {fellow}
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7">
+              {calendarDays.map((day, idx) => {
+                const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+                const info = day.isCurrentMonth && !isWeekend ? getClinicInfoForDate(day.date) : null;
+
+                return (
+                  <div
+                    key={idx}
+                    className={`min-h-[64px] p-1 border-r border-b border-gray-200 dark:border-gray-700 ${
+                      !day.isCurrentMonth
+                        ? "opacity-30 bg-gray-50 dark:bg-gray-900"
+                        : isWeekend
+                        ? "bg-gray-50 dark:bg-gray-900"
+                        : ""
+                    }`}
+                  >
+                    <div className={`text-xs font-semibold mb-0.5 ${isWeekend ? "text-gray-400 dark:text-gray-600" : "dark:text-gray-200"}`}>
+                      {day.date.getDate()}
+                    </div>
+
+                    {info && (
+                      <div className="space-y-0.5">
+                        {/* Fellows normally in clinic */}
+                        {info.inClinic.map(({ fellow, pgy }) => (
+                          <div
+                            key={fellow}
+                            className={`text-[10px] px-1 py-0.5 rounded truncate font-semibold ${getPGYColor(pgy)}`}
+                            title={`${fellow} (PGY-${pgy}) — regular clinic`}
+                          >
+                            {fellow}
+                          </div>
+                        ))}
+                        {/* Coverage entries: coverer (or uncovered) for nights fellows */}
+                        {info.coverages.map((entry, i) =>
+                          entry.coverer ? (
+                            <div
+                              key={i}
+                              className="text-[10px] px-1 py-0.5 rounded truncate font-semibold bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300"
+                              title={`${entry.coverer} covers clinic for ${entry.absent} (on Nights)`}
+                            >
+                              {entry.coverer}*
+                            </div>
+                          ) : (
+                            <div
+                              key={i}
+                              className="text-[10px] px-1 py-0.5 rounded truncate font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                              title={`${entry.absent} on Nights — no coverage assigned`}
+                            >
+                              !{entry.absent}
+                            </div>
+                          )
+                        )}
                       </div>
-                    ))}
-                    {/* Coverage entries: coverer (or uncovered) for nights fellows */}
-                    {info.coverages.map((entry, i) =>
-                      entry.coverer ? (
-                        <div
-                          key={i}
-                          className="text-[10px] px-1 py-0.5 rounded truncate font-semibold bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300"
-                          title={`${entry.coverer} covers clinic for ${entry.absent} (on Nights)`}
-                        >
-                          {entry.coverer}*
-                        </div>
-                      ) : (
-                        <div
-                          key={i}
-                          className="text-[10px] px-1 py-0.5 rounded truncate font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
-                          title={`${entry.absent} on Nights — no coverage assigned`}
-                        >
-                          !{entry.absent}
-                        </div>
-                      )
+                    )}
+
+                    {/* No block (outside academic year) */}
+                    {day.isCurrentMonth && !isWeekend && !info && (
+                      <div className="text-[9px] text-gray-300 dark:text-gray-600">—</div>
                     )}
                   </div>
-                )}
-
-                {/* No block (outside academic year) */}
-                {day.isCurrentMonth && !isWeekend && !info && (
-                  <div className="text-[9px] text-gray-300 dark:text-gray-600">—</div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Legend */}
@@ -320,9 +324,102 @@ const CANNOT_COVER_ROTATIONS = [
           </p>
         </div>
 
-        <div
-          className="overflow-x-auto"
-        >
+        {/* ── Mobile: one card per entry ── */}
+        <div className="md:hidden p-2 space-y-1.5">
+          {coverageEntries.map((entry, idx) => {
+            const { weekStart, weekEnd } = getWeekRange(
+              entry.blockStart,
+              entry.blockEnd,
+              entry.week
+            );
+            const clinicDate = entry.clinicDate;
+            const count = entry.coverer ? (coverageStats?.[entry.coverer] || 0) : null;
+
+            const cardBorder = !entry.coverer
+              ? "border-red-300 dark:border-red-700"
+              : entry.relaxedSameClinicDay
+              ? "border-yellow-300 dark:border-yellow-700"
+              : entry.relaxedBackToBack
+              ? "border-amber-300 dark:border-amber-700"
+              : "border-gray-200 dark:border-gray-700";
+
+            const cardBg = !entry.coverer
+              ? "bg-red-50 dark:bg-red-950/40"
+              : entry.relaxedSameClinicDay
+              ? "bg-yellow-50 dark:bg-yellow-950/40"
+              : entry.relaxedBackToBack
+              ? "bg-amber-50 dark:bg-amber-950/40"
+              : idx % 2 === 0
+              ? "bg-white dark:bg-gray-900"
+              : "bg-gray-50 dark:bg-gray-800";
+
+            return (
+              <div key={idx} className={`rounded border text-xs overflow-hidden ${cardBorder}`}>
+                {/* Card header: block + week + date range */}
+                <div className={`flex items-center justify-between px-2 py-1 ${cardBg} border-b ${cardBorder}`}>
+                  <div className="flex items-center gap-1.5 font-bold dark:text-gray-100">
+                    <span>Blk {entry.block} · W{entry.week}</span>
+                    {entry.relaxedSameClinicDay && (
+                      <span className="px-1 rounded text-[10px] font-bold bg-yellow-200 text-yellow-900">RELAX</span>
+                    )}
+                    {!entry.relaxedSameClinicDay && entry.relaxedBackToBack && (
+                      <span className="px-1 rounded text-[10px] font-bold bg-amber-200 text-amber-900">B2B</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–
+                    {weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+
+                {/* Card body: absent → covered */}
+                <div className={`px-2 py-1.5 flex items-center justify-between flex-wrap gap-y-1 ${cardBg}`}>
+                  {/* Left: absent fellow + clinic date */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold">{entry.absent}</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                      Nights → {clinicDayName(entry.absentClinicDay)}
+                      {clinicDate ? ` ${clinicDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                    </span>
+                  </div>
+
+                  {/* Right: coverer info */}
+                  <div className="flex items-center gap-1.5">
+                    {entry.coverer ? (
+                      <>
+                        <span className={`px-1.5 py-0.5 rounded font-semibold ${getRotationColor(entry.covererRotation)}`}>
+                          {entry.coverer}
+                        </span>
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                          ({clinicDayName(entry.covererClinicDay)})
+                        </span>
+                        {entry.covererRotation && (
+                          <span className={`px-1 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(entry.covererRotation)}`}>
+                            {entry.covererRotation}
+                          </span>
+                        )}
+                        {entry.covererPGY && (
+                          <span className={`px-1 py-0.5 rounded text-[10px] font-bold border ${getPGYColor(entry.covererPGY)}`}>
+                            {entry.covererPGY}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">#{count}</span>
+                      </>
+                    ) : (
+                      <span className="flex items-center gap-1 text-red-600 font-bold">
+                        <AlertTriangle className="w-3 h-3" />
+                        NONE
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Desktop: full table ── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead className="bg-gray-200 dark:bg-gray-700">
               <tr className="border-b border-gray-400 dark:border-gray-600">

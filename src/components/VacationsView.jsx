@@ -45,7 +45,7 @@ export default function VacationsView({
       // Fetch fellows for this institution
       const { data: fellowsData, error: fellowsErr } = await supabase
         .from('fellows')
-        .select('id, name, pgy_level, program')
+        .select('id, name, pgy_level, program, user_id')
         .eq('institution_id', profile.institution_id)
         .eq('is_active', true)
         .order('name');
@@ -121,6 +121,10 @@ export default function VacationsView({
     if (!canApprove()) return;
     setSubmitting(true);
     try {
+      // Find the full request so we have fellow + block range
+      const req = dbRequests.find(r => r.id === requestId);
+      if (!req) throw new Error('Request not found');
+
       const { error } = await supabase
         .from('vacation_requests')
         .update({
@@ -131,6 +135,43 @@ export default function VacationsView({
         .eq('id', requestId);
 
       if (error) throw error;
+
+      // Write 'Vacation' into schedule_assignments for every block in the range
+      const startBlock = req.start_block?.block_number;
+      const endBlock = req.end_block?.block_number;
+      const fellowId = req.fellow?.id;
+      const fellowName = req.fellow?.name;
+
+      if (fellowId && startBlock && endBlock) {
+        const affectedBlocks = blockDates.filter(
+          b => b.block_number >= startBlock && b.block_number <= endBlock
+        );
+        if (affectedBlocks.length > 0) {
+          const assignments = affectedBlocks.map(b => ({
+            fellow_id: fellowId,
+            block_date_id: b.id,
+            rotation: 'Vacation',
+            created_by: user.id,
+          }));
+          const { error: upsertErr } = await supabase
+            .from('schedule_assignments')
+            .upsert(assignments, { onConflict: 'fellow_id,block_date_id' });
+          if (upsertErr) console.error('Error updating schedule_assignments:', upsertErr);
+
+          // Mirror into local React state so all views update immediately
+          if (setSchedule && fellowName) {
+            setSchedule(prev => {
+              const next = { ...prev };
+              next[fellowName] = [...(next[fellowName] || [])];
+              for (let b = startBlock; b <= endBlock; b++) {
+                next[fellowName][b - 1] = 'Vacation';
+              }
+              return next;
+            });
+          }
+        }
+      }
+
       await fetchRequests();
     } catch (err) {
       console.error('Error approving request:', err);
@@ -164,6 +205,19 @@ export default function VacationsView({
     if (!canApprove()) return;
     setSubmitting(true);
     try {
+      const req = dbSwapRequests.find(r => r.id === requestId);
+      if (!req) throw new Error('Swap request not found');
+
+      const requesterId = req.requester?.id;
+      const targetId = req.target?.id;
+      const requesterName = req.requester?.name;
+      const targetName = req.target?.name;
+      const blockNum = req.block_number;
+
+      // Read current rotations from local schedule (source of truth at approve time)
+      const requesterRot = schedule[requesterName]?.[blockNum - 1] ?? '';
+      const targetRot = schedule[targetName]?.[blockNum - 1] ?? '';
+
       const { error } = await supabase
         .from('swap_requests')
         .update({
@@ -174,6 +228,35 @@ export default function VacationsView({
         .eq('id', requestId);
 
       if (error) throw error;
+
+      // Swap in schedule_assignments
+      const blockDate = blockDates.find(b => b.block_number === blockNum);
+      if (requesterId && targetId && blockDate) {
+        const { error: upsertErr } = await supabase
+          .from('schedule_assignments')
+          .upsert(
+            [
+              { fellow_id: requesterId, block_date_id: blockDate.id, rotation: targetRot, created_by: user.id },
+              { fellow_id: targetId, block_date_id: blockDate.id, rotation: requesterRot, created_by: user.id },
+            ],
+            { onConflict: 'fellow_id,block_date_id' }
+          );
+        if (upsertErr) console.error('Error swapping schedule_assignments:', upsertErr);
+
+        // Mirror swap into local React state
+        if (setSchedule && requesterName && targetName) {
+          setSchedule(prev => {
+            const next = { ...prev };
+            const idx = blockNum - 1;
+            next[requesterName] = [...(next[requesterName] || [])];
+            next[targetName] = [...(next[targetName] || [])];
+            next[requesterName][idx] = targetRot;
+            next[targetName][idx] = requesterRot;
+            return next;
+          });
+        }
+      }
+
       await fetchRequests();
     } catch (err) {
       console.error('Error approving swap:', err);

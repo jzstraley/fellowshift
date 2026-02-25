@@ -1,5 +1,5 @@
 // src/components/HeaderBar.jsx
-import { Menu, X, Moon, Sun, AlignJustify, User, FileText, Settings, LogIn, LogOut, ClipboardList } from "lucide-react";
+import { Menu, X, Moon, Sun, CircleUser, User, FileText, Settings, LogIn, LogOut, ClipboardList } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 
@@ -131,7 +131,7 @@ export default function HeaderBar({
                 darkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-200 text-gray-600"
               }`}
             >
-              <AlignJustify className="w-4 h-4" />
+              <CircleUser className="w-4 h-4" />
             </button>
 
             {userMenuOpen && (

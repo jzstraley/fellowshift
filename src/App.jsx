@@ -10,6 +10,7 @@ import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureD
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
 import { checkAllWorkHourViolations } from "./engine/workHourChecker";
 import { deriveKey, encryptAndStore, loadAndDecrypt, clearSensitiveStorage } from "./utils/secureStorage";
+import { pushScheduleToSupabase, pullScheduleFromSupabase } from "./utils/scheduleSupabaseSync";
 
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 import useIdleTimeout from "./hooks/useIdleTimeout";
@@ -101,6 +102,8 @@ function AppContent() {
   // Encryption key derived from user ID — null until user is authenticated
   const cryptoKeyRef = useRef(null);
   const [dataReady, setDataReady] = useState(false);
+  // Prevents the one-shot Supabase initial load from running more than once per session
+  const supabaseInitLoadDoneRef = useRef(false);
 
   const [schedule, setSchedule] = useState(initialSchedule);
   const [vacations, setVacations] = useState(initialVacations);
@@ -119,6 +122,7 @@ function AppContent() {
     if (!user?.id) {
       cryptoKeyRef.current = null;
       setDataReady(false);
+      supabaseInitLoadDoneRef.current = false;
       return;
     }
 
@@ -281,6 +285,50 @@ function AppContent() {
 
     return () => clearTimeout(t);
   }, [lectures, speakers, topics, dataReady]);
+
+  // One-shot Supabase load on sign-in — runs once after localStorage is ready and profile is available.
+  // If the DB has no assignments yet, local state is preserved unchanged.
+  useEffect(() => {
+    if (!dataReady || !isSupabaseConfigured || !profile?.institution_id) return;
+    if (supabaseInitLoadDoneRef.current) return;
+    supabaseInitLoadDoneRef.current = true;
+
+    pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id })
+      .then(({ schedule: remote }) => {
+        if (remote) setSchedule(remote);
+      });
+  // fellows and blockDates are stable module-level constants
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataReady, profile?.institution_id]);
+
+  // Push the full schedule to Supabase — called by ScheduleEditorView's Validate button.
+  const onSaveToSupabase = useCallback(async () => {
+    if (!isSupabaseConfigured || !profile?.institution_id) return { error: 'Supabase not available' };
+    return pushScheduleToSupabase({
+      schedule,
+      fellows,
+      blockDates,
+      institutionId: profile.institution_id,
+      userId: user?.id,
+    });
+  }, [schedule, fellows, profile?.institution_id, user?.id]);
+
+  // Pull schedule from Supabase on demand — called by ScheduleEditorView's Sync button.
+  const onPullFromSupabase = useCallback(async () => {
+    if (!isSupabaseConfigured || !profile?.institution_id) return { error: 'Supabase not available', loaded: false };
+    const { error, schedule: remote } = await pullScheduleFromSupabase({
+      fellows,
+      blockDates,
+      institutionId: profile.institution_id,
+    });
+    if (!error && remote) {
+      setSchedule(remote);
+      return { error: null, loaded: true };
+    }
+    return { error: error || null, loaded: false };
+  // fellows and blockDates are stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.institution_id]);
 
   // Build stats object synchronously from a schedule snapshot.
   const buildCounts = (sched) => {
@@ -473,7 +521,7 @@ function AppContent() {
   const handleIdleTimeout = useCallback(async () => {
     clearSensitiveStorage();
     await signOut();
-    window.location.reload();
+    setShowLanding(true);
   }, [signOut]);
 
   const { showWarning: showIdleWarning, dismissWarning: dismissIdleWarning } = useIdleTimeout({
@@ -635,6 +683,9 @@ function AppContent() {
               clinicDays={clinicDays}
               vacations={vacations}
               workHourViolations={workHourViolations}
+              isSupabaseConfigured={isSupabaseConfigured}
+              onSaveToSupabase={isSupabaseConfigured ? onSaveToSupabase : null}
+              onPullFromSupabase={isSupabaseConfigured ? onPullFromSupabase : null}
             />
           )}
 

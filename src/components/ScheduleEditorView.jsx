@@ -1,6 +1,6 @@
 // src/components/ScheduleEditorView.jsx
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Undo2, Redo2, AlertTriangle, ShieldCheck, X } from "lucide-react";
+import { Undo2, Redo2, AlertTriangle, ShieldCheck, X, RefreshCw, Loader2, CloudUpload } from "lucide-react";
 import { allRotationTypes, pgyLevels as defaultPgyLevels } from "../data/scheduleData";
 import { getRotationColor, getPGYColor, formatDate } from "../utils/scheduleUtils";
 import { detectConflicts } from "../engine/conflictDetector";
@@ -22,9 +22,13 @@ export default function ScheduleEditorView({
   clinicDays,
   vacations,
   workHourViolations = [],
+  isSupabaseConfigured = false,
+  onSaveToSupabase = null,
+  onPullFromSupabase = null,
 }) {
   const [mode, setMode] = useState(MODE_GRID);
   const [conflictResults, setConflictResults] = useState(null);
+  const [syncStatus, setSyncStatus] = useState({ state: 'idle', message: '' });
   const [changeLog, setChangeLog] = useState([]);
 
   // Undo/Redo: dual stacks of schedule snapshots
@@ -133,7 +137,7 @@ export default function ScheduleEditorView({
     [setSchedule, pushHistory, schedule]
   );
 
-  const runValidation = useCallback(() => {
+  const runValidation = useCallback(async () => {
     const results = detectConflicts({
       schedule,
       callSchedule,
@@ -144,7 +148,16 @@ export default function ScheduleEditorView({
       dayOverrides,
     });
     setConflictResults(results);
-  }, [schedule, callSchedule, nightFloatSchedule, fellows, blockDates, vacations, dayOverrides]);
+
+    if (!onSaveToSupabase) return;
+    setSyncStatus({ state: 'saving', message: 'Saving to Supabase…' });
+    const { error, count } = await onSaveToSupabase();
+    if (error) {
+      setSyncStatus({ state: 'error', message: `Save failed: ${error}` });
+    } else {
+      setSyncStatus({ state: 'success', message: `${count} assignments saved to Supabase.` });
+    }
+  }, [schedule, callSchedule, nightFloatSchedule, fellows, blockDates, vacations, dayOverrides, onSaveToSupabase]);
 
   const modes = [
     { key: MODE_GRID, label: "Grid" },
@@ -195,14 +208,69 @@ export default function ScheduleEditorView({
           </div>
           <button
             onClick={runValidation}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded border border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50"
-            title="Check for conflicts and violations"
+            disabled={syncStatus.state === 'saving' || syncStatus.state === 'pulling'}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded border border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={onSaveToSupabase ? 'Validate conflicts & save to Supabase' : 'Check for conflicts and violations'}
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Validate
+            {syncStatus.state === 'saving' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <ShieldCheck className="w-3.5 h-3.5" />
+            )}
+            Validate{onSaveToSupabase ? ' & Save' : ''}
           </button>
+          {isSupabaseConfigured && (
+            <button
+              onClick={async () => {
+                setSyncStatus({ state: 'pulling', message: 'Loading from Supabase…' });
+                const { error, loaded } = await onPullFromSupabase();
+                if (error) {
+                  setSyncStatus({ state: 'error', message: `Load failed: ${error}` });
+                } else if (loaded) {
+                  setSyncStatus({ state: 'success', message: 'Schedule updated from Supabase.' });
+                } else {
+                  setSyncStatus({ state: 'idle', message: '' });
+                }
+              }}
+              disabled={syncStatus.state === 'saving' || syncStatus.state === 'pulling'}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Pull latest schedule from Supabase"
+            >
+              {syncStatus.state === 'pulling' ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+              Sync
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Supabase sync status banner */}
+      {syncStatus.state !== 'idle' && (
+        <div className={`flex items-center gap-2 px-3 py-2 rounded text-xs ${
+          syncStatus.state === 'error'
+            ? 'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300'
+            : syncStatus.state === 'success'
+            ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+            : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+        }`}>
+          {(syncStatus.state === 'saving' || syncStatus.state === 'pulling') && (
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          )}
+          {syncStatus.state === 'success' && <CloudUpload className="w-3.5 h-3.5 shrink-0" />}
+          <span>{syncStatus.message}</span>
+          {syncStatus.state !== 'saving' && syncStatus.state !== 'pulling' && (
+            <button
+              onClick={() => setSyncStatus({ state: 'idle', message: '' })}
+              className="ml-auto text-current opacity-60 hover:opacity-100"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Conflict detection results panel */}
       {conflictResults && (
