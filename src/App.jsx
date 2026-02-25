@@ -141,8 +141,8 @@ function AppContent() {
       if (persisted?.schedule && typeof persisted.schedule === "object") setSchedule(persisted.schedule);
       if (Array.isArray(persisted?.vacations)) setVacations(persisted.vacations);
       if (Array.isArray(persisted?.swapRequests)) setSwapRequests(persisted.swapRequests);
-      if (persisted?.callSchedule && typeof persisted.callSchedule === "object") setCallSchedule(persisted.callSchedule);
-      if (persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object") setNightFloatSchedule(persisted.nightFloatSchedule);
+      if (persisted?.callSchedule && typeof persisted.callSchedule === "object" && Object.keys(persisted.callSchedule).length > 0) setCallSchedule(persisted.callSchedule);
+      if (persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object" && Object.keys(persisted.nightFloatSchedule).length > 0) setNightFloatSchedule(persisted.nightFloatSchedule);
       if (persisted?.dayOverrides && typeof persisted.dayOverrides === "object") setDayOverrides(persisted.dayOverrides);
 
       if (Array.isArray(persistedLectures?.lectures)) setLectures(persistedLectures.lectures);
@@ -425,19 +425,6 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const resetToDefaults = useCallback(() => {
-    clearSensitiveStorage();
-    setSchedule(initialSchedule);
-    setVacations(initialVacations);
-    setSwapRequests(initialSwapRequests);
-    setCallSchedule({});
-    setNightFloatSchedule({});
-    setDayOverrides({});
-    setLectures(initialLectures);
-    setSpeakers(initialSpeakers);
-    setTopics(initialTopics);
-    setFellowEmails({});
-  }, []);
 
   const checkBalance = useCallback(() => {
     if (!stats) return;
@@ -742,8 +729,11 @@ function AppContent() {
                 fellows={fellows}
                 schedule={schedule}
                 setSchedule={setSchedule}
-                resetToDefaults={resetToDefaults}
                 violations={violations}
+                showExportViolations={
+                  activeView === "violations" &&
+                  ['admin', 'program_director', 'chief_fellow'].includes(profile?.role)
+                }
               />
             </div>
           </div>
@@ -767,7 +757,6 @@ function AppContent() {
                   fellows={fellows}
                   schedule={schedule}
                   setSchedule={setSchedule}
-                  resetToDefaults={resetToDefaults}
                   violations={violations}
                 />
               </div>
