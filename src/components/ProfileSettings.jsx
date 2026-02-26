@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { User, Save, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -10,21 +10,78 @@ const roleLabels = {
   resident: "Resident",
 };
 
+function normalizeUsername(raw) {
+  return String(raw ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9._-]/g, ""); // keep it simple and predictable
+}
+
 export default function ProfileSettings({ darkMode, toggleDarkMode }) {
-  const { user, profile, updateProfile, isAdmin } = useAuth();
-  const [fullName, setFullName] = useState(profile?.full_name || "");
-  const [username, setUsername] = useState(profile?.username || "");
+  const auth = useAuth() || {};
+  const { user, profile, updateProfile } = auth;
+
+  // Support either:
+  // - isAdmin boolean
+  // - isAdmin() function
+  // - profile.role check fallback
+  const canEditIdentity = useMemo(() => {
+    const isAdminValue =
+      typeof auth.isAdmin === "function" ? auth.isAdmin() : auth.isAdmin;
+
+    if (typeof isAdminValue === "boolean") return isAdminValue;
+
+    // Fallback if AuthContext doesn't expose isAdmin consistently
+    return profile?.role === "admin";
+  }, [auth, profile?.role]);
+
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
-  const canEditIdentity = isAdmin();
+  // Keep local inputs in sync with profile as it loads/refreshes
+  useEffect(() => {
+    setFullName(profile?.full_name || "");
+    setUsername(profile?.username || "");
+  }, [profile?.full_name, profile?.username]);
 
   const handleSave = async () => {
-    setSaving(true);
     setMessage(null);
-    const { error } = await updateProfile({ full_name: fullName, username: username || null });
-    setSaving(false);
-    setMessage(error ? { type: "error", text: error.message } : { type: "success", text: "Profile updated" });
+
+    if (!canEditIdentity) {
+      setMessage({ type: "error", text: "You do not have permission to edit these fields." });
+      return;
+    }
+
+    if (typeof updateProfile !== "function") {
+      setMessage({ type: "error", text: "updateProfile is not available. Check AuthContext exports." });
+      return;
+    }
+
+    const payload = {
+      full_name: fullName?.trim() || null,
+      username: normalizeUsername(username) || null,
+    };
+
+    setSaving(true);
+    try {
+      const result = await updateProfile(payload);
+
+      // Support either shape:
+      // - returns { error }
+      // - throws on error
+      const error = result?.error;
+      setMessage(
+        error
+          ? { type: "error", text: error.message || "Failed to update profile." }
+          : { type: "success", text: "Profile updated" }
+      );
+    } catch (e) {
+      setMessage({ type: "error", text: e?.message || "Failed to update profile." });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const card = `rounded-lg border p-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`;
@@ -37,6 +94,11 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
   const readOnly = `w-full px-3 py-2 rounded text-sm ${
     darkMode ? "bg-gray-700/50 text-gray-400" : "bg-gray-100 text-gray-500"
   }`;
+
+  const originalFullName = profile?.full_name || "";
+  const originalUsername = profile?.username || "";
+  const isDirty =
+    (fullName || "") !== originalFullName || (username || "") !== originalUsername;
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
@@ -53,9 +115,11 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
               <input
                 className={input}
                 value={username}
-                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                onChange={(e) => setUsername(normalizeUsername(e.target.value))}
                 placeholder="Your login username"
                 autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
               />
             ) : (
               <div className={readOnly}>{username || "—"}</div>
@@ -94,10 +158,16 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
           )}
 
           {message && (
-            <div className={`flex items-center gap-1.5 text-xs ${
-              message.type === "error" ? "text-red-400" : "text-green-400"
-            }`}>
-              {message.type === "error" ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+            <div
+              className={`flex items-center gap-1.5 text-xs ${
+                message.type === "error" ? "text-red-400" : "text-green-400"
+              }`}
+            >
+              {message.type === "error" ? (
+                <AlertCircle className="w-3.5 h-3.5" />
+              ) : (
+                <CheckCircle className="w-3.5 h-3.5" />
+              )}
               {message.text}
             </div>
           )}
@@ -105,7 +175,7 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
           {canEditIdentity && (
             <button
               onClick={handleSave}
-              disabled={saving || (fullName === (profile?.full_name || "") && username === (profile?.username || ""))}
+              disabled={saving || !isDirty}
               className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-semibold rounded"
             >
               <Save className="w-3.5 h-3.5" />
@@ -121,14 +191,18 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
         <div className="flex items-center justify-between">
           <span className="text-sm">Dark Mode</span>
           <button
-            onClick={toggleDarkMode}
+            type="button"
+            onClick={typeof toggleDarkMode === "function" ? toggleDarkMode : undefined}
+            disabled={typeof toggleDarkMode !== "function"}
             className={`relative w-10 h-5 rounded-full transition-colors ${
               darkMode ? "bg-blue-600" : "bg-gray-300"
-            }`}
+            } ${typeof toggleDarkMode !== "function" ? "opacity-40 cursor-not-allowed" : ""}`}
           >
-            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-              darkMode ? "translate-x-5" : ""
-            }`} />
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                darkMode ? "translate-x-5" : ""
+              }`}
+            />
           </button>
         </div>
       </div>
