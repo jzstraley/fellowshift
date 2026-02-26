@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase, isSupabaseConfigured, signOutAndClear } from '../lib/supabaseClient';
 
 const AuthContext = createContext({});
@@ -9,64 +9,13 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-  if (!isSupabaseConfigured) {
-    setLoading(false);
-    console.warn('Supabase not configured - authentication disabled');
-    return;
-  }
-
-  let alive = true;
-
-  // Hard timeout, but we will also resolve as soon as INITIAL_SESSION arrives
-  const timeout = setTimeout(() => {
-    if (!alive) return;
-    console.warn('Auth check timed out - continuing without auth');
-    setUser(null);
-    setProfile(null);
-    setLoading(false);
-  }, 10000);
-
-  // ✅ Listen FIRST and do NOT skip INITIAL_SESSION
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (!alive) return;
-
-    // INITIAL_SESSION is your reliable boot event
-    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-      clearTimeout(timeout);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        setLoading(true);
-        await loadProfile(session.user.id);
-      } else {
-        setProfile(null);
-        setLoading(false);
-      }
-      return;
-    }
-
-    if (event === 'SIGNED_OUT') {
-      clearTimeout(timeout);
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
-    }
-  });
-
-  // Optional: kick once, but do not depend on it
-  supabase.auth.getSession()
-    .then(() => {}) // no-op, listener will handle state
-    .catch(() => {}); // no-op
-
-  return () => {
-    alive = false;
-    clearTimeout(timeout);
-    subscription.unsubscribe();
-  };
-}, []);
+  const profileLoadInFlight = useRef(false);
 
   const loadProfile = async (userId) => {
+    if (!supabase) return;
+    if (profileLoadInFlight.current) return;
+
+    profileLoadInFlight.current = true;
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -75,6 +24,15 @@ export const AuthProvider = ({ children }) => {
         .single();
 
       if (error) {
+        const msg = String(error?.message || '').toLowerCase();
+        const isAbort = msg.includes('aborterror') || msg.includes('aborted');
+
+        if (isAbort) {
+          console.warn('Profile load aborted; retrying once...');
+          setTimeout(() => loadProfile(userId), 400);
+          return;
+        }
+
         console.error('Error loading profile:', error);
         setError(error.message);
         setProfile(null);
@@ -86,54 +44,99 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(false);
     } catch (err) {
+      const msg = String(err?.message || err).toLowerCase();
+      const isAbort = msg.includes('aborterror') || msg.includes('aborted');
+
+      if (isAbort) {
+        console.warn('Profile load aborted (exception); retrying once...');
+        setTimeout(() => loadProfile(userId), 400);
+        return;
+      }
+
       console.error('Exception loading profile:', err);
       setError(err.message);
       setProfile(null);
       setLoading(false);
+    } finally {
+      profileLoadInFlight.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      console.warn('Supabase not configured - authentication disabled');
+      return;
+    }
+
+    let alive = true;
+
+    const timeout = setTimeout(() => {
+      if (!alive) return;
+      console.warn('Auth check timed out - continuing without auth');
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
+    }, 10000);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!alive) return;
+
+      clearTimeout(timeout);
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        setLoading(true);
+        await loadProfile(session.user.id);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    // Optional kick. We don't depend on it.
+    supabase.auth.getSession().catch(() => {});
+
+    return () => {
+      alive = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const signIn = async (email, password) => {
     if (!isSupabaseConfigured) {
       return { data: null, error: { message: 'Supabase not configured' } };
     }
-
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       return { data, error };
     } catch (err) {
       return { data: null, error: err };
     }
   };
 
-    const signOut = async () => {
+  const signOut = async () => {
     if (!isSupabaseConfigured) {
-        return { error: { message: 'Supabase not configured' } };
+      return { error: { message: 'Supabase not configured' } };
     }
-
     try {
-        await signOutAndClear(); // important: clears your encrypted cache in a controlled way
-        return { error: null };
+      await signOutAndClear();
+      return { error: null };
     } catch (err) {
-        return { error: err };
+      return { error: err };
     }
-    };
+  };
 
   const signUp = async (email, password, metadata) => {
     if (!isSupabaseConfigured) {
       return { data: null, error: { message: 'Supabase not configured' } };
     }
-
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: metadata,
-        },
+        options: { data: metadata },
       });
       return { data, error };
     } catch (err) {
@@ -156,7 +159,6 @@ export const AuthProvider = ({ children }) => {
 
       if (error) throw error;
 
-      // Reload profile
       await loadProfile(user.id);
       return { data, error: null };
     } catch (err) {
@@ -164,24 +166,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Permission helpers
+  // Permission helpers (unchanged)
   const canEdit = (program = null) => {
     if (!profile) return false;
     if (profile.role === 'program_director' || profile.role === 'admin') return true;
-    if (profile.role === 'chief_fellow') {
-      return program ? profile.program === program : true;
-    }
+    if (profile.role === 'chief_fellow') return program ? profile.program === program : true;
     return false;
   };
 
-  const canApprove = () => {
-    return ['program_director', 'chief_fellow', 'admin'].includes(profile?.role);
-  };
+  const canApprove = () => ['program_director', 'chief_fellow', 'admin'].includes(profile?.role);
 
-  // Can submit time-off and swap requests (fellows, residents, and above)
-  const canRequest = () => {
-    return ['resident', 'fellow', 'chief_fellow', 'program_director', 'admin'].includes(profile?.role);
-  };
+  const canRequest = () =>
+    ['resident', 'fellow', 'chief_fellow', 'program_director', 'admin'].includes(profile?.role);
 
   const isResident = () => profile?.role === 'resident';
   const isFellow = () => profile?.role === 'fellow';
@@ -215,8 +211,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
