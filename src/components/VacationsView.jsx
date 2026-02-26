@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { CheckCircle, AlertTriangle, Loader2, ArrowLeftRight } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Loader2, ArrowLeftRight, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { pullCallFloatFromSupabase, pushCallFloatToSupabase } from '../utils/scheduleSupabaseSync';
@@ -102,7 +102,7 @@ export default function VacationsView({
           name,
           // satisfy DB NOT NULL `program` column when auto-seeding
           program: '',
-          pgy_level: pgyLevels[name] ?? null,
+          pgy_level: pgyLevels[name] ?? 1,
           institution_id: profile.institution_id,
           is_active: true,
         }));
@@ -297,6 +297,26 @@ export default function VacationsView({
     }
   };
 
+  const cancelDbRequest = async (requestId) => {
+    const req = dbRequests.find(r => r.id === requestId);
+    if (!req || req.requested_by !== user?.id) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('vacation_requests')
+        .update({ status: 'cancelled' })
+        .eq('id', requestId);
+
+      if (error) throw error;
+      await fetchRequests();
+    } catch (err) {
+      console.error('Error cancelling request:', err);
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // --- Supabase approve/deny swaps ---
   const approveDbSwap = async (requestId) => {
     if (!canApprove()) return;
@@ -439,6 +459,26 @@ export default function VacationsView({
       await fetchRequests();
     } catch (err) {
       console.error('Error denying swap:', err);
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const cancelDbSwap = async (requestId) => {
+    const req = dbSwapRequests.find(r => r.id === requestId);
+    if (!req || req.requested_by !== user?.id) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('swap_requests')
+        .update({ status: 'cancelled' })
+        .eq('id', requestId);
+
+      if (error) throw error;
+      await fetchRequests();
+    } catch (err) {
+      console.error('Error cancelling swap:', err);
       setDbError(err.message);
     } finally {
       setSubmitting(false);
@@ -1032,8 +1072,29 @@ export default function VacationsView({
     );
   };
   if (useDatabase) {
-    const vacationDbRequests = dbRequests.filter(r => !DAY_OFF_REASONS.includes(r.reason));
-    const dayOffDbRequests = dbRequests.filter(r => DAY_OFF_REASONS.includes(r.reason));
+    const userCanApprove = canApprove();
+    const userCanRequest = canRequest?.() ?? true;
+
+    // Admins/approvers can select any fellow.
+    // Fellows filter to their own linked record; fall back to all institution fellows when
+    // user_id hasn't been linked yet (e.g., auto-seeded records have no user_id).
+    const linkedFellows = dbFellows.filter(f => f.user_id === user?.id);
+    const linkedFellowIds = new Set(linkedFellows.map(f => f.id));
+
+    // Non-approvers only see requests they submitted or that belong to their linked fellow(s).
+    const isVisibleRequest = (r) =>
+      userCanApprove ||
+      r.requested_by === user?.id ||
+      linkedFellowIds.has(r.fellow?.id);
+
+    const isVisibleSwap = (r) =>
+      userCanApprove ||
+      r.requested_by === user?.id ||
+      linkedFellowIds.has(r.requester?.id) ||
+      linkedFellowIds.has(r.target?.id);
+
+    const vacationDbRequests = dbRequests.filter(r => !DAY_OFF_REASONS.includes(r.reason) && isVisibleRequest(r));
+    const dayOffDbRequests = dbRequests.filter(r => DAY_OFF_REASONS.includes(r.reason) && isVisibleRequest(r));
 
     const pendingRequests = vacationDbRequests.filter(r => r.status === 'pending');
     const approvedRequests = vacationDbRequests.filter(r => r.status === 'approved');
@@ -1043,17 +1104,10 @@ export default function VacationsView({
     const approvedDayOffs = dayOffDbRequests.filter(r => r.status === 'approved');
     const deniedDayOffs = dayOffDbRequests.filter(r => r.status === 'denied');
 
-    const pendingSwaps = dbSwapRequests.filter(r => r.status === 'pending');
-    const approvedSwaps = dbSwapRequests.filter(r => r.status === 'approved');
-    const deniedSwaps = dbSwapRequests.filter(r => r.status === 'denied');
-
-    const userCanApprove = canApprove();
-    const userCanRequest = canRequest?.() ?? true;
-
-    // Admins/approvers can select any fellow.
-    // Fellows filter to their own linked record; fall back to all institution fellows when
-    // user_id hasn't been linked yet (e.g., auto-seeded records have no user_id).
-    const linkedFellows = dbFellows.filter(f => f.user_id === user?.id);
+    const visibleSwaps = dbSwapRequests.filter(isVisibleSwap);
+    const pendingSwaps = visibleSwaps.filter(r => r.status === 'pending');
+    const approvedSwaps = visibleSwaps.filter(r => r.status === 'approved');
+    const deniedSwaps = visibleSwaps.filter(r => r.status === 'denied');
     const selectableFellows = userCanApprove
       ? dbFellows
       : (linkedFellows.length > 0 ? linkedFellows : dbFellows);
@@ -1208,24 +1262,35 @@ export default function VacationsView({
                         );
                       })()}
                     </div>
-                    {userCanApprove && (
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      {userCanApprove && (
+                        <>
+                          <button
+                            onClick={() => approveDbRequest(r.id)}
+                            disabled={submitting}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-3 h-3" /> Approve
+                          </button>
+                          <button
+                            onClick={() => denyDbRequest(r.id)}
+                            disabled={submitting}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          >
+                            <AlertTriangle className="w-3 h-3" /> Deny
+                          </button>
+                        </>
+                      )}
+                      {r.requested_by === user?.id && (
                         <button
-                          onClick={() => approveDbRequest(r.id)}
+                          onClick={() => cancelDbRequest(r.id)}
                           disabled={submitting}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          className="px-3 py-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
                         >
-                          <CheckCircle className="w-3 h-3" /> Approve
+                          <X className="w-3 h-3" /> Cancel
                         </button>
-                        <button
-                          onClick={() => denyDbRequest(r.id)}
-                          disabled={submitting}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
-                        >
-                          <AlertTriangle className="w-3 h-3" /> Deny
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1378,24 +1443,35 @@ export default function VacationsView({
                         {(r.requested_by_profile?.username || r.requested_by_profile?.email) ? ` by ${r.requested_by_profile.username || r.requested_by_profile.email}` : ''}
                       </div>
                     </div>
-                    {userCanApprove && (
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      {userCanApprove && (
+                        <>
+                          <button
+                            onClick={() => approveDayOff(r.id)}
+                            disabled={submitting}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-3 h-3" /> Approve
+                          </button>
+                          <button
+                            onClick={() => denyDayOff(r.id)}
+                            disabled={submitting}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          >
+                            <AlertTriangle className="w-3 h-3" /> Deny
+                          </button>
+                        </>
+                      )}
+                      {r.requested_by === user?.id && (
                         <button
-                          onClick={() => approveDayOff(r.id)}
+                          onClick={() => cancelDbRequest(r.id)}
                           disabled={submitting}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          className="px-3 py-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
                         >
-                          <CheckCircle className="w-3 h-3" /> Approve
+                          <X className="w-3 h-3" /> Cancel
                         </button>
-                        <button
-                          onClick={() => denyDayOff(r.id)}
-                          disabled={submitting}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
-                        >
-                          <AlertTriangle className="w-3 h-3" /> Deny
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1526,24 +1602,35 @@ export default function VacationsView({
                           Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '\u2014'}
                         </div>
                       </div>
-                      {userCanApprove && (
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        {userCanApprove && (
+                          <>
+                            <button
+                              onClick={() => approveDbSwap(r.id)}
+                              disabled={submitting}
+                              className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                            >
+                              <CheckCircle className="w-3 h-3" /> Approve
+                            </button>
+                            <button
+                              onClick={() => denyDbSwap(r.id)}
+                              disabled={submitting}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                            >
+                              <AlertTriangle className="w-3 h-3" /> Deny
+                            </button>
+                          </>
+                        )}
+                        {r.requested_by === user?.id && (
                           <button
-                            onClick={() => approveDbSwap(r.id)}
+                            onClick={() => cancelDbSwap(r.id)}
                             disabled={submitting}
-                            className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                            className="px-3 py-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
                           >
-                            <CheckCircle className="w-3 h-3" /> Approve
+                            <X className="w-3 h-3" /> Cancel
                           </button>
-                          <button
-                            onClick={() => denyDbSwap(r.id)}
-                            disabled={submitting}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
-                          >
-                            <AlertTriangle className="w-3 h-3" /> Deny
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                     {r.requester?.name && r.target?.name && (
                       <SwapPreview requester={r.requester.name} target={r.target.name} block={r.block_number} />

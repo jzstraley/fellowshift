@@ -20,7 +20,7 @@
 - [ ] Toggle Vacation Mode to paint vacation blocks.
 - [X] Remove PGY year on Clinic schedule
     - [X] Fix UI for Clinic on mobile, just equal space
-- [ ] Could not find the table public.lecture_speaker when submitting a change request
+- [X] Could not find the table public.lecture_speaker when submitting a change request
 - [ ] Fellow View TODO
     - [ ] when logging back in, login should end up on home page
     - [ ] Unable to request time off/page not available for fellows
@@ -28,7 +28,7 @@
 - [ ] admins should be able to create requests for anyone. users should be able to only create time off requests for themselves. I also want the specific username "fellow" to be able to create requests for anyone. that is my tester person and has fellow-like priveldges.
 - [ ] Local mode?
 - [ ] Also should have an option for an individual day off like a sick day on the requests tab Can be a different tab in the requests page
-- [ ] on the requests tab, fellows/residents should not have the option to approve or deny pending requests. They should only be able to see what has been requested. Also currently showes like "Blocks 2-1–2-1 — Vacation" that is terrible. Please make it appear pretteir, can be dates, shbould have timestamp
+- [ ] on the requests tab, request list is now scoped to the fellow's own requests; approve/deny buttons only shown to approvers. Remaining: display format still shows "Blocks 2-1–2-1 — Vacation" — needs to show dates with timestamp instead
 
 ---
 

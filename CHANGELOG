@@ -1,23 +1,22 @@
 # Changelog
 
+## 2026-02-26 — Request Cancellation & Fellow Visibility Scoping
+
+- Fellows can now cancel their own pending vacation, day-off, and swap requests via a Cancel button (sets status to `cancelled`)
+- Request lists are now scoped: non-approvers only see requests they submitted or that involve their linked fellow record; admins/approvers see all
+- Added `cancelled` as a valid status in `vacation_requests` and `swap_requests` schema CHECK constraints
+- Username and full name fields in Profile Settings are now read-only for non-admin users; only admins can edit identity fields and see the Save button
+- Renamed `lecture_speakers` table reference to `speakers` in Supabase sync (fixes "could not find table public.lecture_speaker" error)
+- Renamed lecture columns: `lecture_date` → `date`, `lecture_time` → `time`, `presenter_fellow` → `presenter_fellow_id`
+- Added `program` field to lecture rows on push/pull
+- Removed `rsvps` column from lectures (no longer pushed or pulled)
+
 ## 2026-02-24 — Supabase Schedule Sync
 
 - Validate & Save button pushes full schedule to Supabase; Sync button pulls on demand; approving vacation/swap requests now writes directly to schedule_assignments and mirrors into local state
-
-## 2026-02-24 — Mobile-Friendly Call Weekend & Clinic Coverage Views
-
 - Call weekend/float and clinic coverage tables now render as stacked cards on mobile; calendar scrolls horizontally instead of squishing
-
-## 2026-02-24 — Idle Timeout Redirects to Landing Page
-
 - Timeout now navigates to the landing page instead of reloading to the demo/base screen
-
-## 2026-02-24 — Mobile Header Icon Differentiation
-
 - Replaced duplicate hamburger icon on user menu with a CircleUser icon to visually distinguish it from the nav menu toggle
-
-## 2026-02-24 — Vacation Request Fellow Dropdown Fix
-
 - Fixed time off request form: fellows query now fetches `user_id` so regular fellows correctly see themselves in the Fellow dropdown (previously always empty for non-admin users)
 
 ## 2026-02-22 — Navigation Gating & Stats Permissions
@@ -26,9 +25,6 @@
 - HeaderBar nav tabs are hidden entirely for unauthenticated users; shown in demo mode (no Supabase configured)
 - Stats tab added via splice to preserve correct tab ordering
 - Removed debounced call/float generator (debouncedGenerate); optimize button calls generator directly
-
-## 2026-02-22 — Schedule View & Violations Overhaul
-
 - ScheduleView: block header now groups consecutive blocks by rotation number with a spanning header row
 - ScheduleView: PGY divider rows separate fellows by PGY level
 - ScheduleView: current block column is highlighted; view uses full block list from blockDates (not single-block selector)
@@ -43,34 +39,19 @@
 - Import/Export bar on Dashboard now gated to admin/program_director/chief_fellow only
 - Check Balance button and table gated to program_director/admin roles
 - Added `supabase_migration_roles.sql` with role-based RLS policy migrations
-
-## 2026-02-24 — Mobile Overscroll Background Fix
-
 - Fixed white overscroll area on mobile: `html` and `body` now have explicit background colors matching the app theme (`gray-50` in light mode, `gray-900` in dark mode)
-
-## 2026-02-21 — Call/Float Balance Check gated to Program Directors
-
 - Call/Float Balance Check table in the Call/Float view is now only visible to program directors
 - "Check Balance" button in the toolbar is now only rendered for program directors
 - Fixed a race condition where the schedule recalculation effect (150ms debounce) would overwrite call/float counts with zeros after `generateCallAndFloat()` ran on mount — call/float values now persist across schedule re-renders
-
-## 2026-02-21 — Monthly Clinic Calendar
-
 - Added a monthly calendar above the Weekly Clinic Coverage for Nights table in the Clinic Coverage view, similar in style to the Lecture Calendar
 - Calendar shows all fellows in clinic each weekday: PGY-colored badges for regular clinic, amber badges (Name*) for fellows covering a nights fellow's clinic slot, and red badges (!Name) for uncovered slots
 - Month navigation arrows (‹ ›) allow browsing through the academic year
 - Removed the ▼ clinic day indicator that was previously shown in each schedule cell in the Schedule view
-
-## 2026-02-21 — Schedule View Block Selector
-
 - Replaced horizontal-scroll block table in Schedule view with a block selector dropdown showing all 26 blocks with date ranges
 - Table now displays only the selected block's column — no horizontal scrolling needed
 - App auto-detects today's date on load and pre-selects the current block; falls back to Block 1 if before the schedule year
 - Current block is marked with a ★ in the dropdown and a blue header with "Current" badge in the table
 - Rotation filter and fellow/rotation click-to-highlight remain fully functional in the single-block view
-
-## 2026-02-21
-
 - Added username and access level display in the top-right header bar beside the hamburger menu, showing the user's full name and formatted role (Program Director, Chief Fellow, Fellow, Viewer)
 - Replaced "Start Block" and "End Block" number inputs in the time off request creator with "Start Date" and "End Date" dropdowns showing actual calendar dates from configured block dates
 
@@ -83,9 +64,6 @@
 - Admin users see "Pending Approvals" and ACGME Violations cards
 - Improved empty states with helpful messages
 - Call/Night Float duties shown with colored pill badges
-
-## Phase 1 — Foundation & Core UX (2026-02-18)
-
 - Pinned the Import/Export bar to the bottom of the screen on the Home (Dashboard) view so it stays visible while scrolling
 - Fixed Clinic Coverage Load Distribution cards: text was invisible in light mode (white on white); added explicit dark text colors
 - Reduced column spacing in Weekly Clinic Coverage for Nights table for a more compact layout
@@ -96,9 +74,6 @@
 - Added global keyboard shortcuts: 1–9 to switch views, ←/→ arrow keys for month navigation in Lecture Calendar, Escape to close modals, Ctrl+K to focus search (Phase 2)
 - Added session idle timeout: auto-signs out after 15 minutes of inactivity with a warning modal at 13 minutes
 - Added "Home" tab to header navigation as the first entry
-
-## 2026-02-18
-
 - Added ACGME work hour violation checker engine that builds a day-by-day shift timeline per fellow and flags 80h weekly average, 24+4h max shift, 1-in-7 day off, and other ACGME rule violations
 - Added Violations view with filters by fellow, rule, and severity
 - Added violation fix suggester that proposes swap/reassignment options to resolve violations without introducing new ones

@@ -212,7 +212,7 @@ export async function pullCallFloatFromSupabase({ institutionId }) {
  * Upserts one row per (fellow, block). Empty rotations are stored as ''.
  * If the fellows table is empty, auto-seeds from the passed fellows list.
  */
-export async function pushScheduleToSupabase({ schedule, fellows, blockDates, institutionId, userId, pgyLevels = {} }) {
+export async function pushScheduleToSupabase({ schedule, fellows, institutionId, userId, pgyLevels = {} }) {
   if (!supabase) return { error: 'Supabase not configured' };
   if (!institutionId) return { error: 'No institution ID available' };
 
@@ -232,7 +232,7 @@ export async function pushScheduleToSupabase({ schedule, fellows, blockDates, in
       // The DB schema requires a non-null `program` column. Use empty string
       // as a safe default when auto-seeding from local data.
       program: '',
-      pgy_level: pgyLevels[name] ?? null,
+      pgy_level: pgyLevels[name] ?? 1,
     }));
     const { data: seeded, error: seedErr } = await supabase
       .from('fellows')
@@ -427,7 +427,7 @@ export async function pushLecturesToSupabase({ lectures, speakers, topics, insti
       type: s.type ?? 'attending',
     }));
     const { error } = await supabase
-      .from('lecture_speakers')
+      .from('speakers')
       .upsert(speakerRows, { onConflict: 'id' });
     if (error) return { error: error.message };
   }
@@ -452,19 +452,19 @@ export async function pushLecturesToSupabase({ lectures, speakers, topics, insti
     const lectureRows = lectures.map(l => ({
       id: l.id,
       institution_id: institutionId,
+      program: l.program ?? 'general',
       topic_id: l.topicId ?? null,
       title: l.title,
       speaker_id: l.speakerId ?? null,
-      presenter_fellow: l.presenterFellow ?? null,
-      lecture_date: l.date ?? null,
-      lecture_time: l.time ?? null,
+      presenter_fellow_id: l.presenterFellowId ?? null,
+      date: l.date ?? null,
+      time: l.time ?? null,
       duration: l.duration ?? null,
       location: l.location ?? null,
       series: l.series ?? null,
       recurrence: l.recurrence ?? 'none',
       reminder_sent: l.reminderSent ?? false,
       notes: l.notes ?? null,
-      rsvps: l.rsvps ?? {},
       created_by: userId ?? null,
     }));
     const { error } = await supabase
@@ -486,9 +486,9 @@ export async function pullLecturesFromSupabase({ institutionId }) {
   if (!institutionId) return { error: 'No institution ID', lectures: null, speakers: null, topics: null };
 
   const [speakerRes, topicRes, lectureRes] = await Promise.all([
-    supabase.from('lecture_speakers').select('id, name, title, email, type').eq('institution_id', institutionId),
+    supabase.from('speakers').select('id, name, title, email, type').eq('institution_id', institutionId),
     supabase.from('lecture_topics').select('id, name, series, duration').eq('institution_id', institutionId),
-    supabase.from('lectures').select('id, topic_id, title, speaker_id, presenter_fellow, lecture_date, lecture_time, duration, location, series, recurrence, reminder_sent, notes, rsvps').eq('institution_id', institutionId),
+    supabase.from('lectures').select('id, program, topic_id, title, speaker_id, presenter_fellow_id, date, time, duration, location, series, recurrence, reminder_sent, notes').eq('institution_id', institutionId),
   ]);
 
   const error = speakerRes.error?.message || topicRes.error?.message || lectureRes.error?.message || null;
@@ -501,19 +501,20 @@ export async function pullLecturesFromSupabase({ institutionId }) {
   const lectures = lectureRes.data?.length
     ? lectureRes.data.map(l => ({
         id: l.id,
+        program: l.program,
         topicId: l.topic_id,
         title: l.title,
         speakerId: l.speaker_id,
-        presenterFellow: l.presenter_fellow,
-        date: l.lecture_date,
-        time: l.lecture_time,
+        presenterFellowId: l.presenter_fellow_id,
+        date: l.date,
+        time: l.time,
         duration: l.duration,
         location: l.location,
         series: l.series,
         recurrence: l.recurrence ?? 'none',
         reminderSent: l.reminder_sent ?? false,
         notes: l.notes,
-        rsvps: l.rsvps ?? {},
+        rsvps: {},
       }))
     : null;
 

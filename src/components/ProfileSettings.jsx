@@ -11,11 +11,13 @@ const roleLabels = {
 };
 
 export default function ProfileSettings({ darkMode, toggleDarkMode }) {
-  const { user, profile, updateProfile } = useAuth();
+  const { user, profile, updateProfile, isAdmin } = useAuth();
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [username, setUsername] = useState(profile?.username || "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+
+  const canEditIdentity = isAdmin();
 
   const handleSave = async () => {
     setSaving(true);
@@ -47,23 +49,31 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
         <div className="space-y-3">
           <div>
             <label className={label}>Username</label>
-            <input
-              className={input}
-              value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
-              placeholder="Your login username"
-              autoCapitalize="none"
-            />
+            {canEditIdentity ? (
+              <input
+                className={input}
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                placeholder="Your login username"
+                autoCapitalize="none"
+              />
+            ) : (
+              <div className={readOnly}>{username || "—"}</div>
+            )}
           </div>
 
           <div>
             <label className={label}>Full Name</label>
-            <input
-              className={input}
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Your name"
-            />
+            {canEditIdentity ? (
+              <input
+                className={input}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your name"
+              />
+            ) : (
+              <div className={readOnly}>{fullName || "—"}</div>
+            )}
           </div>
 
           <div>
@@ -92,14 +102,16 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
             </div>
           )}
 
-          <button
-            onClick={handleSave}
-            disabled={saving || (fullName === (profile?.full_name || "") && username === (profile?.username || ""))}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-semibold rounded"
-          >
-            <Save className="w-3.5 h-3.5" />
-            {saving ? "Saving..." : "Save"}
-          </button>
+          {canEditIdentity && (
+            <button
+              onClick={handleSave}
+              disabled={saving || (fullName === (profile?.full_name || "") && username === (profile?.username || ""))}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-semibold rounded"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {saving ? "Saving..." : "Save"}
+            </button>
+          )}
         </div>
       </div>
 
