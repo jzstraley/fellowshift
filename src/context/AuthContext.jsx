@@ -36,13 +36,13 @@ export const AuthProvider = ({ children }) => {
         console.error('Error loading profile:', error);
         setError(error.message);
         setProfile(null);
-        setLoading(false);
+        
         return;
       }
 
       setProfile(data);
       setError(null);
-      setLoading(false);
+      
     } catch (err) {
       const msg = String(err?.message || err).toLowerCase();
       const isAbort = msg.includes('aborterror') || msg.includes('aborted');
@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Exception loading profile:', err);
       setError(err.message);
       setProfile(null);
-      setLoading(false);
+      
     } finally {
       profileLoadInFlight.current = false;
     }
@@ -64,7 +64,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setLoading(false);
+      
       console.warn('Supabase not configured - authentication disabled');
       return;
     }
@@ -76,23 +76,21 @@ export const AuthProvider = ({ children }) => {
       console.warn('Auth check timed out - continuing without auth');
       setUser(null);
       setProfile(null);
-      setLoading(false);
+      
     }, 10000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!alive) return;
+    supabase.auth.onAuthStateChange((event, session) => {
+  clearTimeout(timeout);
 
-      clearTimeout(timeout);
-      setUser(session?.user ?? null);
+  console.log("AUTH EVENT:", event, !!session?.user);
 
-      if (session?.user) {
-        setLoading(true);
-        await loadProfile(session.user.id);
-      } else {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
+  setUser(session?.user ?? null);
+  if (session?.user) {
+    loadProfile(session.user.id);   // no await
+  } else {
+    setProfile(null);
+  }
+});
 
     // Optional kick. We don't depend on it.
     supabase.auth.getSession().catch(() => {});
