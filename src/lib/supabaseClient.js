@@ -29,7 +29,7 @@ export const supabase =
 
           // Keep this as you had it if you use OAuth/magic links.
           // If you do NOT use URL-based auth redirects, set to false.
-          detectSessionInUrl: true,
+          detectSessionInUrl: false,
         },
         realtime: {
           params: {

@@ -10,40 +10,30 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
-      setLoading(false);
-      console.warn('Supabase not configured - authentication disabled');
-      return;
-    }
+  if (!isSupabaseConfigured) {
+    setLoading(false);
+    console.warn('Supabase not configured - authentication disabled');
+    return;
+  }
 
-    // Safety timeout - only fires if Supabase never responds at all
-    const timeout = setTimeout(() => {
-      console.warn('Auth check timed out - continuing without auth');
-      setLoading(false);
-    }, 10000);
+  let alive = true;
 
-    // Check active session immediately — this is the reliable path for
-    // returning users whose session is already stored locally.
-    supabase.auth.getSession().then(({ data: { session } }) => {
+  // Hard timeout, but we will also resolve as soon as INITIAL_SESSION arrives
+  const timeout = setTimeout(() => {
+    if (!alive) return;
+    console.warn('Auth check timed out - continuing without auth');
+    setUser(null);
+    setProfile(null);
+    setLoading(false);
+  }, 10000);
+
+  // ✅ Listen FIRST and do NOT skip INITIAL_SESSION
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (!alive) return;
+
+    // INITIAL_SESSION is your reliable boot event
+    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
       clearTimeout(timeout);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    }).catch((err) => {
-      clearTimeout(timeout);
-      console.error('Error checking session:', err);
-      setLoading(false);
-    });
-
-    // Listen for subsequent auth changes (sign-in, sign-out, token refresh).
-    // Skip INITIAL_SESSION — already handled by getSession() above.
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION') return;
       setUser(session?.user ?? null);
 
       if (session?.user) {
@@ -53,13 +43,28 @@ export const AuthProvider = ({ children }) => {
         setProfile(null);
         setLoading(false);
       }
-    });
+      return;
+    }
 
-    return () => {
+    if (event === 'SIGNED_OUT') {
       clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
-  }, []);
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
+    }
+  });
+
+  // Optional: kick once, but do not depend on it
+  supabase.auth.getSession()
+    .then(() => {}) // no-op, listener will handle state
+    .catch(() => {}); // no-op
+
+  return () => {
+    alive = false;
+    clearTimeout(timeout);
+    subscription.unsubscribe();
+  };
+}, []);
 
   const loadProfile = async (userId) => {
     try {
