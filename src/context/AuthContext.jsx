@@ -16,40 +16,26 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    // Safety timeout - if auth check takes too long, stop loading
+    // Safety timeout - only fires if Supabase never responds at all
     const timeout = setTimeout(() => {
       console.warn('Auth check timed out - continuing without auth');
       setLoading(false);
-    }, 5000);
+    }, 10000);
 
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      clearTimeout(timeout);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    }).catch((err) => {
-      clearTimeout(timeout);
-      console.error('Error checking session:', err);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
+    // onAuthStateChange fires INITIAL_SESSION on mount (Supabase v2 guarantee),
+    // so we don't need a separate getSession() call which can race against it.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
+      clearTimeout(timeout);
       setUser(session?.user ?? null);
 
       if (session?.user) {
         await loadProfile(session.user.id);
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {

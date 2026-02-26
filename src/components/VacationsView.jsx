@@ -1140,8 +1140,10 @@ export default function VacationsView({
 
       // call/float assignments use keys like B{parent}-W{part}
       const key = `B${parent}-W${part}`;
-      const callAssigned = callSchedule?.[key] || '—';
-      const floatAssigned = nightFloatSchedule?.[key] || '—';
+      const callRaw = callSchedule?.[key];
+      const floatRaw = nightFloatSchedule?.[key];
+      const callAssigned = (callRaw && typeof callRaw === 'object' ? callRaw.name : callRaw) || '—';
+      const floatAssigned = (floatRaw && typeof floatRaw === 'object' ? floatRaw.name : floatRaw) || '—';
 
       return { parent, part, rotationNumber, rotationName, start, end, callAssigned, floatAssigned };
     };
