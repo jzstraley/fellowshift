@@ -55,6 +55,17 @@ export default function VacationsView({
       </button>
       <button
         type="button"
+        onClick={() => setSubView('dayoff')}
+        className={`px-3 py-1 text-xs font-medium border-l dark:border-gray-600 ${
+          subView === 'dayoff'
+            ? 'bg-blue-600 text-white'
+            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+        }`}
+      >
+        Day Off
+      </button>
+      <button
+        type="button"
         onClick={() => setSubView('swaps')}
         className={`px-3 py-1 text-xs font-medium border-l dark:border-gray-600 ${
           subView === 'swaps'
@@ -541,6 +552,101 @@ export default function VacationsView({
 
   // (removed approver seed button - not needed when using local split weeks)
 
+  // --- Supabase new day-off request ---
+  const DAY_OFF_REASONS = ['Sick Day', 'Personal Day', 'Conference', 'CME'];
+  const [newDayOff, setNewDayOff] = useState({ fellow_id: '', date: '', reason_type: 'Sick Day' });
+
+  const approveDayOff = async (requestId) => {
+    if (!canApprove()) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('vacation_requests')
+        .update({ status: 'approved', approved_by: user.id, approved_at: new Date().toISOString() })
+        .eq('id', requestId);
+      if (error) throw error;
+      await fetchRequests();
+    } catch (err) {
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const denyDayOff = async (requestId) => {
+    if (!canApprove()) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('vacation_requests')
+        .update({ status: 'denied' })
+        .eq('id', requestId);
+      if (error) throw error;
+      await fetchRequests();
+    } catch (err) {
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitDayOff = async () => {
+    if (!newDayOff.fellow_id || !newDayOff.date) return;
+    setSubmitting(true);
+    setDbError(null);
+    try {
+      const selectedDate = new Date(newDayOff.date + 'T00:00:00');
+
+      // Find the block_date that contains the selected date
+      let blockDateId = null;
+      const matchingBlock = blockDates.find(b => {
+        const start = new Date(b.start_date + 'T00:00:00');
+        const end = new Date(b.end_date + 'T00:00:00');
+        return selectedDate >= start && selectedDate <= end;
+      });
+
+      if (matchingBlock) {
+        blockDateId = matchingBlock.id;
+      } else {
+        // Try local block dates
+        const localMatch = (localBlockDates || []).find(b => {
+          const start = new Date(b.start + 'T00:00:00');
+          const end = new Date(b.end + 'T00:00:00');
+          return selectedDate >= start && selectedDate <= end;
+        });
+        if (!localMatch) throw new Error('No schedule block found for the selected date.');
+        const { data: found } = await supabase
+          .from('block_dates')
+          .select('id')
+          .eq('block_number', localMatch.block)
+          .eq('institution_id', profile?.institution_id)
+          .limit(1);
+        if (found?.[0]) blockDateId = found[0].id;
+        else throw new Error('Block date not found in database.');
+      }
+
+      const { error } = await supabase
+        .from('vacation_requests')
+        .insert({
+          fellow_id: newDayOff.fellow_id,
+          start_block_id: blockDateId,
+          end_block_id: blockDateId,
+          reason: newDayOff.reason_type,
+          notes: newDayOff.date,
+          status: 'pending',
+          requested_by: user.id,
+        });
+      if (error) throw error;
+
+      setNewDayOff({ fellow_id: '', date: '', reason_type: 'Sick Day' });
+      await fetchRequests();
+    } catch (err) {
+      setDbError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // --- Supabase new swap request ---
   const [newDbSwap, setNewDbSwap] = useState({ requester_id: '', target_id: '', block_number: 1, reason: '', swap_type: 'call', weekend: 1 });
   // Require swap type (call|float) and weekend (1 or 2)
@@ -926,9 +1032,16 @@ export default function VacationsView({
     );
   };
   if (useDatabase) {
-    const pendingRequests = dbRequests.filter(r => r.status === 'pending');
-    const approvedRequests = dbRequests.filter(r => r.status === 'approved');
-    const deniedRequests = dbRequests.filter(r => r.status === 'denied');
+    const vacationDbRequests = dbRequests.filter(r => !DAY_OFF_REASONS.includes(r.reason));
+    const dayOffDbRequests = dbRequests.filter(r => DAY_OFF_REASONS.includes(r.reason));
+
+    const pendingRequests = vacationDbRequests.filter(r => r.status === 'pending');
+    const approvedRequests = vacationDbRequests.filter(r => r.status === 'approved');
+    const deniedRequests = vacationDbRequests.filter(r => r.status === 'denied');
+
+    const pendingDayOffs = dayOffDbRequests.filter(r => r.status === 'pending');
+    const approvedDayOffs = dayOffDbRequests.filter(r => r.status === 'approved');
+    const deniedDayOffs = dayOffDbRequests.filter(r => r.status === 'denied');
 
     const pendingSwaps = dbSwapRequests.filter(r => r.status === 'pending');
     const approvedSwaps = dbSwapRequests.filter(r => r.status === 'approved');
@@ -954,10 +1067,34 @@ export default function VacationsView({
       ? newDbSwapAvailableWeekends
       : [1, 2];
 
+    const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+
     const formatBlockRange = (req) => {
+      const startDate = req.start_block?.start_date;
+      const endDate = (req.end_block ?? req.start_block)?.end_date;
+      if (startDate && endDate && startDate !== endDate) return `${fmtDate(startDate)} \u2013 ${fmtDate(endDate)}`;
+      if (startDate) return fmtDate(startDate);
       const start = req.start_block?.block_number ?? '?';
       const end = req.end_block?.block_number ?? '?';
-      return start === end ? `Block ${start}` : `Blocks ${start}–${end}`;
+      return start === end ? `Week ${start}` : `Weeks ${start}\u2013${end}`;
+    };
+
+    const fmtSwapBlock = (blockNum, weekend) => {
+      if (!blockNum) return '\u2014';
+      if (weekend) {
+        const weeklyNum = (blockNum - 1) * 2 + weekend;
+        const entry = blockDates.find(b => b.block_number === weeklyNum);
+        if (entry?.start_date) {
+          return entry.start_date !== entry.end_date
+            ? `${fmtDate(entry.start_date)} \u2013 ${fmtDate(entry.end_date)}`
+            : fmtDate(entry.start_date);
+        }
+      }
+      const w1 = blockDates.find(b => b.block_number === (blockNum - 1) * 2 + 1);
+      const w2 = blockDates.find(b => b.block_number === blockNum * 2);
+      if (w1?.start_date && w2?.end_date) return `${fmtDate(w1.start_date)} \u2013 ${fmtDate(w2.end_date)}`;
+      if (w1?.start_date) return fmtDate(w1.start_date);
+      return `Block ${blockNum}${weekend ? `, Wk ${weekend}` : ''}`;
     };
 
     const getRequestExtras = (req) => {
@@ -1212,6 +1349,153 @@ export default function VacationsView({
               )}
             </div>}
           </>
+        ) : subView === 'dayoff' ? (
+          /* ============== DAY OFF SUB-VIEW (Supabase) ============== */
+          <>
+            {/* Pending Day Off Requests */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">
+                Pending Day Off Requests ({pendingDayOffs.length})
+              </div>
+              {pendingDayOffs.length === 0 && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">No pending day off requests</div>
+              )}
+              <div className="space-y-2">
+                {pendingDayOffs.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-gray-100">
+                        {r.fellow?.name ?? 'Unknown Fellow'}
+                        <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">PGY-{r.fellow?.pgy_level}</span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {r.reason}{r.notes ? ` — ${new Date(r.notes + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                        Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                        {r.requested_by_profile?.full_name ? ` by ${r.requested_by_profile.full_name}` : ''}
+                      </div>
+                    </div>
+                    {userCanApprove && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => approveDayOff(r.id)}
+                          disabled={submitting}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                        >
+                          <CheckCircle className="w-3 h-3" /> Approve
+                        </button>
+                        <button
+                          onClick={() => denyDayOff(r.id)}
+                          disabled={submitting}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                        >
+                          <AlertTriangle className="w-3 h-3" /> Deny
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Approved Day Off Requests */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">
+                Approved Day Off Requests ({approvedDayOffs.length})
+              </div>
+              {approvedDayOffs.length === 0 && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">No approved day off requests</div>
+              )}
+              <div className="space-y-2">
+                {approvedDayOffs.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-green-100">
+                        {r.fellow?.name ?? 'Unknown Fellow'}
+                        <span className="ml-2 text-xs font-normal text-green-600 dark:text-green-300">PGY-{r.fellow?.pgy_level}</span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-green-200">
+                        {r.reason}{r.notes ? ` — ${new Date(r.notes + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                      </div>
+                      {r.approved_at && (
+                        <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">
+                          Approved {new Date(r.approved_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Denied Day Off Requests */}
+            {deniedDayOffs.length > 0 && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">
+                  Denied Day Off Requests ({deniedDayOffs.length})
+                </div>
+                <div className="space-y-2">
+                  {deniedDayOffs.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 rounded">
+                      <div className="text-sm">
+                        <div className="font-semibold dark:text-red-100">{r.fellow?.name ?? 'Unknown Fellow'}</div>
+                        <div className="text-xs text-gray-600 dark:text-red-200">
+                          {r.reason}{r.notes ? ` — ${new Date(r.notes + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                        </div>
+                      </div>
+                      <div className="px-3 py-1 bg-red-600 text-white rounded text-xs">Denied</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Create New Day Off Request */}
+            {userCanRequest && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">Request a Day Off</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select
+                    className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                    value={newDayOff.fellow_id}
+                    onChange={(e) => setNewDayOff({ ...newDayOff, fellow_id: e.target.value })}
+                  >
+                    <option value="">Select Fellow</option>
+                    {selectableFellows.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name} (PGY-{f.pgy_level})</option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                    value={newDayOff.date}
+                    onChange={(e) => setNewDayOff({ ...newDayOff, date: e.target.value })}
+                  />
+                  <select
+                    className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                    value={newDayOff.reason_type}
+                    onChange={(e) => setNewDayOff({ ...newDayOff, reason_type: e.target.value })}
+                  >
+                    <option value="Sick Day">Sick Day</option>
+                    <option value="Personal Day">Personal Day</option>
+                    <option value="Conference">Conference</option>
+                    <option value="CME">CME</option>
+                  </select>
+                </div>
+                <div className="mt-2">
+                  <button
+                    onClick={submitDayOff}
+                    disabled={submitting || !newDayOff.fellow_id || !newDayOff.date}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs"
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           /* ============== SWAPS SUB-VIEW (Supabase) ============== */
           <>
@@ -1234,10 +1518,10 @@ export default function VacationsView({
                           {r.target?.name ?? '?'}
                         </div>
                         <div className="text-xs text-gray-600 dark:text-gray-400">
-                          Block {r.block_number}{r.reason ? ` — ${r.reason}` : ''}
+                          {fmtSwapBlock(r.block_number, r.weekend)}{r.reason ? ` \u2014 ${r.reason}` : ''}
                         </div>
                         <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                          Submitted {new Date(r.created_at).toLocaleDateString()}
+                          Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '\u2014'}
                         </div>
                       </div>
                       {userCanApprove && (
@@ -1285,7 +1569,7 @@ export default function VacationsView({
                         {r.target?.name ?? '?'}
                       </div>
                       <div className="text-xs text-gray-600 dark:text-green-200">
-                        Block {r.block_number}{r.reason ? ` — ${r.reason}` : ''}
+                        {fmtSwapBlock(r.block_number, r.weekend)}{r.reason ? ` \u2014 ${r.reason}` : ''}
                       </div>
                       {r.approved_at && (
                         <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">
@@ -1315,7 +1599,7 @@ export default function VacationsView({
                           {r.target?.name ?? '?'}
                         </div>
                         <div className="text-xs text-gray-600 dark:text-red-200">
-                          Block {r.block_number}{r.reason ? ` — ${r.reason}` : ''}
+                          {fmtSwapBlock(r.block_number, r.weekend)}{r.reason ? ` \u2014 ${r.reason}` : ''}
                         </div>
                       </div>
                       <div className="px-3 py-1 bg-red-600 text-white rounded text-xs">Denied</div>
@@ -1408,6 +1692,17 @@ export default function VacationsView({
     : weeklyBlocks;
   // In local fallback mode there is no real auth, so default to allowing requests
   const userCanRequest = profile ? (canRequest?.() ?? true) : true;
+  const userCanApproveLocal = profile ? (canApprove?.() ?? false) : false;
+  const localFmtRange = (startBlock, endBlock) => {
+    const fmt = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    const startEntry = availableLocalBlocks?.find(b => String(b.block) === String(startBlock));
+    const endEntry = availableLocalBlocks?.find(b => String(b.block) === String(endBlock));
+    const start = startEntry?.start ?? startEntry?.start_date;
+    const end = endEntry?.end ?? endEntry?.end_date;
+    if (start && end && start !== end) return `${fmt(start)} \u2013 ${fmt(end)}`;
+    if (start) return fmt(start);
+    return startBlock === endBlock ? `Week ${startBlock}` : `Weeks ${startBlock}\u2013${endBlock}`;
+  };
   const pendingVacations = vacations.filter(v => !v.status || v.status === 'pending');
   const approvedVacations = vacations.filter(v => v.status === 'approved');
   const pendingSwapsLocal = swapRequests.filter(s => s.status === 'pending');
@@ -1439,16 +1734,19 @@ export default function VacationsView({
                 <div key={idx} className="flex items-center justify-between border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
                   <div className="text-sm">
                     <div className="font-semibold dark:text-gray-100">{v.fellow}</div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">Blocks {v.startBlock}–{v.endBlock} — {v.reason}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">{localFmtRange(v.startBlock, v.endBlock)}{v.reason ? ` \u2014 ${v.reason}` : ''}</div>
+                    {v.created_at && <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Submitted {new Date(v.created_at).toLocaleString()}</div>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => approveRequest(idx)} className="px-3 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" /> Approve
-                    </button>
-                    <button onClick={() => denyRequest(idx)} className="px-3 py-1 bg-red-600 text-white rounded text-xs flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Deny
-                    </button>
-                  </div>
+                  {userCanApproveLocal && (
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => approveRequest(idx)} className="px-3 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Approve
+                      </button>
+                      <button onClick={() => denyRequest(idx)} className="px-3 py-1 bg-red-600 text-white rounded text-xs flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Deny
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1463,7 +1761,7 @@ export default function VacationsView({
                 <div key={idx} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
                   <div className="text-sm">
                     <div className="font-semibold dark:text-green-100">{v.fellow}</div>
-                    <div className="text-xs text-gray-600 dark:text-green-200">Blocks {v.startBlock}–{v.endBlock} — {v.reason}</div>
+                    <div className="text-xs text-gray-600 dark:text-green-200">{localFmtRange(v.startBlock, v.endBlock)}{v.reason ? ` \u2014 ${v.reason}` : ''}</div>
                   </div>
                   <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">
                     Approved
@@ -1499,6 +1797,12 @@ export default function VacationsView({
             </div>
           </div>}
         </>
+      ) : subView === 'dayoff' ? (
+        /* ============== DAY OFF SUB-VIEW (Local) ============== */
+        <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+          <div className="mb-2 font-semibold dark:text-gray-100">Day Off Requests</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Day off requests require a database connection. Please sign in to submit or view day off requests.</div>
+        </div>
       ) : (
         /* ============== SWAPS SUB-VIEW (Local) ============== */
         <>
@@ -1517,17 +1821,19 @@ export default function VacationsView({
                         {s.target}
                       </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400">
-                        Block {s.block}{s.reason ? ` — ${s.reason}` : ''}
+                        {localFmtRange(s.block, s.block)}{s.reason ? ` \u2014 ${s.reason}` : ''}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => approveSwap(idx)} className="px-3 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> Approve
-                      </button>
-                      <button onClick={() => denySwap(idx)} className="px-3 py-1 bg-red-600 text-white rounded text-xs flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Deny
-                      </button>
-                    </div>
+                    {userCanApproveLocal && (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => approveSwap(idx)} className="px-3 py-1 bg-green-600 text-white rounded text-xs flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Approve
+                        </button>
+                        <button onClick={() => denySwap(idx)} className="px-3 py-1 bg-red-600 text-white rounded text-xs flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Deny
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <SwapPreview requester={s.requester} target={s.target} block={s.block} />
                 </div>
@@ -1549,7 +1855,7 @@ export default function VacationsView({
                       {s.target}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-green-200">
-                      Block {s.block}{s.reason ? ` — ${s.reason}` : ''}
+                      {localFmtRange(s.block, s.block)}{s.reason ? ` \u2014 ${s.reason}` : ''}
                     </div>
                   </div>
                   <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>

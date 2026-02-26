@@ -503,7 +503,7 @@ function AppContent() {
     return counts;
   };
 
-  const generateCallAndFloat = useCallback(() => {
+  const generateCallAndFloat = useCallback(async () => {
     const callTargets = { 4: 5, 5: 4, 6: 2 };
     const floatTargets = { 4: 5, 5: 4, 6: 3 };
 
@@ -528,7 +528,17 @@ function AppContent() {
       fresh[f].float = result.floatCounts?.[f] ?? 0;
     });
     setStats(fresh);
-  }, [fellows, schedule]);
+
+    // Persist relaxed flags to Supabase so they survive page reloads
+    if (isSupabaseConfigured && profile?.institution_id) {
+      await pushCallFloatToSupabase({
+        callSchedule: result.callSchedule ?? {},
+        nightFloatSchedule: result.nightFloatSchedule ?? {},
+        institutionId: profile.institution_id,
+        userId: user?.id,
+      });
+    }
+  }, [fellows, schedule, isSupabaseConfigured, profile?.institution_id, user?.id]);
 
   // Debounced stats calculation when schedule changes to avoid frequent heavy work
   // Preserve call/float counts from the previous stats (set by generateCallAndFloat)
@@ -647,7 +657,7 @@ function AppContent() {
     return <ViewLoader />;
   }
 
-  // Show landing or login when not authenticated
+  // Show landing or login when not authenticated — nothing renders behind this gate
   if (!user) {
     if (showLanding) {
       return (
@@ -656,13 +666,11 @@ function AppContent() {
         </Suspense>
       );
     }
-    if (isSupabaseConfigured) {
-      return (
-        <Suspense fallback={<ViewLoader />}>
-          <LoginPage onLogoClick={() => setShowLanding(true)} />
-        </Suspense>
-      );
-    }
+    return (
+      <Suspense fallback={<ViewLoader />}>
+        <LoginPage onLogoClick={() => setShowLanding(true)} />
+      </Suspense>
+    );
   }
 
   return (
