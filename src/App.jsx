@@ -21,6 +21,7 @@ import {
 
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 import useIdleTimeout from "./hooks/useIdleTimeout";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // ✅ LAZY LOAD ALL VIEWS
 const LoginPage = lazy(() => import("./components/auth/LoginPage"));
@@ -164,6 +165,8 @@ function AppContent() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
+
+  const [syncError, setSyncError] = useState(null);
 
   const [stats, setStats] = useState(null);
 
@@ -326,6 +329,8 @@ function AppContent() {
       pullLecturesFromSupabase({ institutionId: profile.institution_id }),
       pullClinicDaysFromSupabase({ institutionId: profile.institution_id }),
     ]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
+      const firstError = schedResult.error || callFloatResult.error || vacResult.error || swapResult.error || lectResult.error || clinicResult.error;
+      if (firstError) setSyncError(typeof firstError === 'string' ? firstError : firstError.message ?? 'Failed to load data from server');
       if (schedResult.schedule) {
         // Merge: apply non-empty Supabase rotations on top of current schedule.
         // Avoids wiping local data when Supabase only has partial records (e.g. vacation approvals).
@@ -363,6 +368,9 @@ function AppContent() {
       if (lectResult.speakers) setSpeakers(lectResult.speakers);
       if (lectResult.topics) setTopics(lectResult.topics);
       if (clinicResult.clinicDays) setClinicDays(clinicResult.clinicDays);
+    }).catch((err) => {
+      console.error('Initial Supabase load failed:', err);
+      setSyncError(err?.message ?? 'Failed to connect to server');
     });
   // fellows and blockDates are stable module-level constants
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -689,6 +697,19 @@ function AppContent() {
         showAdmin={isAdmin?.()}
       />
 
+      {syncError && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+          <span><strong>Sync error:</strong> {syncError}</span>
+          <button
+            onClick={() => setSyncError(null)}
+            className="shrink-0 text-red-500 hover:text-red-700 dark:hover:text-red-100 font-bold"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="p-3 pb-16">
         <Suspense fallback={<ViewLoader />}>
           {activeView === "dashboard" && (
@@ -944,8 +965,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

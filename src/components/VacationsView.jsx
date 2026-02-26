@@ -168,7 +168,7 @@ export default function VacationsView({
         if (requesterIds.length) {
           const { data: profilesData, error: profilesErr } = await supabase
             .from('profiles')
-            .select('id, full_name, email')
+            .select('id, username, full_name, email')
             .in('id', requesterIds);
           if (!profilesErr && profilesData) {
             const profMap = {};
@@ -1203,7 +1203,7 @@ export default function VacationsView({
                             <div>Call: {ex.callAssigned}{ex.callAssigned && ex.callAssigned !== '—' ? (ex.callAssigned === r.fellow?.name ? ' (requested fellow on call)' : '') : ''}</div>
                             <div>Float: {ex.floatAssigned}{ex.floatAssigned && ex.floatAssigned !== '—' ? (ex.floatAssigned === r.fellow?.name ? ' (requested fellow on float)' : '') : ''}</div>
                             <div className="mt-1">Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">Submitted by: {r.requested_by_profile?.full_name ?? r.requested_by ?? '—'}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">Submitted by: {r.requested_by_profile?.username ?? r.requested_by_profile?.email ?? '—'}</div>
                           </div>
                         );
                       })()}
@@ -1375,7 +1375,7 @@ export default function VacationsView({
                       </div>
                       <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                         Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
-                        {r.requested_by_profile?.full_name ? ` by ${r.requested_by_profile.full_name}` : ''}
+                        {(r.requested_by_profile?.username || r.requested_by_profile?.email) ? ` by ${r.requested_by_profile.username || r.requested_by_profile.email}` : ''}
                       </div>
                     </div>
                     {userCanApprove && (
@@ -1719,7 +1719,7 @@ export default function VacationsView({
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold">Requests</h3>
         <div className="text-sm text-gray-600 dark:text-gray-400">
-          {profile ? (isAdmin?.() ? 'Admin' : isProgramDirector() ? 'Program Director' : isChiefFellow() ? 'Chief Fellow' : profile.role) : 'Local mode'}
+          {profile && (isAdmin?.() ? 'Admin' : isProgramDirector() ? 'Program Director' : isChiefFellow() ? 'Chief Fellow' : profile.role)}
         </div>
       </div>
 

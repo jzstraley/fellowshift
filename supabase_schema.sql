@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   institution_id UUID REFERENCES institutions(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
+  username TEXT UNIQUE,
   full_name TEXT,
   role TEXT NOT NULL CHECK (role IN ('resident', 'fellow', 'chief_fellow', 'program_director', 'admin')),
   program TEXT, -- For chief_fellows: which program they manage
@@ -289,6 +290,12 @@ $$ LANGUAGE sql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION get_user_program()
 RETURNS TEXT AS $$
   SELECT program FROM profiles WHERE id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- Returns the email for a given username (used by login to support username-based sign-in)
+CREATE OR REPLACE FUNCTION get_email_by_username(lookup_username TEXT)
+RETURNS TEXT AS $$
+  SELECT email FROM profiles WHERE username = lookup_username LIMIT 1;
 $$ LANGUAGE sql SECURITY DEFINER;
 
 -- ============================================================================

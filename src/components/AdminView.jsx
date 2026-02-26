@@ -20,7 +20,7 @@ const ROLE_COLORS = {
   resident: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
 };
 
-const EMPTY_FORM = { email: "", full_name: "", role: "fellow", program: "", password: "" };
+const EMPTY_FORM = { email: "", username: "", full_name: "", role: "fellow", program: "", password: "" };
 const CLINIC_DAY_LABELS = { 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday" };
 
 export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clinicDays = {}, setClinicDays }) {
@@ -45,7 +45,7 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
     setLoadingUsers(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, role, program, is_active, created_at")
+      .select("id, email, username, full_name, role, program, is_active, created_at")
       .eq("institution_id", profile.institution_id)
       .order("role")
       .order("full_name");
@@ -62,7 +62,7 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
     setCreating(true);
     setMessage(null);
 
-    const { email, full_name, role, program, password } = form;
+    const { email, username, full_name, role, program, password } = form;
 
     // Create the Supabase Auth user.
     // When email confirmation is required (the default), this does NOT change
@@ -93,6 +93,7 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
       id: newUserId,
       institution_id: profile.institution_id,
       email,
+      username: username || null,
       full_name: full_name || null,
       role,
       program: program || null,
@@ -184,6 +185,7 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
                     }`}
                   >
                     <th className="text-left py-2 pr-4 font-medium">Name</th>
+                    <th className="text-left py-2 pr-4 font-medium">Username</th>
                     <th className="text-left py-2 pr-4 font-medium">Email</th>
                     <th className="text-left py-2 pr-4 font-medium">Role</th>
                     <th className="text-left py-2 font-medium">Program</th>
@@ -196,6 +198,7 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
                       className={`border-b ${darkMode ? "border-gray-700/50" : "border-gray-100"}`}
                     >
                       <td className="py-2 pr-4">{u.full_name || <span className={darkMode ? "text-gray-600" : "text-gray-400"}>—</span>}</td>
+                      <td className={`py-2 pr-4 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>{u.username || <span className={darkMode ? "text-gray-600" : "text-gray-400"}>—</span>}</td>
                       <td className={`py-2 pr-4 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>{u.email}</td>
                       <td className="py-2 pr-4">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${ROLE_COLORS[u.role] || ""}`}>
@@ -273,6 +276,19 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
                   value={form.email}
                   onChange={setField("email")}
                   placeholder="user@hospital.edu"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Username *</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={form.username}
+                  onChange={setField("username")}
+                  placeholder="e.g. jsmith"
+                  autoCapitalize="none"
                   required
                 />
               </div>

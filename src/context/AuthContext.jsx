@@ -22,12 +22,28 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }, 10000);
 
-    // onAuthStateChange fires INITIAL_SESSION on mount (Supabase v2 guarantee),
-    // so we don't need a separate getSession() call which can race against it.
+    // Check active session immediately — this is the reliable path for
+    // returning users whose session is already stored locally.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(timeout);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    }).catch((err) => {
+      clearTimeout(timeout);
+      console.error('Error checking session:', err);
+      setLoading(false);
+    });
+
+    // Listen for subsequent auth changes (sign-in, sign-out, token refresh).
+    // Skip INITIAL_SESSION — already handled by getSession() above.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      clearTimeout(timeout);
+      if (event === 'INITIAL_SESSION') return;
       setUser(session?.user ?? null);
 
       if (session?.user) {
