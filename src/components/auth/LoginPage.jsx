@@ -77,7 +77,7 @@ export default function LoginPage({ onLogoClick }) {
             Fellow<span className="text-red-400 italic">Shift</span>
           </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Fellowship Schedule Management
+            Efficient Schedule Management
           </p>
         </div>
 
@@ -153,16 +153,10 @@ export default function LoginPage({ onLogoClick }) {
 
           <div className="text-center">
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Don't have an account? Contact your program director to get access.
+              Don't have an account? Contact your administrator to get access.
             </p>
           </div>
         </form>
-
-        <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-          <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-            Secure authentication powered by Supabase
-          </p>
-        </div>
       </div>
     </div>
   );
