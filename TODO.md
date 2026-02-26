@@ -29,6 +29,9 @@
 - [ ] Local mode?
 - [ ] Also should have an option for an individual day off like a sick day on the requests tab Can be a different tab in the requests page
 - [ ] on the requests tab, request list is now scoped to the fellow's own requests; approve/deny buttons only shown to approvers. Remaining: display format still shows "Blocks 2-1–2-1 — Vacation" — needs to show dates with timestamp instead
+- [ ] Fix profile not loading (RLS or join issue causing profile = null)
+    - [ ] index-CMUShsm2.js:53 Auth check timed out - continuing without auth
+(anonymous) @ index-CMUShsm2.js:53Understand this warning;;        const J = setTimeout( () => {console.warn("Auth check timed out - continuing without auth"), h(!1)}, 1e4);
 
 ---
 

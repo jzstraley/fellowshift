@@ -127,23 +127,32 @@ function AppContent() {
   const [topics, setTopics] = useState(initialTopics);
 
   // Derive encryption key and load persisted data when user becomes available
-  useEffect(() => {
-    if (!user?.id) {
-      cryptoKeyRef.current = null;
-      setDataReady(false);
-      supabaseInitLoadDoneRef.current = false;
-      return;
-    }
+  // Derive encryption key and load persisted data when user becomes available
+useEffect(() => {
+  if (!user?.id) {
+    cryptoKeyRef.current = null;
+    setDataReady(false);
+    supabaseInitLoadDoneRef.current = false;
+    return;
+  }
 
-    let cancelled = false;
+  let cancelled = false;
 
-    (async () => {
+  (async () => {
+    try {
+      // 1) Derive key (can throw if WebCrypto unavailable or blocked)
       const key = await deriveKey(user.id);
       if (cancelled) return;
+
       cryptoKeyRef.current = key;
 
-      const persisted = await loadAndDecrypt(key, STORAGE_KEY);
-      const persistedLectures = await loadAndDecrypt(key, LECTURE_STORAGE_KEY);
+      // 2) Load/decrypt (can throw if storage blocked, bad payload, etc.)
+      // loadAndDecrypt already catches decrypt errors internally and returns null,
+      // but keep try/catch here anyway for truly unexpected failures.
+      const [persisted, persistedLectures] = await Promise.all([
+        loadAndDecrypt(key, STORAGE_KEY),
+        loadAndDecrypt(key, LECTURE_STORAGE_KEY),
+      ]);
 
       if (cancelled) return;
 
@@ -158,12 +167,25 @@ function AppContent() {
       if (Array.isArray(persistedLectures?.lectures)) setLectures(persistedLectures.lectures);
       if (Array.isArray(persistedLectures?.speakers)) setSpeakers(persistedLectures.speakers);
       if (Array.isArray(persistedLectures?.topics)) setTopics(persistedLectures.topics);
+    } catch (err) {
+      // If anything unexpected happens, do NOT brick the app.
+      console.warn("Local decrypt/hydration failed; continuing with defaults:", err);
 
-      setDataReady(true);
-    })();
+      // Important: ensure we don't keep a bad key around
+      cryptoKeyRef.current = null;
 
-    return () => { cancelled = true; };
-  }, [user?.id]);
+      // You can decide whether you want to clear corrupted app data here.
+      // For resilience, I'd avoid clearing automatically unless you're sure it's corrupt.
+      // clearSensitiveStorage();
+    } finally {
+      if (!cancelled) setDataReady(true);
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, [user?.id]);
 
 
   const [syncError, setSyncError] = useState(null);
@@ -648,7 +670,6 @@ function AppContent() {
 
   // Idle timeout — signs out after 15 min of inactivity
   const handleIdleTimeout = useCallback(async () => {
-    clearSensitiveStorage();
     await signOut();
     setShowLanding(true);
   }, [signOut]);
@@ -689,7 +710,7 @@ function AppContent() {
         darkMode={darkMode}
         toggleDarkMode={toggleDarkMode}
         onLogoClick={() => setShowLanding(true)}
-        onSignOut={() => { clearSensitiveStorage(); setShowLanding(true); }}
+        onSignOut={async () => { await signOut(); setShowLanding(true);}}
         violationCount={workHourViolations.length}
         showStats={!isSupabaseConfigured || canApprove?.()}
         showViolations={!isSupabaseConfigured || canApprove?.()}

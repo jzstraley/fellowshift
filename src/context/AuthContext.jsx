@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured, signOutAndClear } from '../lib/supabaseClient';
 
 const AuthContext = createContext({});
 
@@ -47,6 +47,7 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
 
       if (session?.user) {
+        setLoading(true);
         await loadProfile(session.user.id);
       } else {
         setProfile(null);
@@ -103,18 +104,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signOut = async () => {
+    const signOut = async () => {
     if (!isSupabaseConfigured) {
-      return { error: { message: 'Supabase not configured' } };
+        return { error: { message: 'Supabase not configured' } };
     }
 
     try {
-      const { error } = await supabase.auth.signOut();
-      return { error };
+        await signOutAndClear(); // important: clears your encrypted cache in a controlled way
+        return { error: null };
     } catch (err) {
-      return { error: err };
+        return { error: err };
     }
-  };
+    };
 
   const signUp = async (email, password, metadata) => {
     if (!isSupabaseConfigured) {
