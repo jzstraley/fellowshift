@@ -12,10 +12,17 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
 -- This is called at login when the user types a username instead of an email.
 -- SECURITY DEFINER lets it read profiles rows regardless of RLS.
 -- ============================================================================
-CREATE OR REPLACE FUNCTION get_email_by_username(lookup_username TEXT)
-RETURNS TEXT AS $$
-  SELECT email FROM profiles WHERE username = lookup_username LIMIT 1;
-$$ LANGUAGE sql SECURITY DEFINER;
+create or replace function public.get_email_by_username(lookup_username text)
+returns text
+language sql
+security definer
+stable
+as $$
+  select email
+  from public.profiles
+  where lower(username) = lower(lookup_username)
+  limit 1;
+$$;
 
 -- ============================================================================
 -- VERIFICATION

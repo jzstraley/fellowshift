@@ -2,16 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { clearSensitiveStorage } from '../utils/secureStorage';
 
-// Prefer Vite's import.meta.env in browser builds, but allow Node process.env
-const supabaseUrl =
-  (import.meta?.env?.VITE_SUPABASE_URL) ||
-  (typeof process !== 'undefined' ? process.env?.VITE_SUPABASE_URL : null) ||
-  null;
-
-const supabaseAnonKey =
-  (import.meta?.env?.VITE_SUPABASE_ANON_KEY) ||
-  (typeof process !== 'undefined' ? process.env?.VITE_SUPABASE_ANON_KEY : null) ||
-  null;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? null;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? null;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
@@ -38,6 +30,16 @@ export const supabase =
         },
       })
     : null;
+
+    // --- TEMP DEBUG TRAP: find unexpected signouts ---
+if (typeof window !== "undefined" && supabase) {
+  const originalSignOut = supabase.auth.signOut.bind(supabase.auth);
+  supabase.auth.signOut = async (...args) => {
+    console.error("[TRAP] supabase.auth.signOut called", args);
+    console.trace("[TRAP] signOut stack");
+    return originalSignOut(...args);
+  };
+}
 
 // Export a flag to check if Supabase is configured
 export const isSupabaseConfigured = Boolean(supabase);
@@ -96,11 +98,13 @@ if (supabase) {
  * Use this from your UI instead of calling supabase.auth.signOut() directly.
  * This guarantees your app cache clears on real user sign-out.
  */
-export async function signOutAndClear() {
+export async function signOutAndClear(reason = "unknown") {
+  console.error("[TRAP] signOutAndClear called. reason:", reason);
+  console.trace("[TRAP] signOutAndClear stack");
   if (!supabase) return;
+
   userInitiatedSignOut = true;
-  // Optional: clear immediately for snappy UI. Listener will also clear but is idempotent.
-  clearSensitiveStorage();
+
   const { error } = await supabase.auth.signOut();
-  if (error) console.warn('Supabase signOut error:', error);
+  if (error) console.warn("Supabase signOut error:", error);
 }

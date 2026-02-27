@@ -207,75 +207,116 @@ export async function pullCallFloatFromSupabase({ institutionId }) {
   };
 }
 
-/**
- * Push the full schedule to Supabase schedule_assignments.
- * Upserts one row per (fellow, block). Empty rotations are stored as ''.
- * If the fellows table is empty, auto-seeds from the passed fellows list.
- */
-export async function pushScheduleToSupabase({ schedule, fellows, institutionId, userId, pgyLevels = {} }) {
+// Push the full schedule to Supabase schedule_assignments.
+// - Scopes everything by institution + program.
+// - Auto-seeds fellows if none exist, using the provided program (never '').
+// - Requires block_dates rows exist for (institution, program).
+// - Upserts schedule_assignments by (fellow_id, block_date_id).
+//
+// Assumptions:
+// - fellows table has: id, name, institution_id, program, is_active, pgy_level
+// - block_dates table has: id, block_number, institution_id, program
+// - schedule_assignments has: fellow_id, block_date_id, rotation, created_by
+export async function pushScheduleToSupabase({
+  schedule,
+  fellows,              // array of fellow names (keys for schedule object)
+  institutionId,
+  program,              // REQUIRED
+  userId,
+  pgyLevels = {},       // { [name]: number }
+}) {
   if (!supabase) return { error: 'Supabase not configured' };
   if (!institutionId) return { error: 'No institution ID available' };
+  if (!program) return { error: 'No program available' };
+  if (!Array.isArray(fellows) || fellows.length === 0) return { error: 'No fellows provided' };
 
+  // 1) Load fellows for this institution+program
   let { data: dbFellows, error: fe } = await supabase
     .from('fellows')
     .select('id, name')
     .eq('institution_id', institutionId)
+    .eq('program', program)
     .eq('is_active', true);
+
   if (fe) return { error: fe.message };
 
+  // 2) Auto-seed fellows if empty (institution+program scoped)
   if (!dbFellows?.length) {
-    // Auto-seed fellows from the local schedule data
-    const toInsert = fellows.map(name => ({
+    const uniqueNames = [...new Set(fellows.map(n => (n ?? '').trim()).filter(Boolean))];
+
+    const toInsert = uniqueNames.map(name => ({
       name,
       institution_id: institutionId,
+      program,                 // NEVER ''
       is_active: true,
-      // The DB schema requires a non-null `program` column. Use empty string
-      // as a safe default when auto-seeding from local data.
-      program: '',
       pgy_level: pgyLevels[name] ?? 1,
     }));
+
     const { data: seeded, error: seedErr } = await supabase
       .from('fellows')
       .insert(toInsert)
       .select('id, name');
-    if (seedErr) return { error: `Fellows table is empty. Auto-seed failed: ${seedErr.message}` };
-    if (!seeded?.length) return { error: 'Fellows table is empty and auto-seed returned no rows.' };
+
+    if (seedErr) {
+      return { error: `Fellows table is empty for this program. Auto-seed failed: ${seedErr.message}` };
+    }
+    if (!seeded?.length) {
+      return { error: 'Fellows table is empty and auto-seed returned no rows.' };
+    }
     dbFellows = seeded;
   }
 
+  // 3) Load block_dates for this institution+program
   const { data: dbBlocks, error: be } = await supabase
     .from('block_dates')
     .select('id, block_number')
-    .eq('institution_id', institutionId);
+    .eq('institution_id', institutionId)
+    .eq('program', program);
+
   if (be) return { error: be.message };
-  if (!dbBlocks?.length) return { error: 'No block dates found in database. Populate the block_dates table first.' };
+  if (!dbBlocks?.length) {
+    return { error: 'No block dates found in database for this program. Populate block_dates first.' };
+  }
 
-  const nameToId = Object.fromEntries(dbFellows.map(f => [f.name, f.id]));
-  const numToId = Object.fromEntries(dbBlocks.map(b => [b.block_number, b.id]));
+  // Build maps
+  const nameToId = Object.fromEntries((dbFellows || []).map(f => [f.name, f.id]));
+  const numToId = Object.fromEntries((dbBlocks || []).map(b => [Number(b.block_number), b.id]));
 
+  // 4) Build assignments
   const assignments = [];
   for (const name of fellows) {
-    const fellowId = nameToId[name];
+    const trimmed = (name ?? '').trim();
+    if (!trimmed) continue;
+
+    const fellowId = nameToId[trimmed];
     if (!fellowId) continue;
-    (schedule[name] || []).forEach((rotation, idx) => {
-      const blockDateId = numToId[idx + 1];
+
+    const rotations = Array.isArray(schedule?.[trimmed]) ? schedule[trimmed] : [];
+    rotations.forEach((rotation, idx) => {
+      const blockNum = idx + 1;
+      const blockDateId = numToId[blockNum];
       if (!blockDateId) return;
+
       assignments.push({
         fellow_id: fellowId,
         block_date_id: blockDateId,
-        rotation: rotation || '',
-        created_by: userId || null,
+        rotation: (rotation ?? '') || '',
+        created_by: userId ?? null,
       });
     });
   }
 
   if (!assignments.length) {
-    return { error: 'No assignments could be matched. Verify fellow names match the database.' };
+    return {
+      error: 'No assignments could be matched. Verify fellow names match the database and block_dates exist for this program.',
+    };
   }
 
+  // 5) Upsert assignments
   const { error: ue } = await supabase
     .from('schedule_assignments')
     .upsert(assignments, { onConflict: 'fellow_id,block_date_id' });
+
   if (ue) return { error: ue.message };
 
   return { error: null, count: assignments.length };
@@ -415,20 +456,23 @@ export async function pullSwapRequestsFromSupabase({ institutionId }) {
 export async function pushLecturesToSupabase({ lectures, speakers, topics, institutionId, userId }) {
   if (!supabase) return { error: 'Supabase not configured' };
   if (!institutionId) return { error: 'No institution ID' };
+  if (!program) return { error: 'No program available' };
 
   // Upsert speakers
-  if (speakers?.length) {
+    if (speakers?.length) {
     const speakerRows = speakers.map(s => ({
-      id: s.id,
-      institution_id: institutionId,
-      name: s.name,
-      title: s.title ?? null,
-      email: s.email ?? null,
-      type: s.type ?? 'attending',
+        id: s.id,
+        institution_id: institutionId,
+        name: s.name,
+        title: s.title ?? null,
+        email: s.email ?? null,
+        type: s.type ?? 'attending',
     }));
+
     const { error } = await supabase
-      .from('speakers')
-      .upsert(speakerRows, { onConflict: 'id' });
+    .from('lecture_speakers')
+      .upsert(speakerRows, { onConflict: 'id' })
+      .select('id, institution_id, name');
     if (error) return { error: error.message };
   }
 
@@ -443,7 +487,7 @@ export async function pushLecturesToSupabase({ lectures, speakers, topics, insti
     }));
     const { error } = await supabase
       .from('lecture_topics')
-      .upsert(topicRows, { onConflict: 'id' });
+      .upsert(lectureRows, { onConflict: 'institution_id,program,id' });
     if (error) return { error: error.message };
   }
 
@@ -452,7 +496,7 @@ export async function pushLecturesToSupabase({ lectures, speakers, topics, insti
     const lectureRows = lectures.map(l => ({
       id: l.id,
       institution_id: institutionId,
-      program: l.program ?? 'general',
+      program: l.program ?? program,
       topic_id: l.topicId ?? null,
       title: l.title,
       speaker_id: l.speakerId ?? null,
@@ -486,7 +530,7 @@ export async function pullLecturesFromSupabase({ institutionId }) {
   if (!institutionId) return { error: 'No institution ID', lectures: null, speakers: null, topics: null };
 
   const [speakerRes, topicRes, lectureRes] = await Promise.all([
-    supabase.from('speakers').select('id, name, title, email, type').eq('institution_id', institutionId),
+    supabase.from('lecture_speakers').select('id, name, title, email, type').eq('institution_id', institutionId),
     supabase.from('lecture_topics').select('id, name, series, duration').eq('institution_id', institutionId),
     supabase.from('lectures').select('id, program, topic_id, title, speaker_id, presenter_fellow_id, date, time, duration, location, series, recurrence, reminder_sent, notes').eq('institution_id', institutionId),
   ]);

@@ -4,7 +4,7 @@
 
 ### Mobile Responsiveness
 
-- [ ] Make all tables horizontally scrollable on mobile
+- [X] Make all tables horizontally scrollable on mobile
 - [ ] Touch-friendly buttons and controls
 - [ ] Test on various screen sizes
 
@@ -21,17 +21,12 @@
 - [X] Remove PGY year on Clinic schedule
     - [X] Fix UI for Clinic on mobile, just equal space
 - [X] Could not find the table public.lecture_speaker when submitting a change request
-- [ ] Fellow View TODO
-    - [ ] when logging back in, login should end up on home page
-    - [ ] Unable to request time off/page not available for fellows
+- [ ] harden session persistence across tabs
+- [ ] add silent retry for profile loads so auth never looks broken when RLS/network hiccups
+- [ ] Unify role/permission gating so admin UX feels stable everywhere (dashboard, approvals, stats, schedule edit)
 - [ ] Currently there is a vacation request for fellow Ali, for some reason it appears he is on vacation already on the schedule view. Maybe Ali and Alkhawlani got switched around because Alkhawlani already has two weeks of vacation approved. Also on the schedule view, Alkhawlani is not on vacation. Also if vacation is only one week of a 2 week block, the schedule view should show like "AI/VAC" or "VAC/AI" depending on which week was chosen. The schedule view should not update with vacations until they are approved.
-- [ ] admins should be able to create requests for anyone. users should be able to only create time off requests for themselves. I also want the specific username "fellow" to be able to create requests for anyone. that is my tester person and has fellow-like priveldges.
 - [ ] Local mode?
 - [ ] Also should have an option for an individual day off like a sick day on the requests tab Can be a different tab in the requests page
-- [ ] on the requests tab, request list is now scoped to the fellow's own requests; approve/deny buttons only shown to approvers. Remaining: display format still shows "Blocks 2-1–2-1 — Vacation" — needs to show dates with timestamp instead
-- [ ] Fix profile not loading (RLS or join issue causing profile = null)
-    - [ ] index-CMUShsm2.js:53 Auth check timed out - continuing without auth
-(anonymous) @ index-CMUShsm2.js:53Understand this warning;;        const J = setTimeout( () => {console.warn("Auth check timed out - continuing without auth"), h(!1)}, 1e4);
 
 ---
 
