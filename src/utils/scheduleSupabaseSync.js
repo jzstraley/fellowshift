@@ -1,110 +1,47 @@
+// src/utils/scheduleSupabaseSync.js
+//
 // Utilities for syncing schedule data between app state and Supabase.
+//
+// Canonical scope after migration:
+//   program_id + academic_year_id
+//
+// Legacy fallback scope (temporary):
+//   institution_id
+//
 // Fellows are matched by name (fellow.name must match app schedule keys exactly).
-// Block dates are matched by block_number (1-26).
+// Block dates are matched by block_number (1–26).
 // dayOverrides are NOT synced — no table exists for per-day overrides.
-//
-// Required table for call/float sync (run once in Supabase SQL editor):
-//
-// create table call_float_assignments (
-//   id uuid primary key default gen_random_uuid(),
-//   institution_id uuid not null references institutions(id) on delete cascade,
-//   block_number smallint not null,
-//   weekend smallint not null,
-//   type text not null,
-//   fellow_id uuid references fellows(id) on delete set null,
-//   relaxed boolean not null default false,
-//   created_by uuid references auth.users(id),
-//   created_at timestamptz default now(),
-//   unique (institution_id, block_number, weekend, type)
-// );
-// alter table call_float_assignments enable row level security;
-// create policy "Institution members can read" on call_float_assignments
-//   for select using (institution_id in (
-//     select institution_id from profiles where id = auth.uid()
-//   ));
-// create policy "Approvers can write" on call_float_assignments
-//   for all using (institution_id in (
-//     select institution_id from profiles where id = auth.uid()
-//       and role in ('admin','program_director','chief_fellow')
-//   ));
 
 import { supabase } from '../lib/supabaseClient';
+import { blockDates as localBlockDates } from '../data/scheduleData';
 
-// ─── SQL for new tables — run once in Supabase SQL editor ────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Notes on required schema (matches your current DB reality)
+// ─────────────────────────────────────────────────────────────────────────────
+// block_dates NOT NULL columns in your DB:
+//   institution_id (uuid)
+//   program_id (uuid)
+//   academic_year_id (uuid)
+//   block_number (int)
+//   rotation_number (int)
+//   start_date (date)
+//   end_date (date)
 //
-// -- Lecture speakers
-// create table lecture_speakers (
-//   id text primary key,
-//   institution_id uuid not null references institutions(id) on delete cascade,
-//   name text not null,
-//   title text,
-//   email text,
-//   type text default 'attending',
-//   created_at timestamptz default now()
-// );
-// alter table lecture_speakers enable row level security;
-// create policy "Institution members can read" on lecture_speakers
-//   for select using (institution_id in (select institution_id from profiles where id = auth.uid()));
-// create policy "Approvers can write" on lecture_speakers
-//   for all using (institution_id in (
-//     select institution_id from profiles where id = auth.uid()
-//       and role in ('admin','program_director','chief_fellow')
-//   ));
+// Unique constraint:
+//   UNIQUE (program_id, academic_year_id, block_number)
 //
-// -- Lecture topics
-// create table lecture_topics (
-//   id text primary key,
-//   institution_id uuid not null references institutions(id) on delete cascade,
-//   name text not null,
-//   series text,
-//   duration integer,
-//   created_at timestamptz default now()
-// );
-// alter table lecture_topics enable row level security;
-// create policy "Institution members can read" on lecture_topics
-//   for select using (institution_id in (select institution_id from profiles where id = auth.uid()));
-// create policy "Approvers can write" on lecture_topics
-//   for all using (institution_id in (
-//     select institution_id from profiles where id = auth.uid()
-//       and role in ('admin','program_director','chief_fellow')
-//   ));
+// schedule_assignments should have a unique constraint on (fellow_id, block_date_id).
 //
-// -- Lectures
-// create table lectures (
-//   id text primary key,
-//   institution_id uuid not null references institutions(id) on delete cascade,
-//   topic_id text references lecture_topics(id) on delete set null,
-//   title text not null,
-//   speaker_id text references lecture_speakers(id) on delete set null,
-//   presenter_fellow text,
-//   lecture_date date,
-//   lecture_time text,
-//   duration integer,
-//   location text,
-//   series text,
-//   recurrence text default 'none',
-//   reminder_sent boolean default false,
-//   notes text,
-//   rsvps jsonb default '{}',
-//   created_by uuid references auth.users(id),
-//   created_at timestamptz default now()
-// );
-// alter table lectures enable row level security;
-// create policy "Institution members can read" on lectures
-//   for select using (institution_id in (select institution_id from profiles where id = auth.uid()));
-// create policy "Approvers can write" on lectures
-//   for all using (institution_id in (
-//     select institution_id from profiles where id = auth.uid()
-//       and role in ('admin','program_director','chief_fellow')
-//   ));
-//
-// -- Clinic day per fellow (add column to existing fellows table)
-// alter table fellows add column if not exists clinic_day integer;
-//   -- 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday
-//
+// call_float_assignments should be migrated to support program_id + academic_year_id scope.
+// If you still have legacy (institution_id only), we keep a fallback in code.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Parse a callSchedule/nightFloatSchedule value to { name, relaxed }
+const BLOCKS = 26;
+const WEEKENDS_PER_BLOCK = 2;
+
 const parseEntry = (v) => {
   if (!v) return { name: null, relaxed: false };
   if (typeof v === 'string') return { name: v, relaxed: false };
@@ -112,36 +49,116 @@ const parseEntry = (v) => {
   return { name: null, relaxed: false };
 };
 
+async function getProgramInstitutionId(programId) {
+  const { data, error } = await supabase
+    .from('programs')
+    .select('institution_id')
+    .eq('id', programId)
+    .single();
+
+  if (error) throw new Error(error.message);
+  if (!data?.institution_id) throw new Error('Program missing institution_id');
+  return data.institution_id;
+}
+
+const toDbBlockRows = (programId, academicYearId, institutionId) =>
+  (localBlockDates ?? []).map((b) => ({
+    institution_id: institutionId,
+    program_id: programId,
+    academic_year_id: academicYearId,
+    block_number: Number(b.block),
+    rotation_number: Number(b.rotation ?? b.block),
+    start_date: b.start,
+    end_date: b.end,
+  }));
+
+export async function ensureBlockDatesInDb({ programId, academicYearId }) {
+  if (!supabase) throw new Error('Supabase not configured');
+  if (!programId) throw new Error('ensureBlockDatesInDb: programId required');
+  if (!academicYearId) throw new Error('ensureBlockDatesInDb: academicYearId required');
+
+  const institutionId = await getProgramInstitutionId(programId);
+  const rows = toDbBlockRows(programId, academicYearId, institutionId);
+
+  // Seed/repair block_dates idempotently
+  const { error: ue } = await supabase
+    .from('block_dates')
+    .upsert(rows, { onConflict: 'program_id,academic_year_id,block_number' });
+
+  if (ue) throw new Error(ue.message);
+
+  // Return mapping rows
+  const { data: blocks, error: re } = await supabase
+    .from('block_dates')
+    .select('id, block_number')
+    .eq('program_id', programId)
+    .eq('academic_year_id', academicYearId);
+
+  if (re) throw new Error(re.message);
+  return blocks ?? [];
+}
+
+async function loadFellowsByScope({ programId, institutionId }) {
+  const q = supabase.from('fellows').select('id, name').eq('is_active', true);
+
+  const { data, error } = await (programId ? q.eq('program_id', programId) : q.eq('institution_id', institutionId));
+  if (error) throw new Error(error.message);
+
+  return data ?? [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Call / Float sync
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Push callSchedule and nightFloatSchedule to Supabase call_float_assignments.
- * Upserts one row per (institution, block, weekend, type).
+ *
+ * New scope: (program_id, academic_year_id)
+ * Legacy fallback: (institution_id)
+ *
+ * NOTE: Your call_float_assignments table must match the scope you use.
+ * If your DB table still has only institution_id (legacy), pass institutionId and omit programId/academicYearId.
  */
-export async function pushCallFloatToSupabase({ callSchedule, nightFloatSchedule, institutionId, userId }) {
+export async function pushCallFloatToSupabase({
+  callSchedule,
+  nightFloatSchedule,
+  programId,
+  academicYearId,
+  institutionId, // legacy fallback
+  userId,
+}) {
   if (!supabase) return { error: 'Supabase not configured' };
-  if (!institutionId) return { error: 'No institution ID available' };
 
-  const { data: dbFellows, error: fe } = await supabase
-    .from('fellows')
-    .select('id, name')
-    .eq('institution_id', institutionId)
-    .eq('is_active', true);
-  if (fe) return { error: fe.message };
-  if (!dbFellows?.length) return { error: 'No fellows found in database.' };
+  const useNewScope = !!(programId && academicYearId);
+  if (!useNewScope && !institutionId) return { error: 'No scope available (programId+academicYearId OR institutionId required)' };
 
-  const nameToId = Object.fromEntries(dbFellows.map(f => [f.name, f.id]));
+  let dbFellows = [];
+  try {
+    dbFellows = await loadFellowsByScope({ programId: useNewScope ? programId : null, institutionId: useNewScope ? null : institutionId });
+  } catch (e) {
+    return { error: e.message };
+  }
+
+  if (!dbFellows.length) return { error: 'No fellows found in database.' };
+  const nameToId = Object.fromEntries(dbFellows.map((f) => [f.name, f.id]));
 
   const rows = [];
+
   const addRows = (sched, type) => {
-    for (let b = 1; b <= 26; b++) {
-      for (let w = 1; w <= 2; w++) {
+    for (let b = 1; b <= BLOCKS; b++) {
+      for (let w = 1; w <= WEEKENDS_PER_BLOCK; w++) {
         const key = `B${b}-W${w}`;
         const { name, relaxed } = parseEntry(sched?.[key]);
         const fellowId = name ? (nameToId[name] ?? null) : null;
+
         rows.push({
-          institution_id: institutionId,
+          ...(useNewScope
+            ? { program_id: programId, academic_year_id: academicYearId }
+            : { institution_id: institutionId }),
           block_number: b,
           weekend: w,
-          type,
+          type, // 'call' | 'float'
           fellow_id: fellowId,
           relaxed,
           created_by: userId ?? null,
@@ -153,35 +170,41 @@ export async function pushCallFloatToSupabase({ callSchedule, nightFloatSchedule
   addRows(callSchedule, 'call');
   addRows(nightFloatSchedule, 'float');
 
-  const { error: ue } = await supabase
-    .from('call_float_assignments')
-    .upsert(rows, { onConflict: 'institution_id,block_number,weekend,type' });
+  const conflict = useNewScope
+    ? 'program_id,academic_year_id,block_number,weekend,type'
+    : 'institution_id,block_number,weekend,type';
+
+  const { error: ue } = await supabase.from('call_float_assignments').upsert(rows, { onConflict: conflict });
   if (ue) return { error: ue.message };
 
   return { error: null, count: rows.length };
 }
 
-/**
- * Pull call_float_assignments from Supabase and reconstruct callSchedule / nightFloatSchedule.
- * Returns { error, callSchedule, nightFloatSchedule } — both null if nothing found.
- */
-export async function pullCallFloatFromSupabase({ institutionId }) {
+export async function pullCallFloatFromSupabase({
+  programId,
+  academicYearId,
+  institutionId, // legacy fallback
+}) {
   if (!supabase) return { error: 'Supabase not configured', callSchedule: null, nightFloatSchedule: null };
-  if (!institutionId) return { error: 'No institution ID available', callSchedule: null, nightFloatSchedule: null };
 
-  const { data: dbFellows, error: fe } = await supabase
-    .from('fellows')
-    .select('id, name')
-    .eq('institution_id', institutionId)
-    .eq('is_active', true);
-  if (fe) return { error: fe.message, callSchedule: null, nightFloatSchedule: null };
+  const useNewScope = !!(programId && academicYearId);
+  if (!useNewScope && !institutionId) return { error: 'No scope available', callSchedule: null, nightFloatSchedule: null };
 
-  const idToName = Object.fromEntries((dbFellows ?? []).map(f => [f.id, f.name]));
+  let dbFellows = [];
+  try {
+    dbFellows = await loadFellowsByScope({ programId: useNewScope ? programId : null, institutionId: useNewScope ? null : institutionId });
+  } catch (e) {
+    return { error: e.message, callSchedule: null, nightFloatSchedule: null };
+  }
 
-  const { data: rows, error: re } = await supabase
-    .from('call_float_assignments')
-    .select('block_number, weekend, type, fellow_id, relaxed')
-    .eq('institution_id', institutionId);
+  const idToName = Object.fromEntries(dbFellows.map((f) => [f.id, f.name]));
+
+  const q = supabase.from('call_float_assignments').select('block_number, weekend, type, fellow_id, relaxed');
+
+  const { data: rows, error: re } = await (useNewScope
+    ? q.eq('program_id', programId).eq('academic_year_id', academicYearId)
+    : q.eq('institution_id', institutionId));
+
   if (re) return { error: re.message, callSchedule: null, nightFloatSchedule: null };
   if (!rows?.length) return { error: null, callSchedule: null, nightFloatSchedule: null };
 
@@ -191,63 +214,79 @@ export async function pullCallFloatFromSupabase({ institutionId }) {
   for (const { block_number, weekend, type, fellow_id, relaxed } of rows) {
     const key = `B${block_number}-W${weekend}`;
     const name = fellow_id ? (idToName[fellow_id] ?? null) : null;
-    if (!name) continue; // skip unfilled slots
+    if (!name) continue;
+
     const entry = { name, relaxed: !!relaxed };
     if (type === 'call') callSchedule[key] = entry;
-    else if (type === 'float') nightFloatSchedule[key] = entry;
+    if (type === 'float') nightFloatSchedule[key] = entry;
   }
-
-  const hasCalls = Object.keys(callSchedule).length > 0;
-  const hasFloats = Object.keys(nightFloatSchedule).length > 0;
 
   return {
     error: null,
-    callSchedule: hasCalls ? callSchedule : null,
-    nightFloatSchedule: hasFloats ? nightFloatSchedule : null,
+    callSchedule: Object.keys(callSchedule).length ? callSchedule : null,
+    nightFloatSchedule: Object.keys(nightFloatSchedule).length ? nightFloatSchedule : null,
   };
 }
 
-// Push the full schedule to Supabase schedule_assignments.
-// - Scopes everything by institution + program.
-// - Auto-seeds fellows if none exist, using the provided program (never '').
-// - Requires block_dates rows exist for (institution, program).
-// - Upserts schedule_assignments by (fellow_id, block_date_id).
-//
-// Assumptions:
-// - fellows table has: id, name, institution_id, program, is_active, pgy_level
-// - block_dates table has: id, block_number, institution_id, program
-// - schedule_assignments has: fellow_id, block_date_id, rotation, created_by
+// ─────────────────────────────────────────────────────────────────────────────
+// Full schedule sync (schedule_assignments)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Push the full schedule to Supabase schedule_assignments.
+ *
+ * Scope: program_id + academic_year_id
+ * Requires:
+ *   - fellows exist for program_id (or we auto-seed)
+ *   - block_dates exist for (program_id, academic_year_id) (we ensure/seed)
+ */
 export async function pushScheduleToSupabase({
   schedule,
-  fellows,              // array of fellow names (keys for schedule object)
-  institutionId,
-  program,              // REQUIRED
+  fellows,        // array of fellow names
+  programId,      // REQUIRED uuid
+  academicYearId, // REQUIRED uuid
   userId,
-  pgyLevels = {},       // { [name]: number }
+  pgyLevels = {}, // { [name]: number }
 }) {
   if (!supabase) return { error: 'Supabase not configured' };
-  if (!institutionId) return { error: 'No institution ID available' };
-  if (!program) return { error: 'No program available' };
+  if (!programId) return { error: 'No programId provided' };
+  if (!academicYearId) return { error: 'No academicYearId provided' };
   if (!Array.isArray(fellows) || fellows.length === 0) return { error: 'No fellows provided' };
 
-  // 1) Load fellows for this institution+program
-  let { data: dbFellows, error: fe } = await supabase
-    .from('fellows')
-    .select('id, name')
-    .eq('institution_id', institutionId)
-    .eq('program', program)
-    .eq('is_active', true);
+  // 0) Ensure blocks exist and get mapping (block_number -> block_date_id)
+  let dbBlocks = [];
+  try {
+    dbBlocks = await ensureBlockDatesInDb({ programId, academicYearId });
+  } catch (e) {
+    return { error: `Block date seed failed: ${e.message}` };
+  }
+  if (!dbBlocks.length) return { error: 'No block dates found after seeding.' };
 
-  if (fe) return { error: fe.message };
+  const numToId = Object.fromEntries(dbBlocks.map((b) => [Number(b.block_number), b.id]));
 
-  // 2) Auto-seed fellows if empty (institution+program scoped)
-  if (!dbFellows?.length) {
-    const uniqueNames = [...new Set(fellows.map(n => (n ?? '').trim()).filter(Boolean))];
+  // 1) Load fellows for this program
+  let dbFellows = [];
+  try {
+    dbFellows = await loadFellowsByScope({ programId, institutionId: null });
+  } catch (e) {
+    return { error: e.message };
+  }
 
-    const toInsert = uniqueNames.map(name => ({
+  // 2) Auto-seed fellows if empty (program scoped)
+  if (!dbFellows.length) {
+    let institutionId;
+    try {
+      institutionId = await getProgramInstitutionId(programId);
+    } catch (e) {
+      return { error: e.message };
+    }
+
+    const uniqueNames = [...new Set(fellows.map((n) => (n ?? '').trim()).filter(Boolean))];
+
+    const toInsert = uniqueNames.map((name) => ({
       name,
       institution_id: institutionId,
-      program,                 // NEVER ''
+      program_id: programId,
       is_active: true,
       pgy_level: pgyLevels[name] ?? 1,
     }));
@@ -257,32 +296,15 @@ export async function pushScheduleToSupabase({
       .insert(toInsert)
       .select('id, name');
 
-    if (seedErr) {
-      return { error: `Fellows table is empty for this program. Auto-seed failed: ${seedErr.message}` };
-    }
-    if (!seeded?.length) {
-      return { error: 'Fellows table is empty and auto-seed returned no rows.' };
-    }
-    dbFellows = seeded;
+    if (seedErr) return { error: `Fellows auto-seed failed: ${seedErr.message}` };
+
+    dbFellows = seeded ?? [];
+    if (!dbFellows.length) return { error: 'Fellows auto-seed returned no rows.' };
   }
 
-  // 3) Load block_dates for this institution+program
-  const { data: dbBlocks, error: be } = await supabase
-    .from('block_dates')
-    .select('id, block_number')
-    .eq('institution_id', institutionId)
-    .eq('program', program);
+  const nameToId = Object.fromEntries(dbFellows.map((f) => [f.name, f.id]));
 
-  if (be) return { error: be.message };
-  if (!dbBlocks?.length) {
-    return { error: 'No block dates found in database for this program. Populate block_dates first.' };
-  }
-
-  // Build maps
-  const nameToId = Object.fromEntries((dbFellows || []).map(f => [f.name, f.id]));
-  const numToId = Object.fromEntries((dbBlocks || []).map(b => [Number(b.block_number), b.id]));
-
-  // 4) Build assignments
+  // 3) Build schedule_assignments
   const assignments = [];
   for (const name of fellows) {
     const trimmed = (name ?? '').trim();
@@ -292,27 +314,25 @@ export async function pushScheduleToSupabase({
     if (!fellowId) continue;
 
     const rotations = Array.isArray(schedule?.[trimmed]) ? schedule[trimmed] : [];
-    rotations.forEach((rotation, idx) => {
+    for (let idx = 0; idx < rotations.length; idx++) {
       const blockNum = idx + 1;
       const blockDateId = numToId[blockNum];
-      if (!blockDateId) return;
+      if (!blockDateId) continue;
 
       assignments.push({
         fellow_id: fellowId,
         block_date_id: blockDateId,
-        rotation: (rotation ?? '') || '',
+        rotation: rotations[idx] ?? '',
         created_by: userId ?? null,
       });
-    });
+    }
   }
 
   if (!assignments.length) {
-    return {
-      error: 'No assignments could be matched. Verify fellow names match the database and block_dates exist for this program.',
-    };
+    return { error: 'No assignments matched. Verify fellow names match DB and blocks exist.' };
   }
 
-  // 5) Upsert assignments
+  // 4) Upsert schedule_assignments
   const { error: ue } = await supabase
     .from('schedule_assignments')
     .upsert(assignments, { onConflict: 'fellow_id,block_date_id' });
@@ -323,122 +343,183 @@ export async function pushScheduleToSupabase({
 }
 
 /**
- * Pull schedule_assignments from Supabase and convert to app format.
- * Returns { error, schedule } where schedule is null if nothing was found
- * (caller should keep existing state in that case).
+ * Pull schedule_assignments and reconstruct app schedule format.
+ *
+ * Scope: program_id + academic_year_id
+ * Returns { error, schedule } where schedule is null if DB has no assignments yet.
  */
-export async function pullScheduleFromSupabase({ fellows, blockDates, institutionId }) {
+export async function pullScheduleFromSupabase({
+  fellows,        // array of fellow names (used to shape output)
+  blockDates,     // local blockDates array (used to size arrays), length should be 26
+  programId,
+  academicYearId,
+}) {
   if (!supabase) return { error: 'Supabase not configured', schedule: null };
-  if (!institutionId) return { error: 'No institution ID available', schedule: null };
+  if (!programId) return { error: 'No programId provided', schedule: null };
+  if (!academicYearId) return { error: 'No academicYearId provided', schedule: null };
+  if (!Array.isArray(fellows) || fellows.length === 0) return { error: 'No fellows provided', schedule: null };
 
-  const { data: dbFellows, error: fe } = await supabase
-    .from('fellows')
-    .select('id, name')
-    .eq('institution_id', institutionId)
-    .eq('is_active', true);
-  if (fe) return { error: fe.message, schedule: null };
-  if (!dbFellows?.length) return { error: 'No fellows found in database.', schedule: null };
+  // Make sure blocks exist so we can map block_date_id -> block_number
+  let dbBlocks = [];
+  try {
+    dbBlocks = await ensureBlockDatesInDb({ programId, academicYearId });
+  } catch (e) {
+    return { error: `Block date ensure failed: ${e.message}`, schedule: null };
+  }
+  if (!dbBlocks.length) return { error: 'No block dates found for this program/year.', schedule: null };
 
-  const { data: dbBlocks, error: be } = await supabase
-    .from('block_dates')
-    .select('id, block_number')
-    .eq('institution_id', institutionId);
-  if (be) return { error: be.message, schedule: null };
-  if (!dbBlocks?.length) return { error: 'No block dates found in database.', schedule: null };
+  const blockIdToNum = Object.fromEntries(dbBlocks.map((b) => [b.id, Number(b.block_number)]));
 
-  const idToName = Object.fromEntries(dbFellows.map(f => [f.id, f.name]));
-  const idToNum = Object.fromEntries(dbBlocks.map(b => [b.id, b.block_number]));
-  const fellowIds = dbFellows.map(f => f.id);
+  // Load fellows in this program
+  let dbFellows = [];
+  try {
+    dbFellows = await loadFellowsByScope({ programId, institutionId: null });
+  } catch (e) {
+    return { error: e.message, schedule: null };
+  }
+  if (!dbFellows.length) return { error: 'No fellows found in database for this program.', schedule: null };
+
+  const idToName = Object.fromEntries(dbFellows.map((f) => [f.id, f.name]));
+  const fellowIds = dbFellows.map((f) => f.id);
+
+  // Pull assignments for fellows in this program. We filter to blocks in this program/year via in(block_date_id,...)
+  const blockIds = dbBlocks.map((b) => b.id);
 
   const { data: assignments, error: ae } = await supabase
     .from('schedule_assignments')
     .select('fellow_id, block_date_id, rotation')
-    .in('fellow_id', fellowIds);
-  if (ae) return { error: ae.message, schedule: null };
+    .in('fellow_id', fellowIds)
+    .in('block_date_id', blockIds);
 
-  // Return null schedule (not an error) if DB has no assignments yet
+  if (ae) return { error: ae.message, schedule: null };
   if (!assignments?.length) return { error: null, schedule: null };
 
   const newSchedule = {};
-  fellows.forEach(f => { newSchedule[f] = Array(blockDates.length).fill(''); });
+  const nBlocks = Array.isArray(blockDates) && blockDates.length ? blockDates.length : BLOCKS;
+  fellows.forEach((f) => { newSchedule[f] = Array(nBlocks).fill(''); });
 
-  assignments.forEach(({ fellow_id, block_date_id, rotation }) => {
+  for (const { fellow_id, block_date_id, rotation } of assignments) {
     const name = idToName[fellow_id];
-    const num = idToNum[block_date_id];
-    if (name && num && newSchedule[name]) {
-      newSchedule[name][num - 1] = rotation || '';
-    }
-  });
+    const num = blockIdToNum[block_date_id];
+    if (!name || !num) continue;
+    if (!newSchedule[name]) continue;
+
+    const idx = num - 1;
+    if (idx >= 0 && idx < newSchedule[name].length) newSchedule[name][idx] = rotation ?? '';
+  }
 
   return { error: null, schedule: newSchedule };
 }
 
-// ─── Vacations ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Vacations / Swaps (read-only helpers)
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Pull vacation_requests from Supabase and convert to local app format.
- * Local format: [{ fellow, startBlock, endBlock, reason, status }]
- * Does NOT push — VacationsView handles writes to vacation_requests directly.
- */
-export async function pullVacationsFromSupabase({ institutionId }) {
-  if (!supabase) return { error: 'Supabase not configured', vacations: null };
-  if (!institutionId) return { error: 'No institution ID', vacations: null };
+export async function pullVacationsFromSupabase({ programId, academicYearId }) {
+  if (!supabase) return { error: "Supabase not configured", vacations: null };
+  if (!programId) return { error: "No programId provided", vacations: null };
+  if (!academicYearId) return { error: "No academicYearId provided", vacations: null };
+
+  // restrict blocks to this program/year
+  const { data: blocks, error: be } = await supabase
+    .from("block_dates")
+    .select("id, block_number")
+    .eq("program_id", programId)
+    .eq("academic_year_id", academicYearId);
+
+  if (be) return { error: be.message, vacations: null };
+
+  const blockIds = (blocks ?? []).map((b) => b.id);
+  if (!blockIds.length) return { error: null, vacations: null };
 
   const { data, error } = await supabase
-    .from('vacation_requests')
+    .from("vacation_requests")
     .select(`
+      id,
+      created_at,
+      updated_at,
       reason,
       status,
-      fellow:fellows!fellow_id (name),
-      start_block:block_dates!start_block_id (block_number),
-      end_block:block_dates!end_block_id (block_number)
+      fellow_id,
+      start_block_id,
+      end_block_id,
+      fellow:fellows!fellow_id (id, name),
+      start_block:block_dates!start_block_id (id, block_number),
+      end_block:block_dates!end_block_id (id, block_number)
     `)
-    .order('created_at', { ascending: false });
+    .in("start_block_id", blockIds)
+    .order("created_at", { ascending: false });
 
   if (error) return { error: error.message, vacations: null };
   if (!data?.length) return { error: null, vacations: null };
 
+  // normalize + keep identifiers so UI/state can reconcile approvals
   const vacations = data
-    .filter(r => r.fellow?.name && r.start_block?.block_number && r.end_block?.block_number)
-    .map(r => ({
+    .filter(
+      (r) =>
+        r.id &&
+        r.fellow?.name &&
+        r.start_block?.block_number &&
+        r.end_block?.block_number
+    )
+    .map((r) => ({
+      id: r.id,
+      created_at: r.created_at ?? null,
+      updated_at: r.updated_at ?? null,
+
+      // canonical IDs (important)
+      fellow_id: r.fellow_id,
+      start_block_id: r.start_block_id,
+      end_block_id: r.end_block_id,
+
+      // display fields
       fellow: r.fellow.name,
       startBlock: r.start_block.block_number,
       endBlock: r.end_block.block_number,
-      reason: r.reason || 'Vacation',
-      status: r.status || 'pending',
+      reason: r.reason || "Vacation",
+      status: String(r.status || "pending").trim().toLowerCase(),
     }));
 
   return { error: null, vacations: vacations.length ? vacations : null };
 }
-
-/**
- * Pull swap_requests from Supabase and convert to local app format.
- * Local format: [{ fellow, from_block, to_block, target_fellow, reason, status }]
- */
-export async function pullSwapRequestsFromSupabase({ institutionId }) {
+export async function pullSwapRequestsFromSupabase({ programId, academicYearId }) {
   if (!supabase) return { error: 'Supabase not configured', swapRequests: null };
-  if (!institutionId) return { error: 'No institution ID', swapRequests: null };
+  if (!programId) return { error: 'No programId provided', swapRequests: null };
+  if (!academicYearId) return { error: 'No academicYearId provided', swapRequests: null };
+
+  const { data: blocks, error: be } = await supabase
+    .from('block_dates')
+    .select('id, block_number')
+    .eq('program_id', programId)
+    .eq('academic_year_id', academicYearId);
+
+  if (be) return { error: be.message, swapRequests: null };
+  const blockIdToNum = Object.fromEntries((blocks ?? []).map((b) => [b.id, b.block_number]));
+  const blockIds = (blocks ?? []).map((b) => b.id);
+  if (!blockIds.length) return { error: null, swapRequests: null };
 
   const { data, error } = await supabase
     .from('swap_requests')
     .select(`
-      block_number,
+      start_block_id,
+      end_block_id,
       reason,
       status,
       requester:fellows!requester_fellow_id (name),
       target:fellows!target_fellow_id (name)
     `)
+    .in('start_block_id', blockIds)
     .order('created_at', { ascending: false });
 
   if (error) return { error: error.message, swapRequests: null };
   if (!data?.length) return { error: null, swapRequests: null };
 
   const swapRequests = data
-    .filter(r => r.requester?.name)
-    .map(r => ({
+    .filter((r) => r.requester?.name)
+    .map((r) => ({
       fellow: r.requester.name,
-      from_block: r.block_number,
-      to_block: r.block_number,
+      from_block: blockIdToNum[r.start_block_id] ?? null,
+      to_block: blockIdToNum[r.end_block_id] ?? null,
       target_fellow: r.target?.name ?? null,
       reason: r.reason || '',
       status: r.status || 'pending',
@@ -447,73 +528,65 @@ export async function pullSwapRequestsFromSupabase({ institutionId }) {
   return { error: null, swapRequests: swapRequests.length ? swapRequests : null };
 }
 
-// ─── Lectures / Speakers / Topics ────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Lectures / Speakers / Topics
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Push lectures, speakers, and topics to Supabase.
- * Upserts all three tables. Speaker/topic IDs are the app-generated text IDs.
- */
 export async function pushLecturesToSupabase({ lectures, speakers, topics, institutionId, userId }) {
   if (!supabase) return { error: 'Supabase not configured' };
   if (!institutionId) return { error: 'No institution ID' };
-  if (!program) return { error: 'No program available' };
 
-  // Upsert speakers
-    if (speakers?.length) {
-    const speakerRows = speakers.map(s => ({
-        id: s.id,
-        institution_id: institutionId,
-        name: s.name,
-        title: s.title ?? null,
-        email: s.email ?? null,
-        type: s.type ?? 'attending',
+  // Speakers
+  if (speakers?.length) {
+    const speakerRows = speakers.map((s) => ({
+      id: s.id,
+      institution_id: institutionId,
+      name: s.name,
+      title: s.title ?? null,
+      email: s.email ?? null,
+      type: s.type ?? 'attending',
     }));
 
-    const { error } = await supabase
-    .from('lecture_speakers')
-      .upsert(speakerRows, { onConflict: 'id' })
-      .select('id, institution_id, name');
+    const { error } = await supabase.from('lecture_speakers').upsert(speakerRows, { onConflict: 'id' });
     if (error) return { error: error.message };
   }
 
-  // Upsert topics
+  // Topics
   if (topics?.length) {
-    const topicRows = topics.map(t => ({
+    const topicRows = topics.map((t) => ({
       id: t.id,
       institution_id: institutionId,
       name: t.name,
       series: t.series ?? null,
       duration: t.duration ?? null,
     }));
-    const { error } = await supabase
-      .from('lecture_topics')
-      .upsert(lectureRows, { onConflict: 'institution_id,program,id' });
+
+    const { error } = await supabase.from('lecture_topics').upsert(topicRows, { onConflict: 'id' });
     if (error) return { error: error.message };
   }
 
-  // Upsert lectures
+  // Lectures
   if (lectures?.length) {
-    const lectureRows = lectures.map(l => ({
+    const lectureRows = lectures.map((l) => ({
       id: l.id,
       institution_id: institutionId,
-      program: l.program ?? program,
       topic_id: l.topicId ?? null,
       title: l.title,
       speaker_id: l.speakerId ?? null,
-      presenter_fellow_id: l.presenterFellowId ?? null,
-      date: l.date ?? null,
-      time: l.time ?? null,
+      presenter_fellow: l.presenterFellow ?? null,
+      lecture_date: l.date ?? null,
+      lecture_time: l.time ?? null,
       duration: l.duration ?? null,
       location: l.location ?? null,
       series: l.series ?? null,
       recurrence: l.recurrence ?? 'none',
       reminder_sent: l.reminderSent ?? false,
       notes: l.notes ?? null,
+      rsvps: l.rsvps ?? {},
       created_by: userId ?? null,
     }));
-    const { error } = await supabase
-      .from('lectures')
-      .upsert(lectureRows, { onConflict: 'id' });
+
+    const { error } = await supabase.from('lectures').upsert(lectureRows, { onConflict: 'id' });
     if (error) return { error: error.message };
   }
 
@@ -521,10 +594,6 @@ export async function pushLecturesToSupabase({ lectures, speakers, topics, insti
   return { error: null, count };
 }
 
-/**
- * Pull lectures, speakers, and topics from Supabase.
- * Returns { error, lectures, speakers, topics } — all null if nothing found.
- */
 export async function pullLecturesFromSupabase({ institutionId }) {
   if (!supabase) return { error: 'Supabase not configured', lectures: null, speakers: null, topics: null };
   if (!institutionId) return { error: 'No institution ID', lectures: null, speakers: null, topics: null };
@@ -532,83 +601,81 @@ export async function pullLecturesFromSupabase({ institutionId }) {
   const [speakerRes, topicRes, lectureRes] = await Promise.all([
     supabase.from('lecture_speakers').select('id, name, title, email, type').eq('institution_id', institutionId),
     supabase.from('lecture_topics').select('id, name, series, duration').eq('institution_id', institutionId),
-    supabase.from('lectures').select('id, program, topic_id, title, speaker_id, presenter_fellow_id, date, time, duration, location, series, recurrence, reminder_sent, notes').eq('institution_id', institutionId),
+    supabase
+      .from('lectures')
+      .select('id, topic_id, title, speaker_id, presenter_fellow, lecture_date, lecture_time, duration, location, series, recurrence, reminder_sent, notes, rsvps')
+      .eq('institution_id', institutionId),
   ]);
 
   const error = speakerRes.error?.message || topicRes.error?.message || lectureRes.error?.message || null;
   if (error) return { error, lectures: null, speakers: null, topics: null };
 
   const speakers = speakerRes.data?.length ? speakerRes.data : null;
-  const topics = topicRes.data?.length
-    ? topicRes.data.map(t => ({ id: t.id, name: t.name, series: t.series, duration: t.duration }))
-    : null;
+  const topics = topicRes.data?.length ? topicRes.data : null;
+
   const lectures = lectureRes.data?.length
-    ? lectureRes.data.map(l => ({
+    ? lectureRes.data.map((l) => ({
         id: l.id,
-        program: l.program,
         topicId: l.topic_id,
         title: l.title,
         speakerId: l.speaker_id,
-        presenterFellowId: l.presenter_fellow_id,
-        date: l.date,
-        time: l.time,
+        presenterFellow: l.presenter_fellow,
+        date: l.lecture_date,
+        time: l.lecture_time,
         duration: l.duration,
         location: l.location,
         series: l.series,
         recurrence: l.recurrence ?? 'none',
         reminderSent: l.reminder_sent ?? false,
         notes: l.notes,
-        rsvps: {},
+        rsvps: l.rsvps ?? {},
       }))
     : null;
 
   return { error: null, lectures, speakers, topics };
 }
 
-// ─── Clinic Days ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Clinic Days
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Push clinic day assignments to Supabase (updates fellows.clinic_day).
- * clinicDays: { [fellowName]: dayNumber } where 1=Mon … 4=Thu
- */
-export async function pushClinicDaysToSupabase({ clinicDays, institutionId }) {
+export async function pushClinicDaysToSupabase({ clinicDays, programId }) {
   if (!supabase) return { error: 'Supabase not configured' };
-  if (!institutionId) return { error: 'No institution ID' };
+  if (!programId) return { error: 'No programId provided' };
 
   const { data: dbFellows, error: fe } = await supabase
     .from('fellows')
     .select('id, name')
-    .eq('institution_id', institutionId)
+    .eq('program_id', programId)
     .eq('is_active', true);
+
   if (fe) return { error: fe.message };
   if (!dbFellows?.length) return { error: 'No fellows found in database.' };
 
   const updates = dbFellows
-    .filter(f => clinicDays[f.name] !== undefined)
-    .map(f => supabase.from('fellows').update({ clinic_day: clinicDays[f.name] }).eq('id', f.id));
+    .filter((f) => clinicDays[f.name] !== undefined)
+    .map((f) => supabase.from('fellows').update({ clinic_day: clinicDays[f.name] }).eq('id', f.id));
 
   const results = await Promise.all(updates);
-  const err = results.find(r => r.error)?.error?.message ?? null;
+  const err = results.find((r) => r.error)?.error?.message ?? null;
+
   return { error: err, count: results.length };
 }
 
-/**
- * Pull clinic_day from fellows table and return as { [name]: dayNumber }.
- */
-export async function pullClinicDaysFromSupabase({ institutionId }) {
+export async function pullClinicDaysFromSupabase({ programId }) {
   if (!supabase) return { error: 'Supabase not configured', clinicDays: null };
-  if (!institutionId) return { error: 'No institution ID', clinicDays: null };
+  if (!programId) return { error: 'No programId provided', clinicDays: null };
 
   const { data, error } = await supabase
     .from('fellows')
     .select('name, clinic_day')
-    .eq('institution_id', institutionId)
+    .eq('program_id', programId)
     .eq('is_active', true)
     .not('clinic_day', 'is', null);
 
   if (error) return { error: error.message, clinicDays: null };
   if (!data?.length) return { error: null, clinicDays: null };
 
-  const clinicDays = Object.fromEntries(data.map(f => [f.name, f.clinic_day]));
+  const clinicDays = Object.fromEntries(data.map((f) => [f.name, f.clinic_day]));
   return { error: null, clinicDays };
 }

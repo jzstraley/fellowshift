@@ -1,9 +1,15 @@
-// Pure helper functions for vacation/swap request views — no React, no state.
+// vacationHelpers.js
+// Pure helper functions for vacation/swap request views, no React, no state.
+//
+// IMPORTANT MODEL (normalized):
+// - blockDates entries are parent 2-week-ish blocks only (block_number 1-26)
+// - week-level granularity is represented on the REQUEST via week_part (1 or 2)
+// - do NOT map to weekly block_numbers (1-52) in block_dates
 
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const DAY_OFF_REASONS = ['Sick Day', 'Personal Day', 'Conference', 'CME'];
 
-// Default form shape — exported so sub-views can import without prop drilling
+// Default form shape, exported so sub-views can import without prop drilling
 export const SWAP_RESET = { requester_id: '', my_shift_key: '', target_shift_key: '', reason: '' };
 
 export const getNameFromAssignment = (val) => {
@@ -17,25 +23,30 @@ export const getRelaxedFromAssignment = (val) => {
 };
 
 // Supports two reason encodings:
-//   Legacy:   `{type}|W{1|2}|note`
-//   Bilateral:`{type}|req:B{block}-W{wknd}|tgt:B{block2}-W{wknd2}|note`
+//   Legacy:    `{type}|W{1|2}|note`
+//   Bilateral: `{type}|req:B{block}-W{wk}|tgt:B{block2}-W{wk2}|note`
 export const parseSwapReason = (reason) => {
   const out = { swapType: null, weekend: null, reqKey: null, tgtKey: null, note: '' };
   if (!reason || typeof reason !== 'string') return out;
-  if (!reason.includes('|')) { out.note = reason; return out; }
+  if (!reason.includes('|')) {
+    out.note = reason;
+    return out;
+  }
 
   const parts = reason.split('|');
   const type = parts[0];
   if (type === 'call' || type === 'float') out.swapType = type;
 
-  const reqPart = parts.find(p => p.startsWith('req:'));
-  const tgtPart = parts.find(p => p.startsWith('tgt:'));
+  const reqPart = parts.find((p) => p.startsWith('req:'));
+  const tgtPart = parts.find((p) => p.startsWith('tgt:'));
   if (reqPart && tgtPart) {
     out.reqKey = reqPart.replace('req:', '');
     out.tgtKey = tgtPart.replace('tgt:', '');
     const rm = out.reqKey.match(/^B\d+-W([12])$/);
     if (rm) out.weekend = Number(rm[1]);
-    out.note = parts.filter(p => p !== type && !p.startsWith('req:') && !p.startsWith('tgt:')).join('|');
+    out.note = parts
+      .filter((p) => p !== type && !p.startsWith('req:') && !p.startsWith('tgt:'))
+      .join('|');
     return out;
   }
 
@@ -49,38 +60,131 @@ export const parseSwapReason = (reason) => {
 };
 
 export const formatPretty = (isoDate) => {
+  if (!isoDate) return '';
   const d = new Date(isoDate + 'T00:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-export const fmtDate = (d) =>
-  d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+export const fmtDate = (iso) =>
+  iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
 
-export const formatBlockRange = (req) => {
-  const startDate = req.start_block?.start_date;
-  const endDate = (req.end_block ?? req.start_block)?.end_date;
-  if (startDate && endDate && startDate !== endDate) return `${fmtDate(startDate)} - ${fmtDate(endDate)}`;
-  if (startDate) return fmtDate(startDate);
-  const start = req.start_block?.block_number ?? '?';
-  const end = req.end_block?.block_number ?? '?';
-  return start === end ? `Week ${start}` : `Weeks ${start}-${end}`;
+export const fmtDateObj = (d) =>
+  d
+    ? d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
+
+// Given a parent block start/end (2-week-ish), compute the week window.
+// weekPart: 1 or 2 (or null for full block)
+export const getWeekWindowWithinBlock = (blockStartISO, blockEndISO, weekPart) => {
+  if (!blockStartISO || !blockEndISO) return { start: null, end: null };
+
+  const blockStart = new Date(blockStartISO + 'T00:00:00');
+  const blockEnd = new Date(blockEndISO + 'T00:00:00');
+
+  if (weekPart !== 1 && weekPart !== 2) {
+    return { start: blockStart, end: blockEnd };
+  }
+
+  const w1Start = new Date(blockStart);
+  const w1End = new Date(blockStart);
+  w1End.setDate(w1End.getDate() + 6);
+
+  const w2Start = new Date(blockStart);
+  w2Start.setDate(w2Start.getDate() + 7);
+
+  const w2End = new Date(w2Start);
+  w2End.setDate(w2End.getDate() + 6);
+
+  const clamp = (d) => (d > blockEnd ? blockEnd : d);
+
+  return weekPart === 1
+    ? { start: w1Start, end: clamp(w1End) }
+    : { start: clamp(w2Start), end: clamp(w2End) };
 };
 
-// Pure: caller passes blockDates so this stays stateless
-export const fmtSwapBlock = (blockNum, weekend, blockDates) => {
-  if (!blockNum) return '—';
-  if (weekend) {
-    const weeklyNum = (blockNum - 1) * 2 + weekend;
-    const entry = blockDates.find(b => b.block_number === weeklyNum);
-    if (entry?.start_date) {
-      return entry.start_date !== entry.end_date
-        ? `${fmtDate(entry.start_date)} - ${fmtDate(entry.end_date)}`
-        : fmtDate(entry.start_date);
-    }
+// Optional utility if you still pass labels like "local-1-2" around in the UI.
+// Returns { blockNumber: 1..26, weekPart: 1|2|null }
+export const parseParentAndWeekPart = (value) => {
+  const raw = String(value || '').trim();
+  const normalized = raw.startsWith('local-') ? raw.slice(6) : raw; // tolerate legacy UI
+  const [b, w] = normalized.split('-');
+
+  const blockNumber = Number(b);
+  const weekPart = w ? Number(w) : null;
+
+  return {
+    blockNumber: Number.isFinite(blockNumber) ? blockNumber : null,
+    weekPart: weekPart === 1 || weekPart === 2 ? weekPart : null,
+  };
+};
+
+export const formatBlockRange = (req) => {
+  const startBlock = req?.start_block ?? null;
+  const endBlock = req?.end_block ?? req?.start_block ?? null;
+
+  const startDate = startBlock?.start_date ?? null;
+  const endDate = endBlock?.end_date ?? null;
+
+  // If this request is for a single block and includes week_part, render the 1-week window.
+  const weekPart = req?.week_part ?? null;
+  const sameBlock =
+    startBlock?.id && endBlock?.id ? startBlock.id === endBlock.id : startBlock?.block_number === endBlock?.block_number;
+
+  if (sameBlock && (weekPart === 1 || weekPart === 2) && startDate && endDate) {
+    const { start, end } = getWeekWindowWithinBlock(startDate, endDate, weekPart);
+    const s = fmtDateObj(start);
+    const e = fmtDateObj(end);
+    if (s && e && s !== e) return `${s} - ${e}`;
+    if (s) return s;
   }
-  const w1 = blockDates.find(b => b.block_number === (blockNum - 1) * 2 + 1);
-  const w2 = blockDates.find(b => b.block_number === blockNum * 2);
-  if (w1?.start_date && w2?.end_date) return `${fmtDate(w1.start_date)} - ${fmtDate(w2.end_date)}`;
-  if (w1?.start_date) return fmtDate(w1.start_date);
-  return `Block ${blockNum}${weekend ? `, Wk ${weekend}` : ''}`;
+
+  // Full block or multi-block range
+  if (startDate && endDate && startDate !== endDate) return `${fmtDate(startDate)} - ${fmtDate(endDate)}`;
+  if (startDate) return fmtDate(startDate);
+
+  // Fallback by block numbers
+  const startNum = startBlock?.block_number ?? '?';
+  const endNum = endBlock?.block_number ?? '?';
+
+  if (startNum === endNum) {
+    if (weekPart === 1 || weekPart === 2) return `Block ${startNum}, Wk ${weekPart}`;
+    return `Block ${startNum}`;
+  }
+  return `Blocks ${startNum}-${endNum}`;
+};
+
+// Pure: caller passes parent blockDates (block_number 1-26).
+// weekend is legacy naming in swap reasons (W1/W2). Treat it as weekPart 1/2.
+export const fmtSwapBlock = (blockNum, weekend, blockDates) => {
+  if (!blockNum) return '-';
+
+  const block = Array.isArray(blockDates) ? blockDates.find((b) => b.block_number === blockNum) : null;
+
+  if (!block?.start_date || !block?.end_date) {
+    return `Block ${blockNum}${weekend ? `, Wk ${weekend}` : ''}`;
+  }
+
+  const weekPart = weekend === 1 || weekend === 2 ? weekend : null;
+
+  if (weekPart) {
+    const { start, end } = getWeekWindowWithinBlock(block.start_date, block.end_date, weekPart);
+    const s = fmtDateObj(start);
+    const e = fmtDateObj(end);
+    if (s && e && s !== e) return `${s} - ${e}`;
+    if (s) return s;
+  }
+
+  // Full parent block range
+  if (block.start_date !== block.end_date) return `${fmtDate(block.start_date)} - ${fmtDate(block.end_date)}`;
+  return fmtDate(block.start_date);
 };

@@ -30,7 +30,7 @@ export default function DashboardView({
   workHourViolations,
   setActiveView,
 }) {
-  const { profile, canApprove } = useAuth();
+  const { user, profile, canApprove } = useAuth();
 
   const today = useMemo(() => {
     const d = new Date();
@@ -101,29 +101,55 @@ export default function DashboardView({
     return null;
   }, [myName, callSchedule, nightFloatSchedule, blockDates, today]);
 
-  // My own pending requests (for non-admin users)
-  const myPendingRequests = useMemo(() => {
-    if (!myName) return { vacations: [], swaps: [] };
-    const myVacations = (vacations || []).filter(
-      (v) => v.fellow === myName && v.status === "pending"
-    );
-    const mySwaps = (swapRequests || []).filter(
-      (s) =>
-        (s.requester === myName || s.target === myName) && s.status === "pending"
-    );
-    return { vacations: myVacations, swaps: mySwaps };
-  }, [vacations, swapRequests, myName]);
+const norm = (s) => String(s ?? "").trim().toLowerCase();
+const isPending = (s) => String(s ?? "").trim().toLowerCase() === "pending";
 
-  // All pending requests counts (for admins)
-  const pendingVacations = useMemo(
-    () => (vacations || []).filter((v) => v.status === "pending").length,
-    [vacations]
-  );
-  const pendingSwaps = useMemo(
-    () => (swapRequests || []).filter((s) => s.status === "pending").length,
-    [swapRequests]
+const dedupeByKey = (arr) => {
+  const seen = new Set();
+  return (arr || []).filter((x, idx) => {
+    const k =
+      x?.id ??
+      x?.request_id ??
+      x?.vacation_request_id ??
+      x?.swap_request_id ??
+      x?.uuid ??
+      `${x?.fellow_id ?? x?.fellow ?? "?"}-${x?.start_block_id ?? x?.start ?? "?"}-${x?.created_at ?? idx}`;
+
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
+
+const vacationsClean = useMemo(() => dedupeByKey(vacations), [vacations]);
+const swapsClean = useMemo(() => dedupeByKey(swapRequests), [swapRequests]);
+
+// My own pending requests (for non-admin users)
+const myPendingRequests = useMemo(() => {
+  if (!myName) return { vacations: [], swaps: [] };
+
+  const myVacations = vacationsClean.filter(
+    (v) => (v.fellow === myName || v.fellow_name === myName) && isPending(v.status)
   );
 
+  const mySwaps = swapsClean.filter(
+    (s) =>
+      (s.requester === myName || s.target === myName) && isPending(s.status)
+  );
+
+  return { vacations: myVacations, swaps: mySwaps };
+}, [vacationsClean, swapsClean, myName]);
+
+// All pending requests counts (for admins)
+const pendingVacations = useMemo(
+  () => vacationsClean.filter((v) => isPending(v.status)).length,
+  [vacationsClean]
+);
+
+const pendingSwaps = useMemo(
+  () => swapsClean.filter((s) => isPending(s.status)).length,
+  [swapsClean]
+);
   // Upcoming lectures (next 3)
   const upcomingLectures = useMemo(() => {
     return (lectures || [])

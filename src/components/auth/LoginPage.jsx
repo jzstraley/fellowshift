@@ -9,37 +9,65 @@ export default function LoginPage({ onLogoClick }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
+  try {
+    const raw = (username ?? '').trim();
+    const rawLower = raw.toLowerCase();
 
-    let email = username;
+    if (!rawLower) {
+      setError('Enter username or email');
+      return;
+    }
+    if (!password) {
+      setError('Enter password');
+      return;
+    }
+
+    let email = rawLower;
 
     // If input doesn't look like an email, look up by username
-    if (!username.includes('@')) {
+    if (!rawLower.includes('@')) {
       const { data, error: lookupError } = await supabase.rpc('get_email_by_username', {
-        lookup_username: username,
+        lookup_username: rawLower,
       });
 
-      if (lookupError || !data) {
-        setError('Username not found');
-        setLoading(false);
+      if (lookupError) {
+        // Don’t leak whether a username exists
+        setError('Sign-in failed');
         return;
       }
-      email = data;
+
+      // RPC might return a scalar string OR an object/row.
+      const resolved =
+        typeof data === 'string'
+          ? data
+          : (data?.email ?? data?.value ?? null);
+
+      if (!resolved) {
+        setError('Sign-in failed');
+        return;
+      }
+
+      email = String(resolved).trim().toLowerCase();
     }
 
     const { error: signInError } = await signIn(email, password);
 
     if (signInError) {
+      // Keep Supabase’s message for wrong password etc.
+      // But if you want to avoid enumeration completely, replace with "Sign-in failed"
       setError(signInError.message);
-      setLoading(false);
-    } else {
-      setLoading(false);
+      return;
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (!isSupabaseConfigured) {
     return (

@@ -57,6 +57,34 @@ const Footer = () => (
   </footer>
 );
 
+const getReqId = (x) =>
+  x?.id ??
+  x?.request_id ??
+  x?.vacation_request_id ??
+  x?.swap_request_id ??
+  x?.uuid ??
+  null;
+
+const normalizeStatus = (s) => String(s ?? "").trim().toLowerCase();
+
+const mergeByReqIdPreferIncoming = (prev = [], incoming = []) => {
+  const map = new Map();
+
+  for (const x of prev || []) {
+    const k = getReqId(x);
+    if (!k) continue;
+    map.set(k, x);
+  }
+
+  for (const x of incoming || []) {
+    const k = getReqId(x);
+    if (!k) continue;
+    map.set(k, { ...map.get(k), ...x, status: normalizeStatus(x.status) });
+  }
+
+  return Array.from(map.values());
+};
+
 function AppContent() {
   const { signOut, profile, user, loading, isSupabaseConfigured, canApprove, isAdmin } = useAuth();
   // Dark mode state
@@ -157,8 +185,12 @@ useEffect(() => {
       if (cancelled) return;
 
       if (persisted?.schedule && typeof persisted.schedule === "object") setSchedule(persisted.schedule);
-      if (Array.isArray(persisted?.vacations)) setVacations(persisted.vacations);
-      if (Array.isArray(persisted?.swapRequests)) setSwapRequests(persisted.swapRequests);
+if (Array.isArray(persisted?.vacations) && !supabaseInitLoadDoneRef.current) {
+  setVacations(persisted.vacations);
+}
+if (Array.isArray(persisted?.swapRequests)) {
+  setSwapRequests((prev) => mergeByReqIdPreferIncoming(prev, persisted.swapRequests));
+}
       if (persisted?.callSchedule && typeof persisted.callSchedule === "object" && Object.keys(persisted.callSchedule).length > 0) setCallSchedule(persisted.callSchedule);
       if (persisted?.nightFloatSchedule && typeof persisted.nightFloatSchedule === "object" && Object.keys(persisted.nightFloatSchedule).length > 0) setNightFloatSchedule(persisted.nightFloatSchedule);
       if (persisted?.dayOverrides && typeof persisted.dayOverrides === "object") setDayOverrides(persisted.dayOverrides);
@@ -342,15 +374,16 @@ useEffect(() => {
     if (!dataReady || !isSupabaseConfigured || !profile?.institution_id) return;
     if (supabaseInitLoadDoneRef.current) return;
     supabaseInitLoadDoneRef.current = true;
+    if (!profile?.program_id) return;
 
     Promise.all([
-      pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
-      pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
-      pullVacationsFromSupabase({ institutionId: profile.institution_id }),
-      pullSwapRequestsFromSupabase({ institutionId: profile.institution_id }),
-      pullLecturesFromSupabase({ institutionId: profile.institution_id }),
-      pullClinicDaysFromSupabase({ institutionId: profile.institution_id }),
-    ]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
+  pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
+  pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
+  pullVacationsFromSupabase({ institutionId: profile.institution_id }),
+  pullSwapRequestsFromSupabase({ institutionId: profile.institution_id }),
+  pullLecturesFromSupabase({ programId: profile.institution_id }),
+  pullClinicDaysFromSupabase({ programId: profile.institution_id }),
+]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
       const firstError = schedResult.error || callFloatResult.error || vacResult.error || swapResult.error || lectResult.error || clinicResult.error;
       if (firstError) setSyncError(typeof firstError === 'string' ? firstError : firstError.message ?? 'Failed to load data from server');
       if (schedResult.schedule) {
@@ -384,8 +417,17 @@ useEffect(() => {
         fellows.forEach(f => { fresh[f].call = callCounts[f] ?? 0; fresh[f].float = floatCounts[f] ?? 0; });
         setStats(fresh);
       }
-      if (vacResult.vacations) setVacations(vacResult.vacations);
-      if (swapResult.swapRequests) setSwapRequests(swapResult.swapRequests);
+if (Array.isArray(vacResult?.vacations)) {
+  setVacations(vacResult.vacations);
+} else if (vacResult?.vacations === null) {
+  setVacations([]); // server says none, clear
+}
+
+if (Array.isArray(swapResult?.swapRequests)) {
+  setSwapRequests(swapResult.swapRequests);
+} else if (swapResult?.swapRequests === null) {
+  setSwapRequests([]);
+}
       if (lectResult.lectures) setLectures(lectResult.lectures);
       if (lectResult.speakers) setSpeakers(lectResult.speakers);
       if (lectResult.topics) setTopics(lectResult.topics);
@@ -464,8 +506,12 @@ useEffect(() => {
     }
     if (callFloatResult.callSchedule) setCallSchedule(callFloatResult.callSchedule);
     if (callFloatResult.nightFloatSchedule) setNightFloatSchedule(callFloatResult.nightFloatSchedule);
-    if (vacResult.vacations) setVacations(vacResult.vacations);
-    if (swapResult.swapRequests) setSwapRequests(swapResult.swapRequests);
+if (Array.isArray(vacResult?.vacations)) {
+  setVacations((prev) => mergeByReqIdPreferIncoming(prev, vacResult.vacations));
+}
+if (Array.isArray(swapResult?.swapRequests)) {
+  setSwapRequests((prev) => mergeByReqIdPreferIncoming(prev, swapResult.swapRequests));
+}
     if (lectResult.lectures) setLectures(lectResult.lectures);
     if (lectResult.speakers) setSpeakers(lectResult.speakers);
     if (lectResult.topics) setTopics(lectResult.topics);
@@ -873,7 +919,6 @@ useEffect(() => {
               fellows={fellows}
               schedule={schedule}
               vacations={vacations}
-              swapRequests={swapRequests}
               callSchedule={callSchedule}
               nightFloatSchedule={nightFloatSchedule}
               setCallSchedule={setCallSchedule}
@@ -881,8 +926,6 @@ useEffect(() => {
               clinicDays={clinicDays}
               pgyLevels={pgyLevels}
               setSchedule={setSchedule}
-              setVacations={setVacations}
-              setSwapRequests={setSwapRequests}
             />
           )}
         </Suspense>
