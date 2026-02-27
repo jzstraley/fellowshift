@@ -117,6 +117,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Derive all permission flags from profile.role.
+  // These are always booleans — never functions.
+  // When profile is null (loading or signed out), all flags are false.
+  const role = profile?.role ?? null;
+  const isAdmin = role === 'admin';
+  const isProgramDirector = role === 'program_director';
+  const isChiefFellow = role === 'chief_fellow';
+  // canManage: can approve requests and edit the schedule
+  const canManage = isAdmin || isProgramDirector || isChiefFellow;
+  // canApprove: alias for canManage (kept for backwards compat at call sites)
+  const canApprove = canManage;
+  // canRequest: can submit vacation / swap requests
+  const canRequest = ['fellow', 'chief_fellow', 'program_director', 'admin'].includes(role);
+
   const value = {
     user,
     profile,
@@ -126,6 +140,15 @@ export const AuthProvider = ({ children }) => {
     signOut,
     isAuthenticated: Boolean(user),
     isSupabaseConfigured,
+    // role string
+    role,
+    // boolean capability flags (never functions)
+    isAdmin,
+    isProgramDirector,
+    isChiefFellow,
+    canManage,
+    canApprove,
+    canRequest,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

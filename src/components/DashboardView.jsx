@@ -153,7 +153,7 @@ export default function DashboardView({
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const isAdmin = canApprove?.() ?? false;
+  const isAdmin = canApprove;
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">

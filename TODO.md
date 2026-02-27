@@ -16,7 +16,7 @@
 - [ ] Dark light icon not centered
 - [X] Background for tables not dark
 - [X] Remove inport/export/reset from vacations tab
-- [X] Click a name, header, or cell to highlight. 
+- [X] Click a name, header, or cell to highlight.
 - [ ] Toggle Vacation Mode to paint vacation blocks.
 - [X] Remove PGY year on Clinic schedule
     - [X] Fix UI for Clinic on mobile, just equal space
@@ -65,6 +65,10 @@
 - [ ] Vacation input and display functionality
 
 ---
+
+## ✅ Recently Completed
+
+- [X] Smart schedule-swap picker: select your own assigned shift → app shows only valid partners (filtered by vacation/away, grouped by fellow), bilateral swap encoded in reason string, bilateral approval updates both slots. Auth schema aligned (booleans, not function calls). All stub UI sections (timeoff, dayoff, swaps) fully implemented.
 
 ## 🔵 Future Features
 

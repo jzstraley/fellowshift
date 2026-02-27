@@ -21,7 +21,7 @@ export default function ClinicCoverageView({
   blockDates,
 }) {
   const { canApprove, isSupabaseConfigured } = useAuth();
-  const showPrivileged = !isSupabaseConfigured || canApprove?.();
+  const showPrivileged = !isSupabaseConfigured || canApprove;
 
 const CANNOT_COVER_ROTATIONS = [
   "Cath","Cath 2","Cath 3","ICU","Floor A","Floor B","Nights","Vac","Vacation",""

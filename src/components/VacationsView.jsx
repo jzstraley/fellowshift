@@ -1,9 +1,8 @@
-// VacationsView.jsx (fixed)
-// Key fixes:
-// 1) Auth fields can be boolean OR function. Normalize once. No more "... is not a function" crashes.
+// VacationsView.jsx
+// Notes:
+// 1) Auth flags are plain booleans from AuthContext — no function-call normalization needed.
 // 2) Swap "weekend" is NOT a DB column (you encode it in reason). Parse it for display + logic.
 // 3) callSchedule / nightFloatSchedule values can be string OR {name, relaxed}. Handle both everywhere.
-// 4) Guard workHourChecker import so a bad export gives a clear error (instead of minified U).
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { CheckCircle, AlertTriangle, Loader2, ArrowLeftRight, X } from 'lucide-react';
@@ -16,8 +15,6 @@ import { blockDates as localBlockDates, allRotationTypes } from '../data/schedul
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ---- helpers ----
-const toBool = (v) => (typeof v === 'function' ? !!v() : !!v);
-
 const getNameFromAssignment = (val) => {
   if (!val) return null;
   return typeof val === 'object' ? (val.name ?? null) : val;
@@ -28,26 +25,36 @@ const getRelaxedFromAssignment = (val) => {
   return !!val.relaxed;
 };
 
-// reason format: `${type}|W<1|2>|optional text`
+// Supports two reason encodings:
+//   Legacy:   `{type}|W{1|2}|note`
+//   Bilateral:`{type}|req:B{block}-W{wknd}|tgt:B{block2}-W{wknd2}|note`
 const parseSwapReason = (reason) => {
-  const out = { swapType: null, weekend: null, note: '' };
+  const out = { swapType: null, weekend: null, reqKey: null, tgtKey: null, note: '' };
   if (!reason || typeof reason !== 'string') return out;
-
-  if (!reason.includes('|')) {
-    out.note = reason;
-    return out;
-  }
+  if (!reason.includes('|')) { out.note = reason; return out; }
 
   const parts = reason.split('|');
   const type = parts[0];
   if (type === 'call' || type === 'float') out.swapType = type;
 
+  // Bilateral format detection
+  const reqPart = parts.find(p => p.startsWith('req:'));
+  const tgtPart = parts.find(p => p.startsWith('tgt:'));
+  if (reqPart && tgtPart) {
+    out.reqKey = reqPart.replace('req:', '');  // e.g. 'B3-W2'
+    out.tgtKey = tgtPart.replace('tgt:', '');  // e.g. 'B5-W1'
+    const rm = out.reqKey.match(/^B\d+-W([12])$/);
+    if (rm) out.weekend = Number(rm[1]);
+    out.note = parts.filter(p => p !== type && !p.startsWith('req:') && !p.startsWith('tgt:')).join('|');
+    return out;
+  }
+
+  // Legacy format
   const w = parts[1] || '';
   if (w.startsWith('W')) {
     const n = Number(w.replace('W', ''));
     if (n === 1 || n === 2) out.weekend = n;
   }
-
   out.note = parts.slice(2).join('|') || '';
   return out;
 };
@@ -78,12 +85,12 @@ export default function VacationsView({
     isAdmin,
   } = auth;
 
-  // Normalize auth “functions-or-bools” ONCE.
-  const userCanApprove = toBool(canApprove);
-  const userCanRequest = (typeof canRequest === 'function' ? canRequest() : (canRequest ?? true));
-  const isAdminBool = toBool(isAdmin);
-  const isPDBool = toBool(isProgramDirector);
-  const isChiefBool = toBool(isChiefFellow);
+  // Auth flags are guaranteed booleans from AuthContext.
+  const userCanApprove = canApprove;
+  const userCanRequest = canRequest;
+  const isAdminBool = isAdmin;
+  const isPDBool = isProgramDirector;
+  const isChiefBool = isChiefFellow;
 
   const [subView, setSubView] = useState('timeoff');
 
@@ -328,22 +335,6 @@ export default function VacationsView({
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Helper: return available weekend numbers [1,2] where `name` holds call/float for `blockNum`
-  const getAvailableWeekendsFor = useCallback((name, blockNum, type = 'call') => {
-    if (!name || !blockNum) return [];
-    const key1 = `B${blockNum}-W1`;
-    const key2 = `B${blockNum}-W2`;
-    const avail = [];
-    if (type === 'call') {
-      if (getNameFromAssignment(callSchedule[key1]) === name) avail.push(1);
-      if (getNameFromAssignment(callSchedule[key2]) === name) avail.push(2);
-    } else {
-      if (getNameFromAssignment(nightFloatSchedule[key1]) === name) avail.push(1);
-      if (getNameFromAssignment(nightFloatSchedule[key2]) === name) avail.push(2);
-    }
-    return avail;
-  }, [callSchedule, nightFloatSchedule]);
-
   // --- Supabase approve/deny vacations ---
   const approveDbRequest = async (requestId) => {
     if (!userCanApprove) return;
@@ -512,20 +503,22 @@ export default function VacationsView({
       const dbCall = pulled.callSchedule || {};
       const dbFloat = pulled.nightFloatSchedule || {};
 
-      const key = `B${blockNum}-W${weekend}`;
-
-      if (swapType === 'call') {
-        const curEntry = dbCall[key];
-        const cur = getNameFromAssignment(curEntry);
-        const relaxed = getRelaxedFromAssignment(curEntry);
-        if (cur === requesterName) dbCall[key] = { name: targetName, relaxed };
-        else if (cur === targetName) dbCall[key] = { name: requesterName, relaxed };
+      // Bilateral swap: two keys (new format) or single key (legacy)
+      const sched = swapType === 'call' ? dbCall : dbFloat;
+      if (parsed.reqKey && parsed.tgtKey) {
+        // New bilateral: swap requester's slot to target, target's slot to requester
+        const reqEntry = sched[parsed.reqKey];
+        const tgtEntry = sched[parsed.tgtKey];
+        sched[parsed.reqKey] = { name: targetName, relaxed: getRelaxedFromAssignment(reqEntry) };
+        sched[parsed.tgtKey] = { name: requesterName, relaxed: getRelaxedFromAssignment(tgtEntry) };
       } else {
-        const curEntry = dbFloat[key];
+        // Legacy single-key swap
+        const key = `B${blockNum}-W${weekend}`;
+        const curEntry = sched[key];
         const cur = getNameFromAssignment(curEntry);
         const relaxed = getRelaxedFromAssignment(curEntry);
-        if (cur === requesterName) dbFloat[key] = { name: targetName, relaxed };
-        else if (cur === targetName) dbFloat[key] = { name: requesterName, relaxed };
+        if (cur === requesterName) sched[key] = { name: targetName, relaxed };
+        else if (cur === targetName) sched[key] = { name: requesterName, relaxed };
       }
 
       const pushRes = await pushCallFloatToSupabase({
@@ -781,111 +774,86 @@ export default function VacationsView({
   };
 
   // --- Supabase new swap request ---
-  const [newDbSwap, setNewDbSwap] = useState({
-    requester_id: '',
-    target_id: '',
-    block_number: 1,
-    reason: '',
-    swap_type: 'call',
-    weekend: 1,
-  });
+  // my_shift_key: '{type}|B{block}-W{wknd}'  e.g. 'call|B3-W2'
+  // target_shift_key: '{fellowId}|{type}|B{block}-W{wknd}'
+  const SWAP_RESET = { requester_id: '', my_shift_key: '', target_shift_key: '', reason: '' };
+  const [newDbSwap, setNewDbSwap] = useState(SWAP_RESET);
   const [newDbSwapError, setNewDbSwapError] = useState(null);
 
   const submitDbSwap = async () => {
     setDbError(null);
     setNewDbSwapError(null);
 
-    if (!newDbSwap.requester_id || !newDbSwap.target_id) return;
-    if (newDbSwap.requester_id === newDbSwap.target_id) {
-      setDbError('Cannot swap with yourself.');
+    const { requester_id, my_shift_key, target_shift_key, reason } = newDbSwap;
+    if (!requester_id || !my_shift_key || !target_shift_key) {
+      setNewDbSwapError('Select your shift and a swap partner.');
       return;
     }
-    if (!newDbSwap.swap_type || !['call', 'float'].includes(newDbSwap.swap_type)) {
-      setNewDbSwapError('Select swap type: call or float');
-      return;
-    }
-    if (![1, 2].includes(Number(newDbSwap.weekend))) {
-      setNewDbSwapError('Select weekend W1 or W2');
-      return;
-    }
+
+    // Parse my shift: '{type}|B{block}-W{wknd}'
+    const [myType, myBKey] = my_shift_key.split('|');
+    const myM = myBKey?.match(/^B(\d+)-W([12])$/);
+    if (!myM) { setNewDbSwapError('Invalid shift selection.'); return; }
+    const myBlockNum = Number(myM[1]);
+    const myWeekend = Number(myM[2]);
+
+    // Parse target shift: '{fellowId}|{type}|B{block}-W{wknd}'
+    const tgtParts = target_shift_key.split('|');
+    const tgtFellowId = tgtParts[0];
+    const tgtBKey = tgtParts[2];
+    const tgtM = tgtBKey?.match(/^B(\d+)-W([12])$/);
+    if (!tgtM) { setNewDbSwapError('Invalid target shift selection.'); return; }
+    const tgtBlockNum = Number(tgtM[1]);
+
+    const requesterFellow = dbFellows.find(f => f.id === requester_id);
+    const targetFellow = dbFellows.find(f => f.id === tgtFellowId);
+    if (!requesterFellow || !targetFellow) { setNewDbSwapError('Fellow lookup failed.'); return; }
+    if (requester_id === tgtFellowId) { setDbError('Cannot swap with yourself.'); return; }
 
     setSubmitting(true);
     try {
-      // Make export problems obvious, not minified
-      if (typeof checkAllWorkHourViolations !== 'function') {
-        throw new Error('checkAllWorkHourViolations is not a function. Fix export/import in ../engine/workHourChecker.');
-      }
-
       const pulled = await pullCallFloatFromSupabase({ institutionId: profile.institution_id });
       if (pulled.error) throw new Error(pulled.error);
 
-      const dbCall = pulled.callSchedule || {};
-      const dbFloat = pulled.nightFloatSchedule || {};
+      const dbCall = { ...pulled.callSchedule || {} };
+      const dbFloat = { ...pulled.nightFloatSchedule || {} };
 
-      const key = `B${newDbSwap.block_number}-W${newDbSwap.weekend}`;
-
+      // Simulate bilateral swap for violation check
       const tempCall = { ...dbCall };
       const tempFloat = { ...dbFloat };
-
-      const requester = dbFellows.find(f => f.id === newDbSwap.requester_id)?.name;
-      const target = dbFellows.find(f => f.id === newDbSwap.target_id)?.name;
-
-      if (!requester || !target) throw new Error('Fellow lookup failed');
-
-      if (newDbSwap.swap_type === 'call') {
-        const cur = getNameFromAssignment(tempCall[key]);
-        if (cur === requester) tempCall[key] = { name: target };
-        else if (cur === target) tempCall[key] = { name: requester };
-      } else {
-        const cur = getNameFromAssignment(tempFloat[key]);
-        if (cur === requester) tempFloat[key] = { name: target };
-        else if (cur === target) tempFloat[key] = { name: requester };
-      }
+      const sched = myType === 'call' ? tempCall : tempFloat;
+      sched[myBKey] = { name: targetFellow.name };   // requester's slot → target
+      sched[tgtBKey] = { name: requesterFellow.name }; // target's slot → requester
 
       const violin = checkAllWorkHourViolations({
         fellows,
         schedule,
         callSchedule: tempCall,
         nightFloatSchedule: tempFloat,
-        blockDates: (blockDates && blockDates.length)
+        blockDates: blockDates.length
           ? blockDates.map(b => ({ block: b.block_number, start: b.start_date, end: b.end_date, rotation: b.rotation_number ?? b.block_number }))
           : localBlockDates,
         vacations,
       });
 
-      const reasonText = `${newDbSwap.swap_type}|W${newDbSwap.weekend}|${newDbSwap.reason || ''}`;
-
-      if (violin && violin.length > 0) {
-        const { error } = await supabase
-          .from('swap_requests')
-          .insert({
-            requester_fellow_id: newDbSwap.requester_id,
-            target_fellow_id: newDbSwap.target_id,
-            block_number: newDbSwap.block_number,
-            reason: reasonText,
-            status: 'denied',
-            requested_by: user.id,
-          });
-        if (error) throw error;
-        setDbError('Swap rejected: would cause work-hour violations.');
-        await fetchRequests();
-        setNewDbSwap({ requester_id: '', target_id: '', block_number: 1, reason: '', swap_type: 'call', weekend: 1 });
-        return;
-      }
+      // Encode bilateral format: '{type}|req:B{block}-W{wknd}|tgt:B{block2}-W{wknd2}|note'
+      const reasonText = `${myType}|req:${myBKey}|tgt:${tgtBKey}|${reason || ''}`;
+      const status = (violin && violin.length > 0) ? 'denied' : 'pending';
 
       const { error: insErr } = await supabase
         .from('swap_requests')
         .insert({
-          requester_fellow_id: newDbSwap.requester_id,
-          target_fellow_id: newDbSwap.target_id,
-          block_number: newDbSwap.block_number,
+          requester_fellow_id: requester_id,
+          target_fellow_id: tgtFellowId,
+          block_number: myBlockNum,
           reason: reasonText,
-          status: 'pending',
+          status,
           requested_by: user.id,
         });
       if (insErr) throw insErr;
 
-      setNewDbSwap({ requester_id: '', target_id: '', block_number: 1, reason: '', swap_type: 'call', weekend: 1 });
+      if (status === 'denied') setDbError('Swap rejected: would cause work-hour violations.');
+      setNewDbSwap(SWAP_RESET);
       await fetchRequests();
     } catch (err) {
       console.error('Error submitting swap:', err);
@@ -894,17 +862,6 @@ export default function VacationsView({
       setSubmitting(false);
     }
   };
-
-  // Keep weekend selection in sync with available weekends for Supabase form
-  useEffect(() => {
-    const target = dbFellows.find(f => f.id === newDbSwap.target_id)?.name;
-    const avail = getAvailableWeekendsFor(target, newDbSwap.block_number, newDbSwap.swap_type);
-    if (!avail || avail.length === 0) return;
-    if (!avail.includes(Number(newDbSwap.weekend))) {
-      setNewDbSwap(prev => ({ ...prev, weekend: avail[0] }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newDbSwap.target_id, newDbSwap.block_number, newDbSwap.swap_type, dbFellows, getAvailableWeekendsFor]);
 
   // --- Helper: get call/float/clinic info for a fellow at a block ---
   const getBlockDetails = useCallback((fellowName, blockNum) => {
@@ -961,6 +918,89 @@ export default function VacationsView({
     );
   };
 
+  // --- Shift-picker computeds ---
+  // Date label for a B{block}-W{wknd} slot
+  const getShiftDateLabel = useCallback((blockNum, weekend) => {
+    const weeklyNum = (blockNum - 1) * 2 + weekend;
+    const entry = blockDates.find(b => b.block_number === weeklyNum);
+    if (entry?.start_date) {
+      const fmt = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${fmt(entry.start_date)} \u2013 ${fmt(entry.end_date)}`;
+    }
+    const source = localBlockDates?.length ? splitLocalWeeks : weeklyBlocks;
+    const match = source.find(b => String(b.block) === `${blockNum}-${weekend}`);
+    if (match) return `${formatPretty(match.start)} \u2013 ${formatPretty(match.end)}`;
+    return `Block ${blockNum}, Wk ${weekend}`;
+  }, [blockDates, localBlockDates, splitLocalWeeks, weeklyBlocks]);
+
+  // All call/float slots assigned to the requester
+  const myShifts = useMemo(() => {
+    const name = dbFellows.find(f => f.id === newDbSwap.requester_id)?.name;
+    if (!name) return [];
+    const shifts = [];
+    ['call', 'float'].forEach(type => {
+      const sched = type === 'call' ? callSchedule : nightFloatSchedule;
+      Object.entries(sched || {}).forEach(([key, val]) => {
+        if (getNameFromAssignment(val) !== name) return;
+        const m = key.match(/^B(\d+)-W([12])$/);
+        if (!m) return;
+        shifts.push({ type, blockNum: Number(m[1]), weekend: Number(m[2]), key });
+      });
+    });
+    return shifts.sort((a, b) => a.blockNum - b.blockNum || a.weekend - b.weekend);
+  }, [newDbSwap.requester_id, dbFellows, callSchedule, nightFloatSchedule]);
+
+  // Valid swap partners: fellows with a shift of the same type, filtered for basic availability
+  const DAY_OFF_REASONS_CONST = ['Sick Day', 'Personal Day', 'Conference', 'CME'];
+  const validSwapTargets = useMemo(() => {
+    if (!newDbSwap.my_shift_key) return [];
+    const [swapType, myBKey] = newDbSwap.my_shift_key.split('|');
+    const myM = myBKey?.match(/^B(\d+)-W([12])$/);
+    const myBlockNum = myM ? Number(myM[1]) : null;
+    const myWeekend = myM ? Number(myM[2]) : null;
+    const myWeeklyNum = myBlockNum ? (myBlockNum - 1) * 2 + myWeekend : null;
+    const requesterName = dbFellows.find(f => f.id === newDbSwap.requester_id)?.name;
+
+    const isOnVacation = (fellowId, weeklyNum) => {
+      if (!weeklyNum) return false;
+      return dbRequests.some(r =>
+        r.fellow?.id === fellowId &&
+        r.status !== 'denied' && r.status !== 'cancelled' &&
+        !DAY_OFF_REASONS_CONST.includes(r.reason) &&
+        (r.start_block?.block_number ?? 0) <= weeklyNum &&
+        ((r.end_block ?? r.start_block)?.block_number ?? 0) >= weeklyNum
+      );
+    };
+    const isAwayRotation = (name, blockNum) =>
+      ['Vacation', 'Away', 'Research'].includes(schedule?.[name]?.[blockNum - 1]);
+
+    const candidatesMap = {};
+    const sched = swapType === 'call' ? callSchedule : nightFloatSchedule;
+    Object.entries(sched || {}).forEach(([key, val]) => {
+      const name = getNameFromAssignment(val);
+      if (!name || name === requesterName) return;
+      const m = key.match(/^B(\d+)-W([12])$/);
+      if (!m) return;
+      const fellow = dbFellows.find(f => f.name === name);
+      if (!fellow || fellow.id === newDbSwap.requester_id) return;
+
+      const tgtBlockNum = Number(m[1]);
+      const tgtWeekend = Number(m[2]);
+      const tgtWeeklyNum = (tgtBlockNum - 1) * 2 + tgtWeekend;
+
+      // Basic availability filter (ACGME checked on submit)
+      if (myWeeklyNum && isOnVacation(newDbSwap.requester_id, tgtWeeklyNum)) return;
+      if (myBlockNum && isAwayRotation(requesterName, tgtBlockNum)) return;
+      if (isOnVacation(fellow.id, myWeeklyNum)) return;
+      if (isAwayRotation(name, myBlockNum)) return;
+
+      if (!candidatesMap[fellow.id]) candidatesMap[fellow.id] = { fellow, shifts: [] };
+      candidatesMap[fellow.id].shifts.push({ type: swapType, blockNum: tgtBlockNum, weekend: tgtWeekend, key });
+    });
+
+    return Object.values(candidatesMap).sort((a, b) => a.fellow.name.localeCompare(b.fellow.name));
+  }, [newDbSwap.my_shift_key, newDbSwap.requester_id, dbFellows, callSchedule, nightFloatSchedule, dbRequests, schedule]);
+
   // ======= Supabase UI =======
   if (useDatabase) {
     const linkedFellows = dbFellows.filter(f => f.user_id === user?.id);
@@ -994,16 +1034,6 @@ export default function VacationsView({
     const deniedSwaps = visibleSwaps.filter(r => r.status === 'denied');
 
     const selectableFellows = userCanApprove ? dbFellows : (linkedFellows.length ? linkedFellows : dbFellows);
-
-    const newDbSwapTargetName = dbFellows.find(f => f.id === newDbSwap.target_id)?.name;
-    const newDbSwapAvailableWeekends = getAvailableWeekendsFor(
-      newDbSwapTargetName,
-      newDbSwap.block_number,
-      newDbSwap.swap_type
-    );
-    const newDbSwapWeekendOptions = (newDbSwapAvailableWeekends && newDbSwapAvailableWeekends.length)
-      ? newDbSwapAvailableWeekends
-      : [1, 2];
 
     const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 
@@ -1161,12 +1191,181 @@ export default function VacationsView({
               </div>
             </div>
 
-            {/* Approved + Denied sections unchanged from yours (safe now) */}
-            {/* Create New Time Off Request unchanged (safe now) */}
+            {/* Approved Vacations */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">Approved Vacations ({approvedRequests.length})</div>
+              {approvedRequests.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved vacations</div>}
+              <div className="space-y-2">
+                {approvedRequests.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-green-100">
+                        {r.fellow?.name ?? 'Unknown Fellow'}
+                        <span className="ml-2 text-xs font-normal text-green-600 dark:text-green-300">PGY-{r.fellow?.pgy_level}</span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-green-200">{formatBlockRange(r)} — {r.reason}</div>
+                      {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
+                    </div>
+                    <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Denied Requests */}
+            {deniedRequests.length > 0 && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">Denied Requests ({deniedRequests.length})</div>
+                <div className="space-y-2">
+                  {deniedRequests.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 rounded">
+                      <div className="text-sm">
+                        <div className="font-semibold dark:text-red-100">{r.fellow?.name ?? 'Unknown Fellow'}</div>
+                        <div className="text-xs text-gray-600 dark:text-red-200">{formatBlockRange(r)} — {r.reason}</div>
+                      </div>
+                      <div className="px-3 py-1 bg-red-600 text-white rounded text-xs">Denied</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Create New Time Off Request */}
+            {userCanRequest && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">Create New Time Off Request</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newDbReq.fellow_id} onChange={e => setNewDbReq({ ...newDbReq, fellow_id: e.target.value })}>
+                    <option value="">Select Fellow</option>
+                    {selectableFellows.map(f => <option key={f.id} value={f.id}>{f.name} (PGY-{f.pgy_level})</option>)}
+                  </select>
+                  <select className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newDbReq.start_block_id} onChange={e => setNewDbReq({ ...newDbReq, start_block_id: e.target.value })}>
+                    <option value="">Select Week</option>
+                    {blockDates.length > 0 ? blockDates.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {new Date(b.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} — {new Date(b.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (Wk {b.block_number})
+                      </option>
+                    )) : (localBlockDates?.length ? splitLocalWeeks : weeklyBlocks).map(b => (
+                      <option key={b.block} value={`local-${b.block}`}>{formatPretty(b.start)} — {formatPretty(b.end)} (Week {b.block})</option>
+                    ))}
+                  </select>
+                  <input className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" placeholder="Reason" value={newDbReq.reason} onChange={e => setNewDbReq({ ...newDbReq, reason: e.target.value })} />
+                </div>
+                <button onClick={submitDbRequest} disabled={submitting || !newDbReq.fellow_id || !newDbReq.start_block_id} className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs">
+                  {submitting ? 'Submitting...' : 'Add Request'}
+                </button>
+              </div>
+            )}
           </>
         ) : subView === 'dayoff' ? (
           <>
-            {/* Day off view unchanged (safe now) */}
+            {/* Pending Day Off Requests */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">Pending Day Off Requests ({pendingDayOffs.length})</div>
+              {pendingDayOffs.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No pending day off requests</div>}
+              <div className="space-y-2">
+                {pendingDayOffs.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-gray-100">
+                        {r.fellow?.name ?? 'Unknown Fellow'}
+                        <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">PGY-{r.fellow?.pgy_level}</span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {r.reason}{r.notes ? ` — ${new Date(r.notes + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                        Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                        {(r.requested_by_profile?.username || r.requested_by_profile?.email) ? ` by ${r.requested_by_profile.username || r.requested_by_profile.email}` : ''}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {userCanApprove && (
+                        <>
+                          <button onClick={() => approveDayOff(r.id)} disabled={submitting} className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" /> Approve
+                          </button>
+                          <button onClick={() => denyDayOff(r.id)} disabled={submitting} className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> Deny
+                          </button>
+                        </>
+                      )}
+                      {r.requested_by === user?.id && (
+                        <button onClick={() => cancelDbRequest(r.id)} disabled={submitting} className="px-3 py-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
+                          <X className="w-3 h-3" /> Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Approved Day Off Requests */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">Approved Day Off Requests ({approvedDayOffs.length})</div>
+              {approvedDayOffs.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved day off requests</div>}
+              <div className="space-y-2">
+                {approvedDayOffs.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-green-100">
+                        {r.fellow?.name ?? 'Unknown Fellow'}
+                        <span className="ml-2 text-xs font-normal text-green-600 dark:text-green-300">PGY-{r.fellow?.pgy_level}</span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-green-200">
+                        {r.reason}{r.notes ? ` — ${new Date(r.notes + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                      </div>
+                      {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
+                    </div>
+                    <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Denied Day Off Requests */}
+            {deniedDayOffs.length > 0 && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">Denied Day Off Requests ({deniedDayOffs.length})</div>
+                <div className="space-y-2">
+                  {deniedDayOffs.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 rounded">
+                      <div className="text-sm">
+                        <div className="font-semibold dark:text-red-100">{r.fellow?.name ?? 'Unknown Fellow'}</div>
+                        <div className="text-xs text-gray-600 dark:text-red-200">
+                          {r.reason}{r.notes ? ` — ${new Date(r.notes + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                        </div>
+                      </div>
+                      <div className="px-3 py-1 bg-red-600 text-white rounded text-xs">Denied</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Request a Day Off */}
+            {userCanRequest && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">Request a Day Off</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newDayOff.fellow_id} onChange={e => setNewDayOff({ ...newDayOff, fellow_id: e.target.value })}>
+                    <option value="">Select Fellow</option>
+                    {selectableFellows.map(f => <option key={f.id} value={f.id}>{f.name} (PGY-{f.pgy_level})</option>)}
+                  </select>
+                  <input type="date" className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newDayOff.date} onChange={e => setNewDayOff({ ...newDayOff, date: e.target.value })} />
+                  <select className="p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100" value={newDayOff.reason_type} onChange={e => setNewDayOff({ ...newDayOff, reason_type: e.target.value })}>
+                    <option value="Sick Day">Sick Day</option>
+                    <option value="Personal Day">Personal Day</option>
+                    <option value="Conference">Conference</option>
+                    <option value="CME">CME</option>
+                  </select>
+                </div>
+                <button onClick={submitDayOff} disabled={submitting || !newDayOff.fellow_id || !newDayOff.date} className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs">
+                  {submitting ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -1240,8 +1439,132 @@ export default function VacationsView({
               </div>
             </div>
 
-            {/* Approved/Denied swaps sections: apply same parseSwapReason() pattern if you show weekend */}
-            {/* Create New Swap Request: unchanged, but now weekend options are correct and stable */}
+            {/* Approved Swaps */}
+            <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+              <div className="mb-2 font-semibold dark:text-gray-100">Approved Swaps ({approvedSwaps.length})</div>
+              {approvedSwaps.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved swaps</div>}
+              <div className="space-y-2">
+                {approvedSwaps.map((r) => {
+                  const parsed = parseSwapReason(r.reason);
+                  const label = parsed.swapType ? `${parsed.swapType === 'call' ? 'Call' : 'Float'} W${parsed.weekend ?? 1}` : 'Rotation swap';
+                  return (
+                    <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                      <div className="text-sm">
+                        <div className="font-semibold dark:text-green-100 flex items-center gap-1">
+                          {r.requester?.name ?? '?'} <ArrowLeftRight className="w-3 h-3 text-green-500" /> {r.target?.name ?? '?'}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-green-200">{fmtSwapBlock(r.block_number, parsed.weekend)} — {label}{parsed.note ? ` — ${parsed.note}` : ''}</div>
+                        {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
+                      </div>
+                      <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Denied Swaps */}
+            {deniedSwaps.length > 0 && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">Denied Swaps ({deniedSwaps.length})</div>
+                <div className="space-y-2">
+                  {deniedSwaps.map((r) => {
+                    const parsed = parseSwapReason(r.reason);
+                    const label = parsed.swapType ? `${parsed.swapType === 'call' ? 'Call' : 'Float'} W${parsed.weekend ?? 1}` : 'Rotation swap';
+                    return (
+                      <div key={r.id} className="flex items-center justify-between border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 rounded">
+                        <div className="text-sm">
+                          <div className="font-semibold dark:text-red-100 flex items-center gap-1">
+                            {r.requester?.name ?? '?'} <ArrowLeftRight className="w-3 h-3 text-red-400" /> {r.target?.name ?? '?'}
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-red-200">{fmtSwapBlock(r.block_number, parsed.weekend)} — {label}{parsed.note ? ` — ${parsed.note}` : ''}</div>
+                        </div>
+                        <div className="px-3 py-1 bg-red-600 text-white rounded text-xs">Denied</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Request Schedule Swap — smart shift picker */}
+            {userCanRequest && (
+              <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+                <div className="mb-2 font-semibold dark:text-gray-100">Request Schedule Swap</div>
+                <div className="space-y-2">
+                  {/* Step 1: who are you */}
+                  <select
+                    className="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                    value={newDbSwap.requester_id}
+                    onChange={e => setNewDbSwap({ ...SWAP_RESET, requester_id: e.target.value })}
+                  >
+                    <option value="">Select your fellow</option>
+                    {selectableFellows.map(f => <option key={f.id} value={f.id}>{f.name} (PGY-{f.pgy_level})</option>)}
+                  </select>
+
+                  {/* Step 2: which of your shifts to give away */}
+                  <select
+                    className="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100 disabled:opacity-50"
+                    value={newDbSwap.my_shift_key}
+                    onChange={e => setNewDbSwap(prev => ({ ...prev, my_shift_key: e.target.value, target_shift_key: '' }))}
+                    disabled={!newDbSwap.requester_id}
+                  >
+                    <option value="">
+                      {!newDbSwap.requester_id
+                        ? 'First select your fellow above'
+                        : myShifts.length === 0
+                        ? 'No assigned call/float shifts found'
+                        : 'Choose your shift to swap away'}
+                    </option>
+                    {myShifts.map(s => (
+                      <option key={`${s.type}|${s.key}`} value={`${s.type}|${s.key}`}>
+                        {s.type === 'call' ? 'Call' : 'Night Float'} — {getShiftDateLabel(s.blockNum, s.weekend)}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Step 3: who takes your shift (in exchange for one of theirs) */}
+                  <select
+                    className="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100 disabled:opacity-50"
+                    value={newDbSwap.target_shift_key}
+                    onChange={e => setNewDbSwap(prev => ({ ...prev, target_shift_key: e.target.value }))}
+                    disabled={!newDbSwap.my_shift_key}
+                  >
+                    <option value="">
+                      {!newDbSwap.my_shift_key
+                        ? 'First pick your shift above'
+                        : validSwapTargets.length === 0
+                        ? 'No eligible swap partners for this shift'
+                        : 'Who takes your shift (you take one of theirs)'}
+                    </option>
+                    {validSwapTargets.map(({ fellow, shifts }) => (
+                      <optgroup key={fellow.id} label={`${fellow.name} (PGY-${fellow.pgy_level})`}>
+                        {shifts.map(s => (
+                          <option key={`${fellow.id}|${s.type}|${s.key}`} value={`${fellow.id}|${s.type}|${s.key}`}>
+                            Their {s.type === 'call' ? 'Call' : 'Float'}: {getShiftDateLabel(s.blockNum, s.weekend)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+
+                  <input
+                    className="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"
+                    placeholder="Reason (optional)"
+                    value={newDbSwap.reason}
+                    onChange={e => setNewDbSwap(prev => ({ ...prev, reason: e.target.value }))}
+                  />
+                </div>
+                {newDbSwapError && <div className="text-xs text-red-600 dark:text-red-400 mt-1">{newDbSwapError}</div>}
+                <button
+                  onClick={submitDbSwap}
+                  disabled={submitting || !newDbSwap.requester_id || !newDbSwap.my_shift_key || !newDbSwap.target_shift_key}
+                  className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs"
+                >
+                  {submitting ? 'Submitting...' : 'Request Swap'}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

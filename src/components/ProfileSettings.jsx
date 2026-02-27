@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { User, Save, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -19,21 +19,10 @@ function normalizeUsername(raw) {
 
 export default function ProfileSettings({ darkMode, toggleDarkMode }) {
   const auth = useAuth() || {};
-  const { user, profile, updateProfile } = auth;
+  const { user, profile, updateProfile, isAdmin } = auth;
 
-  // Support either:
-  // - isAdmin boolean
-  // - isAdmin() function
-  // - profile.role check fallback
-  const canEditIdentity = useMemo(() => {
-    const isAdminValue =
-      typeof auth.isAdmin === "function" ? auth.isAdmin() : auth.isAdmin;
-
-    if (typeof isAdminValue === "boolean") return isAdminValue;
-
-    // Fallback if AuthContext doesn't expose isAdmin consistently
-    return profile?.role === "admin";
-  }, [auth, profile?.role]);
+  // isAdmin is always a boolean from AuthContext (false when profile is loading)
+  const canEditIdentity = isAdmin;
 
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");

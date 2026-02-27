@@ -655,12 +655,12 @@ useEffect(() => {
       { key: "vacRequests", label: "Requests" },
       { key: "lectures", label: "Lectures" },
     ];
-    if (!isSupabaseConfigured || canApprove?.()) {
+    if (!isSupabaseConfigured || canApprove) {
       base.splice(2, 0, { key: "stats", label: "Stats" });
       base.push({ key: "editSchedule", label: "Edit" });
       base.push({ key: "violations", label: "Violations" });
     }
-    if (isAdmin?.()) {
+    if (isAdmin) {
       base.push({ key: "admin", label: "Admin" });
     }
     return base;
@@ -712,10 +712,10 @@ useEffect(() => {
         onLogoClick={() => setShowLanding(true)}
         onSignOut={async () => { await signOut(); setShowLanding(true);}}
         violationCount={workHourViolations.length}
-        showStats={!isSupabaseConfigured || canApprove?.()}
-        showViolations={!isSupabaseConfigured || canApprove?.()}
-        showEdit={!isSupabaseConfigured || canApprove?.()}
-        showAdmin={isAdmin?.()}
+        showStats={!isSupabaseConfigured || canApprove}
+        showViolations={!isSupabaseConfigured || canApprove}
+        showEdit={!isSupabaseConfigured || canApprove}
+        showAdmin={isAdmin}
       />
 
       {syncError && (
@@ -759,7 +759,7 @@ useEffect(() => {
             />
           )}
 
-          {activeView === "stats" && (!isSupabaseConfigured || canApprove?.()) && <StatsView stats={stats} fellows={fellows} />}
+          {activeView === "stats" && (!isSupabaseConfigured || canApprove) && <StatsView stats={stats} fellows={fellows} />}
 
           {activeView === "call" && (
             <CallView
@@ -799,7 +799,7 @@ useEffect(() => {
               topics={topics}
               fellows={fellows}
               darkMode={darkMode}
-              canManageLectures={!isSupabaseConfigured || canApprove?.()}
+              canManageLectures={!isSupabaseConfigured || canApprove}
               onSendReminder={(lecture) => {
                 console.log("Send reminder for:", lecture);
               }}
@@ -817,7 +817,7 @@ useEffect(() => {
           )}
 
 
-          {activeView === "violations" && (!isSupabaseConfigured || canApprove?.()) && (
+          {activeView === "violations" && (!isSupabaseConfigured || canApprove) && (
             <ViolationsView
               violations={workHourViolations}
               schedule={schedule}
@@ -832,7 +832,7 @@ useEffect(() => {
             />
           )}
 
-          {activeView === "editSchedule" && (!isSupabaseConfigured || canApprove?.()) && (
+          {activeView === "editSchedule" && (!isSupabaseConfigured || canApprove) && (
             <ScheduleEditorView
               fellows={fellows}
               schedule={schedule}
@@ -858,7 +858,7 @@ useEffect(() => {
             <ProfileSettings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
           )}
 
-          {activeView === "admin" && isAdmin?.() && (
+          {activeView === "admin" && isAdmin && (
             <AdminView
               darkMode={darkMode}
               fellows={fellows}
@@ -883,7 +883,6 @@ useEffect(() => {
               setSchedule={setSchedule}
               setVacations={setVacations}
               setSwapRequests={setSwapRequests}
-              isAdmin={true}
             />
           )}
         </Suspense>
