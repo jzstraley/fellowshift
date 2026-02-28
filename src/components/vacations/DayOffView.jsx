@@ -1,5 +1,6 @@
 // DayOffView.js
 
+import { useState } from 'react';
 import { CheckCircle, AlertTriangle, X } from 'lucide-react';
 
 export default function DayOffView({
@@ -14,6 +15,9 @@ export default function DayOffView({
   newDayOff, setNewDayOff, submitDayOff,
   selectableFellows,
 }) {
+  const [denyingId, setDenyingId] = useState(null);
+  const [denyReason, setDenyReason] = useState('');
+
   const fmtDayDate = (notes) =>
     notes
       ? new Date(notes + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
@@ -49,9 +53,28 @@ export default function DayOffView({
                     <button onClick={() => approveDayOff(r.id)} disabled={submitting} className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
                       <CheckCircle className="w-3 h-3" /> Approve
                     </button>
-                    <button onClick={() => denyDayOff(r.id)} disabled={submitting} className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Deny
-                    </button>
+                    {denyingId === r.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          className="p-1 border rounded text-xs w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
+                          placeholder="Denial reason…"
+                          value={denyReason}
+                          onChange={e => setDenyReason(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { denyDayOff(r.id, denyReason); setDenyingId(null); setDenyReason(''); }
+                            if (e.key === 'Escape') { setDenyingId(null); setDenyReason(''); }
+                          }}
+                          autoFocus
+                        />
+                        <button onClick={() => { denyDayOff(r.id, denyReason); setDenyingId(null); setDenyReason(''); }} disabled={submitting} className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
+                        <button onClick={() => { setDenyingId(null); setDenyReason(''); }} className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setDenyingId(r.id); setDenyReason(''); }} disabled={submitting} className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Deny
+                      </button>
+                    )}
                   </>
                 )}
                 {r.requested_by === userId && (

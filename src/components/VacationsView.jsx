@@ -18,6 +18,7 @@ export default function VacationsView({
   fellows = [],
   schedule = {},
   vacations = [],
+  setVacations,
   callSchedule = {},
   nightFloatSchedule = {},
   setCallSchedule,
@@ -41,6 +42,7 @@ export default function VacationsView({
     fellows,
     schedule,
     vacations,
+    setVacations,
     callSchedule,
     nightFloatSchedule,
     setCallSchedule,
@@ -108,6 +110,7 @@ export default function VacationsView({
             parentBlockDates={state.blockDates}
             splitLocalWeeks={state.splitLocalWeeks}
             weeklyBlocks={state.weeklyBlocks}
+            getBlockDetails={state.getBlockDetails}
           />
         ) : subView === 'dayoff' ? (
           <DayOffView

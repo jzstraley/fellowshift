@@ -37,6 +37,13 @@ export default function SwapsView({
               ? `${parsed.swapType.toUpperCase()} W${parsed.weekend ?? 1}`
               : 'Rotation swap';
             const note = parsed.note ? ` - ${parsed.note}` : '';
+            // Requester's block: stored column or fall back to parsing from reason/reqKey
+            const reqBlockMatch = (parsed.reqKey || r.reason || '').match(/B(\d+)/);
+            const swapBlockNum = r.block_number || (reqBlockMatch ? Number(reqBlockMatch[1]) : null);
+            // Target's block: bilateral format stores it in tgtKey (e.g. "B4-W2")
+            const tgtKeyMatch = parsed.tgtKey?.match(/^B(\d+)-W([12])$/);
+            const tgtBlock = tgtKeyMatch ? Number(tgtKeyMatch[1]) : swapBlockNum;
+            const toWk = r.to_week_part ?? (tgtKeyMatch ? Number(tgtKeyMatch[2]) : null);
             return (
               <div key={r.id} className="border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
                 <div className="flex items-center justify-between">
@@ -102,11 +109,14 @@ export default function SwapsView({
                     )}
                   </div>
                 </div>
-                {r.requester?.name && r.target?.name && (
+                {r.requester?.name && r.target?.name && (swapBlockNum || tgtBlock) && (
                   <SwapPreview
                     requester={r.requester.name}
                     target={r.target.name}
-                    block={r.block_number}
+                    reqBlock={swapBlockNum}
+                    fromWk={r.from_week_part ?? parsed.weekend ?? null}
+                    tgtBlock={tgtBlock}
+                    toWk={toWk}
                     getBlockDetails={getBlockDetails}
                   />
                 )}
@@ -153,10 +163,21 @@ export default function SwapsView({
           <div className="space-y-2">
             {deniedSwaps.filter(r => !dismissedSwapIds.has(r.id)).map((r) => {
               const parsed = parseSwapReason(r.reason);
-              const label = parsed.swapType
-                ? `${parsed.swapType === 'call' ? 'Call' : 'Float'} W${parsed.weekend ?? 1}`
-                : 'Rotation swap';
+              const swapLabel = parsed.swapType === 'call' ? 'Call' : parsed.swapType === 'float' ? 'Float' : null;
+              const fromWk = r.from_week_part ?? parsed.weekend ?? null;
+              const toWk = r.to_week_part ?? null;
               const violationLines = r.notes ? r.notes.split('\n').filter(Boolean) : [];
+
+              // Human-readable swap direction: "Austin gives up Call Wk 1 · Alex gives up Call Wk 2"
+              let swapDetail;
+              if (swapLabel && fromWk) {
+                const reqPart = `${r.requester?.name ?? 'Requester'} gives up ${swapLabel} Wk ${fromWk}`;
+                const tgtPart = toWk ? ` · ${r.target?.name ?? 'Target'} gives up ${swapLabel} Wk ${toWk}` : '';
+                swapDetail = reqPart + tgtPart;
+              } else {
+                swapDetail = fmtSwapBlock(r.block_number, parsed.weekend, blockDates);
+              }
+
               return (
                 <div key={r.id} className="border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-2 rounded text-sm">
                   <div className="flex items-start justify-between gap-2">
@@ -168,9 +189,9 @@ export default function SwapsView({
                         <span className="ml-1 text-xs text-red-600 dark:text-red-400 font-medium">Denied</span>
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} — {label}{parsed.note ? ` — ${parsed.note}` : ''}
+                        {swapDetail}{parsed.note ? ` — ${parsed.note}` : ''}
                       </div>
-                      {violationLines.length > 0 && (
+                      {violationLines.length > 0 ? (
                         <div className="mt-1 space-y-0.5">
                           {violationLines.map((line, i) => (
                             <div key={i} className="text-xs text-red-700 dark:text-red-300 leading-tight">
@@ -178,6 +199,8 @@ export default function SwapsView({
                             </div>
                           ))}
                         </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-gray-400 dark:text-gray-500 italic">No denial reason recorded</div>
                       )}
                     </div>
                     <button

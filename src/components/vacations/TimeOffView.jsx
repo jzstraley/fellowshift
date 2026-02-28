@@ -6,6 +6,9 @@
 // - Uses getRequestExtras / formatBlockRange for display but never crashes if missing.
 
 import React, { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { weekendStatuses, hasDuty, getWeekWindowWithinBlock } from "../../utils/vacationHelpers";
+import { blockDates as localBlockDates } from "../../data/scheduleData";
 
 function Badge({ children, className = "" }) {
   return (
@@ -90,6 +93,171 @@ function ConfirmModal({
   );
 }
 
+// ─── Calendar helpers ────────────────────────────────────────────────────────
+
+function toISO(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Map a calendar date (ISO) to the parent block + weekPart it falls in
+function getParentBlockForDate(isoDate) {
+  for (const bd of localBlockDates) {
+    if (isoDate >= bd.start && isoDate <= bd.end) {
+      const blockStart = new Date(bd.start + 'T00:00:00');
+      const diff = Math.floor((new Date(isoDate + 'T00:00:00') - blockStart) / 86400000);
+      return { blockNum: bd.block, wk: diff < 7 ? 1 : 2 };
+    }
+  }
+  return null;
+}
+
+// Return duty code ('C'|'F'|'N'|'X') for a Sat (dow=6) or Sun (dow=0)
+function getDutyForDate(isoDate, dow, fellowName, getBlockDetails) {
+  if (dow !== 6 && dow !== 0) return null; // weekday – no duty code
+  const info = getParentBlockForDate(isoDate);
+  if (!info) return null;
+  const details = getBlockDetails(fellowName, info.blockNum);
+  const { sat, sun } = weekendStatuses(details, info.wk);
+  return dow === 6 ? sat : sun;
+}
+
+const DUTY_BADGE = {
+  C: 'bg-orange-500 text-white',
+  F: 'bg-blue-500   text-white',
+  N: 'bg-purple-600 text-white',
+};
+
+// Collapsible mini-calendar showing the vacation week(s) in context
+function ScheduleContextDropdown({ r, getBlockDetails }) {
+  const [open, setOpen] = useState(false);
+
+  const fellowName    = r?.fellow?.name;
+  const blockStartISO = r?.start_block?.start_date ?? null;
+  const blockEndISO   = r?.end_block?.end_date ?? r?.start_block?.end_date ?? null;
+  const weekPart      = r?.week_part ?? null;
+
+  if (!fellowName || !blockStartISO || !getBlockDetails) return null;
+
+  // Compute actual vacation date range
+  let vacStart, vacEnd;
+  if (weekPart === 1 || weekPart === 2) {
+    const { start, end } = getWeekWindowWithinBlock(blockStartISO, blockEndISO ?? blockStartISO, weekPart);
+    vacStart = start;
+    vacEnd   = end;
+  } else {
+    vacStart = new Date(blockStartISO + 'T00:00:00');
+    vacEnd   = new Date((blockEndISO ?? blockStartISO) + 'T00:00:00');
+  }
+
+  const vacStartISO = toISO(vacStart);
+  const vacEndISO   = toISO(vacEnd);
+
+  // Calendar window: 1 full week before → 1 full week after
+  const calStart = new Date(vacStart);
+  calStart.setDate(calStart.getDate() - calStart.getDay() - 7); // back to prev Sun - 7
+  const calEnd = new Date(vacEnd);
+  calEnd.setDate(calEnd.getDate() + (6 - calEnd.getDay()) + 7); // forward to next Sat + 7
+
+  // Build week rows (Sun–Sat)
+  const weeks = [];
+  const cursor = new Date(calStart);
+  while (cursor <= calEnd) {
+    const week = [];
+    for (let i = 0; i < 7; i++) {
+      week.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  const DOW_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  // Month label for header: show range if it spans months
+  const monthLabel = vacStart.getMonth() === vacEnd.getMonth()
+    ? vacStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : `${vacStart.toLocaleDateString('en-US', { month: 'short' })} – ${vacEnd.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+
+  return (
+    <div className="mt-1.5 rounded border border-blue-200 dark:border-blue-700 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-2 py-1.5 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-[10px] font-semibold text-blue-700 dark:text-blue-300 transition-colors"
+      >
+        <span>Schedule context</span>
+        {open ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="px-2 pb-2 pt-1.5 bg-blue-50 dark:bg-blue-900/20">
+          <div className="text-[9px] font-semibold text-center text-gray-500 dark:text-gray-400 mb-1">
+            {monthLabel}
+          </div>
+
+          <table className="mx-auto border-collapse text-[9px] leading-none">
+            <thead>
+              <tr>
+                {DOW_LABELS.map(d => (
+                  <th key={d} className="w-6 pb-0.5 text-center font-normal text-gray-400 dark:text-gray-500">
+                    {d}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map((week, wi) => (
+                <tr key={wi}>
+                  {week.map((day, di) => {
+                    const iso = toISO(day);
+                    const dow = day.getDay();
+                    const isVac = iso >= vacStartISO && iso <= vacEndISO;
+                    const duty = getDutyForDate(iso, dow, fellowName, getBlockDetails);
+                    const hasConflict = isVac && duty && duty !== 'X';
+                    const hasDutyOutside = !isVac && duty && duty !== 'X';
+
+                    let cellClass = 'w-6 h-5 text-center rounded-sm ';
+                    let label = String(day.getDate());
+
+                    if (hasConflict) {
+                      // Vacation day WITH duty → red bg + duty letter
+                      cellClass += 'bg-red-500 text-white font-bold';
+                      label = duty;
+                    } else if (isVac) {
+                      // Vacation day, no duty → yellow
+                      cellClass += 'bg-yellow-300 dark:bg-yellow-700 text-yellow-900 dark:text-yellow-100 font-medium';
+                    } else if (hasDutyOutside) {
+                      // Non-vacation weekend with duty → small colored badge text
+                      const dutyStyle = duty === 'C' ? 'text-orange-600 dark:text-orange-400 font-bold'
+                        : duty === 'F' ? 'text-blue-600 dark:text-blue-400 font-bold'
+                        : 'text-purple-600 dark:text-purple-400 font-bold';
+                      cellClass += dutyStyle;
+                    } else {
+                      cellClass += 'text-gray-400 dark:text-gray-600';
+                    }
+
+                    return (
+                      <td key={di} className={cellClass}>
+                        {label}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="mt-1 flex gap-2 flex-wrap justify-center text-[8px] text-gray-400 dark:text-gray-500">
+            <span className="text-yellow-600 dark:text-yellow-400">■ off during vac</span>
+            <span className="text-red-500">■ C/F/N conflict</span>
+            <span className="text-orange-500">C</span><span className="text-blue-500">F</span><span className="text-purple-500">N = duty outside vac</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function safeStr(v) {
   return typeof v === "string" ? v : "";
 }
@@ -133,7 +301,7 @@ function RequestCard({
   const approvedAt = r?.approved_at ? new Date(r.approved_at).toLocaleDateString() : null;
 
   return (
-    <div className="flex items-center justify-between rounded border p-2">
+    <div className="flex items-center justify-between">
       <div className="text-sm">
         <div className="font-semibold">
           {fellowName}
@@ -226,6 +394,7 @@ export default function TimeOffView({
   splitLocalWeeks,
   weeklyBlocks,
   selectableFellows,
+  getBlockDetails = null,
 }) {
   const [denyOpen, setDenyOpen] = useState(false);
   const [denyTargetId, setDenyTargetId] = useState(null);
@@ -289,6 +458,7 @@ return (
                 rightBadge="Pending"
                 rightBadgeClass="bg-yellow-600 text-white"
               />
+              <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
             </div>
           ))}
         </div>
@@ -322,6 +492,7 @@ return (
                 rightBadge="Approved"
                 rightBadgeClass="bg-green-600 text-white"
               />
+              <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
             </div>
           ))}
         </div>
@@ -355,6 +526,7 @@ return (
                 rightBadge="Denied"
                 rightBadgeClass="bg-red-600 text-white"
               />
+              <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
             </div>
           ))}
         </div>

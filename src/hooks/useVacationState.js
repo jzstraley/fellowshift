@@ -49,6 +49,7 @@ export function useVacationState({
   fellows = [],
   schedule = {},
   vacations = [],
+  setVacations,
   callSchedule = {},
   nightFloatSchedule = {},
   clinicDays = {},
@@ -248,6 +249,23 @@ export function useVacationState({
       }));
 
       setDbRequests(vacData);
+
+      // Sync back to App.jsx's vacations state so the Dashboard count stays current.
+      if (typeof setVacations === 'function') {
+        setVacations(vacData.map((r) => ({
+          id: r.id,
+          created_at: r.created_at ?? null,
+          updated_at: r.updated_at ?? null,
+          fellow_id: r.fellow_id,
+          start_block_id: r.start_block_id,
+          end_block_id: r.end_block_id,
+          fellow: r.fellow?.name || '',
+          startBlock: r.start_block?.block_number ?? null,
+          endBlock: r.end_block?.block_number ?? null,
+          reason: r.reason || 'Vacation',
+          status: r.status,
+        })));
+      }
 
       // Swap requests, base rows then enrich via maps, no FK-name guessing
       let swapQ = supabase
@@ -464,7 +482,7 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
 
   // ---- actions: day-off (stored in vacation_requests with notes=date) ----
   const approveDayOff = useCallback(async (requestId) => approveDbRequest(requestId), [approveDbRequest]);
-  const denyDayOff = useCallback(async (requestId) => denyDbRequest(requestId), [denyDbRequest]);
+  const denyDayOff = useCallback(async (requestId, reason = '') => denyDbRequest(requestId, reason), [denyDbRequest]);
 
   const submitDayOff = useCallback(async () => {
     if (!userCanRequest) return;
@@ -824,13 +842,24 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
   const getShiftDateLabel = useCallback((blockNum, weekend) => {
     const weeklyNum = (blockNum - 1) * 2 + weekend;
     const entry = asArray(blockDates).find(b => Number(b.block_number) === weeklyNum);
-    if (entry?.start_date) {
-      const fmt = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      return `${fmt(entry.start_date)} – ${fmt(entry.end_date)}`;
-    }
+
+    // Given a week's start ISO date, walk forward to find Saturday–Sunday
+    const fmtWeekend = (startISO) => {
+      const d = new Date(`${startISO}T00:00:00`);
+      // Advance to the next Saturday (getDay: 0=Sun, 6=Sat)
+      const daysUntilSat = (6 - d.getDay() + 7) % 7;
+      d.setDate(d.getDate() + daysUntilSat);
+      const sat = d;
+      const sun = new Date(d);
+      sun.setDate(sat.getDate() + 1);
+      const fmt = (x) => x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${fmt(sat)} – ${fmt(sun)}`;
+    };
+
+    if (entry?.start_date) return fmtWeekend(entry.start_date);
     const source = (Array.isArray(localBlockDates) && localBlockDates.length) ? splitLocalWeeks : weeklyBlocks;
     const match = asArray(source).find(b => String(b.block) === `${blockNum}-${weekend}`);
-    if (match) return `${formatPretty(match.start)} – ${formatPretty(match.end)}`;
+    if (match) return fmtWeekend(match.start);
     return `Block ${blockNum}, Wk ${weekend}`;
   }, [blockDates, splitLocalWeeks, weeklyBlocks]);
 

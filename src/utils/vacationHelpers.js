@@ -163,6 +163,45 @@ export const formatBlockRange = (req) => {
   return `Blocks ${startNum}-${endNum}`;
 };
 
+// ─── Schedule context helpers ──────────────────────────────────────────────
+export const ROTATION_ABBR = {
+  'Floor A': 'FlA', 'Floor B': 'FlB',
+  'Nuclear': 'Nuc', 'Nuclear 2': 'Nc2', 'Nuclear 3': 'Nc3',
+  'Nights': 'Nts',
+  'Research': 'Res', 'Research 2': 'Rs2',
+  'Structural': 'Str', 'Vascular': 'Vasc', 'Admin': 'Adm',
+  'Cath 2': 'Ct2', 'Cath 3': 'Ct3',
+  'Echo 2': 'Ec2',
+  'AI 2': 'AI2',
+};
+
+export function abbreviateRotation(rot) {
+  if (!rot || rot === '—') return '—';
+  if (rot in ROTATION_ABBR) return ROTATION_ABBR[rot];
+  return rot.replace(/\s+\d+$/, '').slice(0, 4);
+}
+
+// Per-day weekend status for a block:
+//   Call   → Sat=C, Sun=C  |  Float → Sat=F, Sun=X
+//   Nights → Sat=X, Sun=N  |  Off   → Sat=X, Sun=X
+export function weekendStatuses(blockDetails, wk) {
+  const rotation = blockDetails?.find(d => d.label === 'Rotation')?.value ?? '';
+  const callVal  = blockDetails?.find(d => d.label === 'Call')?.value  ?? '';
+  const floatVal = blockDetails?.find(d => d.label === 'Float')?.value ?? '';
+  const isNights = /nights/i.test(rotation);
+  const hasCall  = callVal.includes(`W${wk}`);
+  const hasFloat = floatVal.includes(`W${wk}`);
+  if (hasCall)  return { sat: 'C', sun: 'C' };
+  if (hasFloat) return { sat: 'F', sun: 'X' };
+  if (isNights) return { sat: 'X', sun: 'N' };
+  return { sat: 'X', sun: 'X' };
+}
+
+// True if the person has any duty (not fully off) in that block/wk
+export function hasDuty({ sat, sun }) {
+  return sat !== 'X' || sun !== 'X';
+}
+
 // Pure: caller passes parent blockDates (block_number 1-26).
 // weekend is legacy naming in swap reasons (W1/W2). Treat it as weekPart 1/2.
 export const fmtSwapBlock = (blockNum, weekend, blockDates) => {

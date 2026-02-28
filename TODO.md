@@ -106,3 +106,7 @@ React scheduler libraries:
 FullCalendar - most feature-rich
 React Big Calendar - simpler, good for basic needs
 DayPilot - medical-specific features
+
+
+
+- [ ]under pending approvals it needs to say the sway and day off requests as well

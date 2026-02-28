@@ -86,7 +86,7 @@ const mergeByReqIdPreferIncoming = (prev = [], incoming = []) => {
 };
 
 function AppContent() {
-  const { signOut, profile, user, loading, isSupabaseConfigured, canApprove, isAdmin } = useAuth();
+  const { signOut, profile, user, loading, isSupabaseConfigured, canApprove, isAdmin, programId, academicYearId } = useAuth();
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("fellowshift_darkmode");
@@ -379,8 +379,8 @@ if (Array.isArray(persisted?.swapRequests)) {
     Promise.all([
   pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
   pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
-  pullVacationsFromSupabase({ institutionId: profile.institution_id }),
-  pullSwapRequestsFromSupabase({ institutionId: profile.institution_id }),
+  pullVacationsFromSupabase({ programId, academicYearId }),
+  pullSwapRequestsFromSupabase({ programId, academicYearId }),
   pullLecturesFromSupabase({ programId: profile.institution_id }),
   pullClinicDaysFromSupabase({ programId: profile.institution_id }),
 ]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
@@ -483,8 +483,8 @@ if (Array.isArray(swapResult?.swapRequests)) {
     const [schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult] = await Promise.all([
       pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
       pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
-      pullVacationsFromSupabase({ institutionId: profile.institution_id }),
-      pullSwapRequestsFromSupabase({ institutionId: profile.institution_id }),
+      pullVacationsFromSupabase({ programId, academicYearId }),
+      pullSwapRequestsFromSupabase({ programId, academicYearId }),
       pullLecturesFromSupabase({ institutionId: profile.institution_id }),
       pullClinicDaysFromSupabase({ institutionId: profile.institution_id }),
     ]);
@@ -534,7 +534,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
     return { error: null, loaded };
   // fellows and blockDates are stable
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.institution_id]);
+  }, [profile?.institution_id, programId, academicYearId]);
 
   // Build stats object synchronously from a schedule snapshot.
   const buildCounts = (sched) => {
@@ -919,6 +919,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
               fellows={fellows}
               schedule={schedule}
               vacations={vacations}
+              setVacations={setVacations}
               callSchedule={callSchedule}
               nightFloatSchedule={nightFloatSchedule}
               setCallSchedule={setCallSchedule}
