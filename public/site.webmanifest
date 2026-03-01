@@ -1,0 +1,8 @@
+{
+  "name": "FellowShift",
+  "short_name": "Shift",
+  "icons": [],
+  "theme_color": "#A91B0D",
+  "background_color": "#A91B0D",
+  "display": "standalone"
+}

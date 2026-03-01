@@ -63,6 +63,7 @@
 
 ## ✅ Recently Completed
 
+- [X] Dashboard "Pending Approvals" card now lists vacation, day off, and swap requests as separate line items (admin and fellow views).
 - [X] Smart schedule-swap picker: select your own assigned shift → app shows only valid partners (filtered by vacation/away, grouped by fellow), bilateral swap encoded in reason string, bilateral approval updates both slots. Auth schema aligned (booleans, not function calls). All stub UI sections (timeoff, dayoff, swaps) fully implemented.
 
 ## 🔵 Future Features
@@ -106,7 +107,3 @@ React scheduler libraries:
 FullCalendar - most feature-rich
 React Big Calendar - simpler, good for basic needs
 DayPilot - medical-specific features
-
-
-
-- [ ]under pending approvals it needs to say the sway and day off requests as well

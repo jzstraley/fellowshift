@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-02-28 — Dashboard Pending Approvals Breakdown
+
+- Dashboard "Pending Approvals" card now shows vacation, day off, and swap requests as separate labeled rows with individual counts
+- Day off requests (Sick Day, Personal Day, Conference, CME) are split out from vacation requests in both the admin approvals view and the fellow "My Requests" view
+- Previously, day offs were silently counted as "vacation requests" in the dashboard totals
+
 ## 2026-02-26 — Request Cancellation & Fellow Visibility Scoping
 
 - Fellows can now cancel their own pending vacation, day-off, and swap requests via a Cancel button (sets status to `cancelled`)

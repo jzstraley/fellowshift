@@ -104,6 +104,9 @@ export default function DashboardView({
 const norm = (s) => String(s ?? "").trim().toLowerCase();
 const isPending = (s) => String(s ?? "").trim().toLowerCase() === "pending";
 
+const DAY_OFF_REASONS = new Set(['Sick Day', 'Personal Day', 'Conference', 'CME']);
+const isDayOff = (v) => DAY_OFF_REASONS.has(v?.reason);
+
 const dedupeByKey = (arr) => {
   const seen = new Set();
   return (arr || []).filter((x, idx) => {
@@ -126,10 +129,14 @@ const swapsClean = useMemo(() => dedupeByKey(swapRequests), [swapRequests]);
 
 // My own pending requests (for non-admin users)
 const myPendingRequests = useMemo(() => {
-  if (!myName) return { vacations: [], swaps: [] };
+  if (!myName) return { vacations: [], dayOffs: [], swaps: [] };
 
   const myVacations = vacationsClean.filter(
-    (v) => (v.fellow === myName || v.fellow_name === myName) && isPending(v.status)
+    (v) => (v.fellow === myName || v.fellow_name === myName) && isPending(v.status) && !isDayOff(v)
+  );
+
+  const myDayOffs = vacationsClean.filter(
+    (v) => (v.fellow === myName || v.fellow_name === myName) && isPending(v.status) && isDayOff(v)
   );
 
   const mySwaps = swapsClean.filter(
@@ -137,12 +144,17 @@ const myPendingRequests = useMemo(() => {
       (s.requester === myName || s.target === myName) && isPending(s.status)
   );
 
-  return { vacations: myVacations, swaps: mySwaps };
+  return { vacations: myVacations, dayOffs: myDayOffs, swaps: mySwaps };
 }, [vacationsClean, swapsClean, myName]);
 
 // All pending requests counts (for admins)
 const pendingVacations = useMemo(
-  () => vacationsClean.filter((v) => isPending(v.status)).length,
+  () => vacationsClean.filter((v) => isPending(v.status) && !isDayOff(v)).length,
+  [vacationsClean]
+);
+
+const pendingDayOffs = useMemo(
+  () => vacationsClean.filter((v) => isPending(v.status) && isDayOff(v)).length,
   [vacationsClean]
 );
 
@@ -318,7 +330,7 @@ const pendingSwaps = useMemo(
 
           {isAdmin ? (
             // Admin: show counts needing approval
-            pendingVacations + pendingSwaps > 0 ? (
+            pendingVacations + pendingDayOffs + pendingSwaps > 0 ? (
               <div className="space-y-2">
                 {pendingVacations > 0 && (
                   <div className="flex items-center gap-2">
@@ -328,6 +340,16 @@ const pendingSwaps = useMemo(
                     <span className="text-xs text-gray-600 dark:text-gray-300">
                       vacation request{pendingVacations !== 1 ? "s" : ""} to
                       review
+                    </span>
+                  </div>
+                )}
+                {pendingDayOffs > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold">
+                      {pendingDayOffs}
+                    </span>
+                    <span className="text-xs text-gray-600 dark:text-gray-300">
+                      day off request{pendingDayOffs !== 1 ? "s" : ""} to review
                     </span>
                   </div>
                 )}
@@ -350,6 +372,7 @@ const pendingSwaps = useMemo(
             )
           ) : // Fellow: show their own requests
           myPendingRequests.vacations.length +
+              myPendingRequests.dayOffs.length +
               myPendingRequests.swaps.length >
             0 ? (
             <div className="space-y-2">
@@ -362,6 +385,18 @@ const pendingSwaps = useMemo(
                     vacation request
                     {myPendingRequests.vacations.length !== 1 ? "s" : ""}{" "}
                     awaiting approval
+                  </span>
+                </div>
+              )}
+              {myPendingRequests.dayOffs.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold">
+                    {myPendingRequests.dayOffs.length}
+                  </span>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">
+                    day off request
+                    {myPendingRequests.dayOffs.length !== 1 ? "s" : ""} awaiting
+                    approval
                   </span>
                 </div>
               )}
