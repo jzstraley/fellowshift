@@ -842,6 +842,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
               lectures={lectures}
               setLectures={setLectures}
               speakers={speakers}
+              setSpeakers={setSpeakers}
               topics={topics}
               fellows={fellows}
               darkMode={darkMode}

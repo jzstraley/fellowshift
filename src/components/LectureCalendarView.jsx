@@ -17,20 +17,55 @@ import {
   Bell,
   Mail,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { LECTURE_SERIES, RECURRENCE, RSVP_STATUS } from "../data/lectureData";
+import { useAuth } from "../context/AuthContext";
+import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { useLectureState } from "./lectures/useLectureState";
+import LectureList from "./lectures/LectureList";
+import PresenterSchedule from "./lectures/PresenterSchedule";
 
 export default function LectureCalendarView({
-  lectures,
+  lectures: propLectures,
   setLectures,
-  speakers,
+  speakers: propSpeakers,
+  setSpeakers,
   topics,
-  fellows,
+  fellows: propFellows,
   onSendReminder,
   darkMode,
   canManageLectures = false,
 }) {
-  const [viewMode, setViewMode] = useState("calendar"); // calendar, list, manage
+  const { user, profile } = useAuth();
+  const useDatabase = isSupabaseConfigured && !!user;
+
+  const dbState = useLectureState({
+    useDatabase,
+    institutionId: profile?.institution_id,
+    user,
+    userCanApprove: canManageLectures,
+    setLectures,
+    setSpeakers,
+  });
+
+  // Prefer DB data when Supabase is configured, fall back to props
+  const lectures  = useDatabase ? dbState.lectures  : (propLectures  ?? []);
+  const speakers  = useDatabase ? dbState.speakers  : (propSpeakers  ?? []);
+  // fellows: DB gives objects; props give name strings — normalize to objects
+  const fellowObjects = useMemo(() => {
+    if (useDatabase && dbState.fellows.length) return dbState.fellows;
+    return (propFellows ?? []).map((f) =>
+      typeof f === 'string' ? { id: f, name: f, pgy_level: null } : f
+    );
+  }, [useDatabase, dbState.fellows, propFellows]);
+  // Keep plain string array for existing RSVP UI
+  const fellows = useMemo(() =>
+    fellowObjects.map((f) => f.name),
+    [fellowObjects]
+  );
+
+  const [viewMode, setViewMode] = useState("calendar"); // calendar, agenda, list, presenter, manage
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -139,43 +174,54 @@ export default function LectureCalendarView({
     return colors[series] || "bg-gray-500";
   };
 
-  const handleAddLecture = () => {
-    const newLecture = {
-      id: `lec${Date.now()}`,
-      ...formData,
-      rsvps: {},
-      reminderSent: false,
-    };
-    setLectures([...lectures, newLecture]);
+  const handleAddLecture = async () => {
+    if (useDatabase) {
+      await dbState.addLecture({ ...formData, rsvps: {}, reminderSent: false });
+    } else {
+      const newLecture = { id: `lec${Date.now()}`, ...formData, rsvps: {}, reminderSent: false };
+      setLectures([...(propLectures ?? []), newLecture]);
+    }
     setShowAddModal(false);
     resetForm();
   };
 
-  const handleUpdateLecture = () => {
-    setLectures(
-      lectures.map((l) =>
-        l.id === editingLecture.id ? { ...l, ...formData } : l
-      )
-    );
+  const handleUpdateLecture = async () => {
+    if (useDatabase) {
+      await dbState.updateLecture(editingLecture.id, formData);
+    } else {
+      setLectures(
+        (propLectures ?? []).map((l) =>
+          l.id === editingLecture.id ? { ...l, ...formData } : l
+        )
+      );
+    }
     setEditingLecture(null);
     resetForm();
   };
 
-  const handleDeleteLecture = (id) => {
+  const handleDeleteLecture = async (id) => {
     if (confirm("Delete this lecture?")) {
-      setLectures(lectures.filter((l) => l.id !== id));
+      if (useDatabase) {
+        await dbState.deleteLecture(id);
+      } else {
+        setLectures((propLectures ?? []).filter((l) => l.id !== id));
+      }
       setSelectedLecture(null);
     }
   };
 
-  const handleRSVP = (lectureId, fellow, status) => {
-    setLectures(
-      lectures.map((l) =>
-        l.id === lectureId
-          ? { ...l, rsvps: { ...l.rsvps, [fellow]: status } }
-          : l
-      )
-    );
+  const handleRSVP = async (lectureId, fellow, status) => {
+    if (useDatabase) {
+      await dbState.setRsvp(lectureId, fellow, status);
+    } else {
+      setLectures(
+        (propLectures ?? []).map((l) =>
+          l.id === lectureId
+            ? { ...l, rsvps: { ...l.rsvps, [fellow]: status } }
+            : l
+        )
+      );
+    }
   };
 
   const resetForm = () => {
@@ -238,6 +284,14 @@ export default function LectureCalendarView({
     ? "bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400"
     : "bg-white border-gray-300 text-gray-800";
 
+  const VIEW_MODES = [
+    { key: "calendar",  label: "Calendar" },
+    { key: "agenda",    label: "Agenda" },
+    { key: "list",      label: "List" },
+    { key: "presenter", label: "Presenters" },
+    { key: "manage",    label: "Manage" },
+  ];
+
   return (
     <div className={`space-y-4 ${baseClasses}`}>
       {/* Header */}
@@ -245,24 +299,27 @@ export default function LectureCalendarView({
         <h2 className="text-lg font-bold flex items-center gap-2">
           <Calendar className="w-5 h-5" />
           Lecture Calendar
+          {useDatabase && dbState.loading && (
+            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+          )}
         </h2>
 
         <div className="flex items-center gap-2">
           {/* View Toggle */}
           <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
-            {["calendar", "list", "manage"].map((mode) => (
+            {VIEW_MODES.map(({ key, label }) => (
               <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`px-3 py-1 text-xs font-semibold capitalize ${
-                  viewMode === mode
+                key={key}
+                onClick={() => setViewMode(key)}
+                className={`px-3 py-1 text-xs font-semibold ${
+                  viewMode === key
                     ? "bg-blue-600 text-white"
                     : darkMode
                     ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                {mode}
+                {label}
               </button>
             ))}
           </div>
@@ -278,6 +335,32 @@ export default function LectureCalendarView({
           )}
         </div>
       </div>
+
+      {/* DB error banner */}
+      {useDatabase && dbState.error && (
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded p-3 text-sm text-red-700 dark:text-red-300">
+          {dbState.error}
+        </div>
+      )}
+
+      {/* Agenda View — upcoming lectures grouped by week */}
+      {viewMode === "agenda" && (
+        <LectureList
+          lectures={lectures}
+          onSelect={setSelectedLecture}
+          canManage={canManageLectures}
+        />
+      )}
+
+      {/* Presenter Schedule — year-long assignment table */}
+      {viewMode === "presenter" && (
+        <PresenterSchedule
+          lectures={lectures}
+          fellows={fellowObjects}
+          onSelectLecture={setSelectedLecture}
+          canManage={canManageLectures}
+        />
+      )}
 
       {/* Calendar View */}
       {viewMode === "calendar" && (
