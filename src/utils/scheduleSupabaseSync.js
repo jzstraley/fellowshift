@@ -418,21 +418,13 @@ export async function pullScheduleFromSupabase({
 export async function pullVacationsFromSupabase({ programId, academicYearId }) {
   if (!supabase) return { error: "Supabase not configured", vacations: null };
   if (!programId) return { error: "No programId provided", vacations: null };
-  if (!academicYearId) return { error: "No academicYearId provided", vacations: null };
 
-  // restrict blocks to this program/year
-  const { data: blocks, error: be } = await supabase
-    .from("block_dates")
-    .select("id, block_number")
-    .eq("program_id", programId)
-    .eq("academic_year_id", academicYearId);
-
-  if (be) return { error: be.message, vacations: null };
-
-  const blockIds = (blocks ?? []).map((b) => b.id);
-  if (!blockIds.length) return { error: null, vacations: null };
-
-  const { data, error } = await supabase
+  // Query vacation_requests directly by program_id — same approach as useVacationState.
+  // The previous 2-step (block_dates → start_block_id IN) silently returned nothing when
+  // block_dates rows had a different academic_year_id than AuthContext provided, and the
+  // short !column_name FK hints for double block_dates joins caused ambiguity in PostgREST.
+  // Full FK constraint names are required when joining the same table twice.
+  let q = supabase
     .from("vacation_requests")
     .select(`
       id,
@@ -443,25 +435,23 @@ export async function pullVacationsFromSupabase({ programId, academicYearId }) {
       fellow_id,
       start_block_id,
       end_block_id,
-      fellow:fellows!fellow_id (id, name),
-      start_block:block_dates!start_block_id (id, block_number),
-      end_block:block_dates!end_block_id (id, block_number)
+      fellow:fellows!vacation_requests_fellow_id_fkey (id, name),
+      start_block:block_dates!vacation_requests_start_block_id_fkey (id, block_number),
+      end_block:block_dates!vacation_requests_end_block_id_fkey (id, block_number)
     `)
-    .in("start_block_id", blockIds)
+    .eq("program_id", programId)
     .order("created_at", { ascending: false });
+
+  if (academicYearId) q = q.eq("academic_year_id", academicYearId);
+
+  const { data, error } = await q;
 
   if (error) return { error: error.message, vacations: null };
   if (!data?.length) return { error: null, vacations: null };
 
   // normalize + keep identifiers so UI/state can reconcile approvals
   const vacations = data
-    .filter(
-      (r) =>
-        r.id &&
-        r.fellow?.name &&
-        r.start_block?.block_number &&
-        r.end_block?.block_number
-    )
+    .filter((r) => r.id && r.fellow?.name && r.start_block?.block_number)
     .map((r) => ({
       id: r.id,
       created_at: r.created_at ?? null,
@@ -475,7 +465,8 @@ export async function pullVacationsFromSupabase({ programId, academicYearId }) {
       // display fields
       fellow: r.fellow.name,
       startBlock: r.start_block.block_number,
-      endBlock: r.end_block.block_number,
+      // fallback end to start if end_block is null (single-block vacations)
+      endBlock: r.end_block?.block_number ?? r.start_block.block_number,
       reason: r.reason || "Vacation",
       status: String(r.status || "pending").trim().toLowerCase(),
     }));
@@ -485,8 +476,9 @@ export async function pullVacationsFromSupabase({ programId, academicYearId }) {
 export async function pullSwapRequestsFromSupabase({ programId, academicYearId }) {
   if (!supabase) return { error: 'Supabase not configured', swapRequests: null };
   if (!programId) return { error: 'No programId provided', swapRequests: null };
-  // academicYearId is intentionally optional — rows inserted before the year
-  // scope was resolved may have academic_year_id = NULL and must still be found.
+  // Do NOT filter by academic_year_id — swap rows created before the year scope
+  // was resolved may have academic_year_id = NULL, and .eq() silently excludes NULLs.
+  // program_id is the correct scope boundary.
 
   // Plain select, no JOINs. Two FKs to the same table require the full pg
   // constraint name for PostgREST disambiguation — skip the complexity.
@@ -495,7 +487,7 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
     .select('id, created_at, block_number, from_week_part, to_week_part, reason, status, requester_fellow_id, target_fellow_id')
     .eq('program_id', programId)
     .order('created_at', { ascending: false });
-  if (academicYearId) q = q.eq('academic_year_id', academicYearId);
+  void academicYearId; // intentionally unused — see comment above
 
   const { data, error } = await q;
 

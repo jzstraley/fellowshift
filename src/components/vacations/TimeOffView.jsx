@@ -636,7 +636,7 @@ return (
             value={newDbReq?.fellow_id ?? ""}
             disabled={submitting}
             onChange={(e) => setNewDbReq((p) => ({ ...(p || {}), fellow_id: e.target.value }))}
-            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-2 text-sm"
+            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2 text-sm"
           >
             <option value="">Select</option>
 {(selectableFellows || []).map((f, idx) => (
@@ -661,7 +661,7 @@ return (
             value={newDbReq?.start_block_id ?? ""}
             disabled={submitting}
             onChange={(e) => setNewDbReq((p) => ({ ...(p || {}), start_block_id: e.target.value }))}
-            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-2 text-sm"
+            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2 text-sm"
           >
             <option value="">Select</option>
 {((splitLocalWeeks?.length ? splitLocalWeeks : weeklyBlocks) || []).map((b, idx) => {

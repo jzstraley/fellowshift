@@ -454,14 +454,14 @@ if (Array.isArray(swapResult?.swapRequests)) {
     ]);
     if (Array.isArray(vacResult?.vacations)) {
       setVacations((prev) => mergeByReqIdPreferIncoming(prev, vacResult.vacations));
-    } else if (vacResult?.vacations === null) {
-      setVacations([]);
     }
+    // Don't clear vacations on null — null means "no rows returned" (query may have
+    // found nothing OR silently failed). Wiping here would undo data the vacations
+    // tab just loaded via useVacationState's own fetch.
     if (Array.isArray(swapResult?.swapRequests)) {
       setSwapRequests((prev) => mergeByReqIdPreferIncoming(prev, swapResult.swapRequests));
     }
-    // Don't clear on null/error — null means "no records found" but an error
-    // means the query failed; wiping state on failure hides existing data.
+    // Don't clear swaps on null/error either — same reasoning.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programId, academicYearId]);
 
