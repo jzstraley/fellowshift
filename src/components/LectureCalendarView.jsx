@@ -37,12 +37,13 @@ export default function LectureCalendarView({
   darkMode,
   canManageLectures = false,
 }) {
-  const { user, profile } = useAuth();
+  const { user, profile, programId } = useAuth();
   const useDatabase = isSupabaseConfigured && !!user;
 
   const dbState = useLectureState({
     useDatabase,
     institutionId: profile?.institution_id,
+    programId,
     user,
     userCanApprove: canManageLectures,
     setLectures,
@@ -102,7 +103,7 @@ export default function LectureCalendarView({
     title: "",
     topicId: "",
     speakerId: "",
-    presenterFellow: "",
+    presenterFellowId: "",
     date: "",
     time: "12:00",
     duration: 60,
@@ -211,17 +212,14 @@ export default function LectureCalendarView({
   };
 
   const handleRSVP = async (lectureId, fellow, status) => {
-    if (useDatabase) {
-      await dbState.setRsvp(lectureId, fellow, status);
-    } else {
-      setLectures(
-        (propLectures ?? []).map((l) =>
-          l.id === lectureId
-            ? { ...l, rsvps: { ...l.rsvps, [fellow]: status } }
-            : l
-        )
-      );
-    }
+    // lecture_rsvps is a separate table not yet wired to the hook — local-only for now
+    setLectures(
+      (propLectures ?? []).map((l) =>
+        l.id === lectureId
+          ? { ...l, rsvps: { ...l.rsvps, [fellow]: status } }
+          : l
+      )
+    );
   };
 
   const resetForm = () => {
@@ -229,7 +227,7 @@ export default function LectureCalendarView({
       title: "",
       topicId: "",
       speakerId: "",
-      presenterFellow: "",
+      presenterFellowId: "",
       date: "",
       time: "12:00",
       duration: 60,
@@ -245,7 +243,7 @@ export default function LectureCalendarView({
       title: lecture.title,
       topicId: lecture.topicId || "",
       speakerId: lecture.speakerId || "",
-      presenterFellow: lecture.presenterFellow || "",
+      presenterFellowId: lecture.presenterFellowId || "",
       date: lecture.date,
       time: lecture.time,
       duration: lecture.duration,
@@ -911,16 +909,16 @@ export default function LectureCalendarView({
                     Presenter (Fellow)
                   </label>
                   <select
-                    value={formData.presenterFellow}
+                    value={formData.presenterFellowId}
                     onChange={(e) =>
-                      setFormData({ ...formData, presenterFellow: e.target.value })
+                      setFormData({ ...formData, presenterFellowId: e.target.value })
                     }
                     className={`w-full px-3 py-2 text-sm border rounded ${inputClasses}`}
                   >
                     <option value="">-- None --</option>
-                    {fellows.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
+                    {fellowObjects.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
                       </option>
                     ))}
                   </select>

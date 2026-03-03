@@ -144,7 +144,7 @@ export default function ViolationsView({
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
         <h2 className="text-xl font-bold text-green-700 dark:text-green-400 mb-2">
-          No ACGME Violations Detected
+          No Violations Detected
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md">
           All fellows are currently within ACGME work-hour limits based on the current schedule,

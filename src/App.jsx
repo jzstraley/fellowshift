@@ -368,21 +368,22 @@ if (Array.isArray(persisted?.swapRequests)) {
     return () => clearTimeout(t);
   }, [lectures, speakers, topics, dataReady]);
 
-  // One-shot Supabase load on sign-in — runs once after localStorage is ready and profile is available.
-  // If the DB has no assignments yet, local state is preserved unchanged.
+  // One-shot Supabase load on sign-in — runs once after localStorage is ready and scope is fully available.
+  // Wait for programId/academicYearId (loaded async by AuthContext) before marking as done,
+  // otherwise the ref gets set while they're still null and the fetch never retries.
   useEffect(() => {
     if (!dataReady || !isSupabaseConfigured || !profile?.institution_id) return;
+    if (!programId || !academicYearId) return;
     if (supabaseInitLoadDoneRef.current) return;
     supabaseInitLoadDoneRef.current = true;
-    if (!profile?.program_id) return;
 
     Promise.all([
-  pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
-  pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
+  pullScheduleFromSupabase({ fellows, blockDates, programId, academicYearId }),
+  pullCallFloatFromSupabase({ programId, academicYearId }),
   pullVacationsFromSupabase({ programId, academicYearId }),
   pullSwapRequestsFromSupabase({ programId, academicYearId }),
-  pullLecturesFromSupabase({ programId: profile.institution_id }),
-  pullClinicDaysFromSupabase({ programId: profile.institution_id }),
+  pullLecturesFromSupabase({ institutionId: profile.institution_id }),
+  pullClinicDaysFromSupabase({ programId }),
 ]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
       const firstError = schedResult.error || callFloatResult.error || vacResult.error || swapResult.error || lectResult.error || clinicResult.error;
       if (firstError) setSyncError(typeof firstError === 'string' ? firstError : firstError.message ?? 'Failed to load data from server');
@@ -447,8 +448,8 @@ if (Array.isArray(swapResult?.swapRequests)) {
     const schedResult = await pushScheduleToSupabase({
       schedule,
       fellows,
-      blockDates,
-      institutionId: profile.institution_id,
+      programId,
+      academicYearId,
       userId: user?.id,
       pgyLevels,
     });
@@ -457,7 +458,8 @@ if (Array.isArray(swapResult?.swapRequests)) {
       pushCallFloatToSupabase({
         callSchedule,
         nightFloatSchedule,
-        institutionId: profile.institution_id,
+        programId,
+        academicYearId,
         userId: user?.id,
       }),
       pushLecturesToSupabase({
@@ -469,24 +471,24 @@ if (Array.isArray(swapResult?.swapRequests)) {
       }),
       pushClinicDaysToSupabase({
         clinicDays,
-        institutionId: profile.institution_id,
+        programId,
       }),
     ]);
     const error = callFloatResult.error || lectResult.error || clinicResult.error || null;
     const count = (schedResult.count ?? 0) + (callFloatResult.count ?? 0) + (lectResult.count ?? 0);
     return { error, count };
-  }, [schedule, callSchedule, nightFloatSchedule, lectures, speakers, topics, clinicDays, fellows, pgyLevels, profile?.institution_id, user?.id]);
+  }, [schedule, callSchedule, nightFloatSchedule, lectures, speakers, topics, clinicDays, fellows, pgyLevels, programId, academicYearId, profile?.institution_id, user?.id]);
 
   // Pull schedule from Supabase on demand — called by ScheduleEditorView's Sync button.
   const onPullFromSupabase = useCallback(async () => {
     if (!isSupabaseConfigured || !profile?.institution_id) return { error: 'Supabase not available', loaded: false };
     const [schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult] = await Promise.all([
-      pullScheduleFromSupabase({ fellows, blockDates, institutionId: profile.institution_id }),
-      pullCallFloatFromSupabase({ institutionId: profile.institution_id }),
+      pullScheduleFromSupabase({ fellows, blockDates, programId, academicYearId }),
+      pullCallFloatFromSupabase({ programId, academicYearId }),
       pullVacationsFromSupabase({ programId, academicYearId }),
       pullSwapRequestsFromSupabase({ programId, academicYearId }),
       pullLecturesFromSupabase({ institutionId: profile.institution_id }),
-      pullClinicDaysFromSupabase({ institutionId: profile.institution_id }),
+      pullClinicDaysFromSupabase({ programId }),
     ]);
     const error = schedResult.error || callFloatResult.error || null;
     if (error) return { error, loaded: false };

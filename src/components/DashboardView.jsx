@@ -141,7 +141,7 @@ const myPendingRequests = useMemo(() => {
 
   const mySwaps = swapsClean.filter(
     (s) =>
-      (s.requester === myName || s.target === myName) && isPending(s.status)
+      (s.requester === myName || s.fellow === myName || s.target === myName || s.target_fellow === myName) && isPending(s.status)
   );
 
   return { vacations: myVacations, dayOffs: myDayOffs, swaps: mySwaps };

@@ -89,12 +89,23 @@ export function useVacationState({
     const firstMonday = new Date(today);
     firstMonday.setDate(today.getDate() + daysUntilMonday);
 
+    const fmtDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
     for (let i = 0; i < 26; i++) {
       const start = new Date(firstMonday);
       start.setDate(firstMonday.getDate() + i * 7);
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
-      weeks.push({ block: `${i + 1}-1`, start: toISODate(start), end: toISODate(end), part: 1, parentBlock: i + 1 });
+      const blockKey = `${i + 1}-1`;
+      weeks.push({
+        block: blockKey,
+        start: toISODate(start),
+        end: toISODate(end),
+        part: 1,
+        parentBlock: i + 1,
+        id: blockKey,
+        label: `Wk ${i + 1}: ${fmtDate(start)} – ${fmtDate(end)}`,
+      });
     }
     return weeks;
   }, []);

@@ -302,7 +302,7 @@ function RequestCard({
 
   return (
     <div className="flex items-center justify-between">
-      <div className="text-sm">
+      <div className="text-sm text-gray-900 dark:text-gray-100">
         <div className="font-semibold">
           {fellowName}
           <span className="ml-2 text-xs font-normal opacity-80">

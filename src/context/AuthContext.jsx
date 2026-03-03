@@ -189,6 +189,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async (payload) => {
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+    const { error } = await supabase
+      .from('profiles')
+      .update(payload)
+      .eq('id', user.id);
+    if (!error) setProfile(prev => ({ ...prev, ...payload }));
+    return { error };
+  };
+
   // --- Capability flags ---
   // Legacy: derive from profile.role string (works before migration)
   const role = profile?.role ?? null;
@@ -219,6 +229,7 @@ export const AuthProvider = ({ children }) => {
     error,
     signIn,
     signOut,
+    updateProfile,
     isAuthenticated: Boolean(user),
     isSupabaseConfigured,
     // role string (legacy)

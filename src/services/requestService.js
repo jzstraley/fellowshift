@@ -243,7 +243,7 @@ export function useVacationState({
       const srQ = supabase
         .from('swap_requests')
         .select(`
-          id, block_number, reason, status, notes, created_at, approved_at, requested_by, approved_by,
+          id, block_number, from_week_part, to_week_part, reason, status, notes, created_at, approved_at, requested_by, approved_by,
           requester:fellows!requester_fellow_id (id, name, pgy_level),
           target:fellows!target_fellow_id (id, name, pgy_level)
         `)
@@ -691,6 +691,8 @@ export function useVacationState({
         requester_fellow_id: requester_id,
         target_fellow_id: tgtFellowId,
         block_number: myBlockNum,
+        from_week_part: Number(myM[2]),
+        to_week_part: Number(tgtM[2]),
         reason: reasonText,
         status,
         notes: violationNotes,

@@ -487,43 +487,49 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
   if (!programId) return { error: 'No programId provided', swapRequests: null };
   if (!academicYearId) return { error: 'No academicYearId provided', swapRequests: null };
 
-  const { data: blocks, error: be } = await supabase
-    .from('block_dates')
-    .select('id, block_number')
-    .eq('program_id', programId)
-    .eq('academic_year_id', academicYearId);
-
-  if (be) return { error: be.message, swapRequests: null };
-  const blockIdToNum = Object.fromEntries((blocks ?? []).map((b) => [b.id, b.block_number]));
-  const blockIds = (blocks ?? []).map((b) => b.id);
-  if (!blockIds.length) return { error: null, swapRequests: null };
-
+  // swap_requests has: block_number, block_date_id, from_week_part, to_week_part
+  // (no start_block_id / end_block_id — those are vacation_requests columns)
   const { data, error } = await supabase
     .from('swap_requests')
     .select(`
-      start_block_id,
-      end_block_id,
+      id,
+      block_number,
+      from_week_part,
+      to_week_part,
       reason,
       status,
-      requester:fellows!requester_fellow_id (name),
-      target:fellows!target_fellow_id (name)
+      requester_fellow_id,
+      target_fellow_id
     `)
-    .in('start_block_id', blockIds)
+    .eq('program_id', programId)
+    .eq('academic_year_id', academicYearId)
     .order('created_at', { ascending: false });
 
   if (error) return { error: error.message, swapRequests: null };
   if (!data?.length) return { error: null, swapRequests: null };
 
+  // Resolve fellow IDs → names via fellows table
+  const { data: fellowsData } = await supabase
+    .from('fellows')
+    .select('id, name')
+    .eq('program_id', programId)
+    .eq('is_active', true);
+
+  const idToName = Object.fromEntries((fellowsData ?? []).map((f) => [f.id, f.name]));
+
   const swapRequests = data
-    .filter((r) => r.requester?.name)
+    .filter((r) => r.requester_fellow_id)
     .map((r) => ({
-      fellow: r.requester.name,
-      from_block: blockIdToNum[r.start_block_id] ?? null,
-      to_block: blockIdToNum[r.end_block_id] ?? null,
-      target_fellow: r.target?.name ?? null,
+      fellow: idToName[r.requester_fellow_id] ?? null,
+      from_block: r.block_number ?? null,
+      to_block: r.block_number ?? null,
+      from_week_part: r.from_week_part ?? null,
+      to_week_part: r.to_week_part ?? null,
+      target_fellow: idToName[r.target_fellow_id] ?? null,
       reason: r.reason || '',
       status: r.status || 'pending',
-    }));
+    }))
+    .filter((r) => r.fellow);
 
   return { error: null, swapRequests: swapRequests.length ? swapRequests : null };
 }
@@ -536,58 +542,69 @@ export async function pushLecturesToSupabase({ lectures, speakers, topics, insti
   if (!supabase) return { error: 'Supabase not configured' };
   if (!institutionId) return { error: 'No institution ID' };
 
-  // Speakers
+  // Speakers — use new `speakers` table (uuid PK); skip if row already exists by id
   if (speakers?.length) {
-    const speakerRows = speakers.map((s) => ({
-      id: s.id,
-      institution_id: institutionId,
-      name: s.name,
-      title: s.title ?? null,
-      email: s.email ?? null,
-      type: s.type ?? 'attending',
-    }));
+    const speakerRows = speakers
+      .filter((s) => s.id && !String(s.id).startsWith('sp')) // skip local placeholder ids
+      .map((s) => ({
+        id: s.id,
+        institution_id: institutionId,
+        name: s.name,
+        title: s.title ?? null,
+        email: s.email ?? null,
+        type: s.type ?? 'attending',
+      }));
 
-    const { error } = await supabase.from('lecture_speakers').upsert(speakerRows, { onConflict: 'id' });
-    if (error) return { error: error.message };
+    if (speakerRows.length) {
+      const { error } = await supabase.from('speakers').upsert(speakerRows, { onConflict: 'id' });
+      if (error) return { error: error.message };
+    }
   }
 
   // Topics
   if (topics?.length) {
-    const topicRows = topics.map((t) => ({
-      id: t.id,
-      institution_id: institutionId,
-      name: t.name,
-      series: t.series ?? null,
-      duration: t.duration ?? null,
-    }));
+    const topicRows = topics
+      .filter((t) => t.id && !String(t.id).startsWith('t')) // skip local placeholder ids
+      .map((t) => ({
+        id: t.id,
+        institution_id: institutionId,
+        name: t.name,
+        series: t.series ?? null,
+        duration: t.duration ?? null,
+      }));
 
-    const { error } = await supabase.from('lecture_topics').upsert(topicRows, { onConflict: 'id' });
-    if (error) return { error: error.message };
+    if (topicRows.length) {
+      const { error } = await supabase.from('lecture_topics').upsert(topicRows, { onConflict: 'id' });
+      if (error) return { error: error.message };
+    }
   }
 
-  // Lectures
+  // Lectures — use actual column names: date, time, presenter_fellow_id (no rsvps column)
   if (lectures?.length) {
-    const lectureRows = lectures.map((l) => ({
-      id: l.id,
-      institution_id: institutionId,
-      topic_id: l.topicId ?? null,
-      title: l.title,
-      speaker_id: l.speakerId ?? null,
-      presenter_fellow: l.presenterFellow ?? null,
-      lecture_date: l.date ?? null,
-      lecture_time: l.time ?? null,
-      duration: l.duration ?? null,
-      location: l.location ?? null,
-      series: l.series ?? null,
-      recurrence: l.recurrence ?? 'none',
-      reminder_sent: l.reminderSent ?? false,
-      notes: l.notes ?? null,
-      rsvps: l.rsvps ?? {},
-      created_by: userId ?? null,
-    }));
+    const lectureRows = lectures
+      .filter((l) => l.id && !String(l.id).startsWith('lec')) // skip local placeholder ids
+      .map((l) => ({
+        id: l.id,
+        institution_id: institutionId,
+        topic_id: l.topicId ?? null,
+        title: l.title,
+        speaker_id: l.speakerId ?? null,
+        presenter_fellow_id: l.presenterFellowId ?? null,
+        date: l.date ?? null,
+        time: l.time ?? null,
+        duration: l.duration ?? null,
+        location: l.location ?? null,
+        series: l.series ?? null,
+        recurrence: l.recurrence ?? 'none',
+        reminder_sent: l.reminderSent ?? false,
+        notes: l.notes ?? null,
+        created_by: userId ?? null,
+      }));
 
-    const { error } = await supabase.from('lectures').upsert(lectureRows, { onConflict: 'id' });
-    if (error) return { error: error.message };
+    if (lectureRows.length) {
+      const { error } = await supabase.from('lectures').upsert(lectureRows, { onConflict: 'id' });
+      if (error) return { error: error.message };
+    }
   }
 
   const count = (speakers?.length ?? 0) + (topics?.length ?? 0) + (lectures?.length ?? 0);
@@ -599,12 +616,13 @@ export async function pullLecturesFromSupabase({ institutionId }) {
   if (!institutionId) return { error: 'No institution ID', lectures: null, speakers: null, topics: null };
 
   const [speakerRes, topicRes, lectureRes] = await Promise.all([
-    supabase.from('lecture_speakers').select('id, name, title, email, type').eq('institution_id', institutionId),
+    supabase.from('speakers').select('id, name, title, email, type').eq('institution_id', institutionId),
     supabase.from('lecture_topics').select('id, name, series, duration').eq('institution_id', institutionId),
     supabase
       .from('lectures')
-      .select('id, topic_id, title, speaker_id, presenter_fellow, lecture_date, lecture_time, duration, location, series, recurrence, reminder_sent, notes, rsvps')
-      .eq('institution_id', institutionId),
+      .select('id, topic_id, title, speaker_id, presenter_fellow_id, date, time, duration, location, series, recurrence, reminder_sent, notes')
+      .eq('institution_id', institutionId)
+      .order('date', { ascending: true }),
   ]);
 
   const error = speakerRes.error?.message || topicRes.error?.message || lectureRes.error?.message || null;
@@ -619,16 +637,17 @@ export async function pullLecturesFromSupabase({ institutionId }) {
         topicId: l.topic_id,
         title: l.title,
         speakerId: l.speaker_id,
-        presenterFellow: l.presenter_fellow,
-        date: l.lecture_date,
-        time: l.lecture_time,
+        presenterFellowId: l.presenter_fellow_id,
+        presenterFellow: null, // resolved name populated by useLectureState join
+        date: l.date,
+        time: l.time,
         duration: l.duration,
         location: l.location,
         series: l.series,
         recurrence: l.recurrence ?? 'none',
         reminderSent: l.reminder_sent ?? false,
         notes: l.notes,
-        rsvps: l.rsvps ?? {},
+        rsvps: {},
       }))
     : null;
 
