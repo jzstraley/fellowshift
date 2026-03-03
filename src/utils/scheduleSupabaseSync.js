@@ -487,25 +487,11 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
   if (!programId) return { error: 'No programId provided', swapRequests: null };
   if (!academicYearId) return { error: 'No academicYearId provided', swapRequests: null };
 
-  // swap_requests has: block_number, block_date_id, from_week_part, to_week_part
-  // (no start_block_id / end_block_id — those are vacation_requests columns)
-  // Use inline JOINs for fellow names (same pattern as vacations) so a failed
-  // secondary lookup can't silently drop all records.
+  // swap_requests — plain select, no JOINs (two FKs to fellows requires the
+  // full pg constraint name for PostgREST disambiguation; skip the complexity).
   const { data, error } = await supabase
     .from('swap_requests')
-    .select(`
-      id,
-      created_at,
-      block_number,
-      from_week_part,
-      to_week_part,
-      reason,
-      status,
-      requester_fellow_id,
-      target_fellow_id,
-      requester:fellows!requester_fellow_id(id, name),
-      target:fellows!target_fellow_id(id, name)
-    `)
+    .select('id, created_at, block_number, from_week_part, to_week_part, reason, status, requester_fellow_id, target_fellow_id')
     .eq('program_id', programId)
     .eq('academic_year_id', academicYearId)
     .order('created_at', { ascending: false });
@@ -513,15 +499,24 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
   if (error) return { error: error.message, swapRequests: null };
   if (!data?.length) return { error: null, swapRequests: null };
 
+  // Resolve fellow IDs → names. Omit is_active filter so deactivated fellows
+  // whose requests are still pending don't silently drop the record.
+  const { data: fellowsData } = await supabase
+    .from('fellows')
+    .select('id, name')
+    .eq('program_id', programId);
+
+  const idToName = Object.fromEntries((fellowsData ?? []).map((f) => [f.id, f.name]));
+
   const swapRequests = data
     .filter((r) => r.requester_fellow_id)
     .map((r) => ({
       id: r.id,
       created_at: r.created_at ?? null,
-      fellow: r.requester?.name ?? null,
-      requester: r.requester?.name ?? null,
-      target: r.target?.name ?? null,
-      target_fellow: r.target?.name ?? null,
+      fellow: idToName[r.requester_fellow_id] ?? null,
+      requester: idToName[r.requester_fellow_id] ?? null,
+      target: idToName[r.target_fellow_id] ?? null,
+      target_fellow: idToName[r.target_fellow_id] ?? null,
       from_block: r.block_number ?? null,
       to_block: r.block_number ?? null,
       from_week_part: r.from_week_part ?? null,

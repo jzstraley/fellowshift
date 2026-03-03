@@ -457,9 +457,9 @@ if (Array.isArray(swapResult?.swapRequests)) {
     }
     if (Array.isArray(swapResult?.swapRequests)) {
       setSwapRequests((prev) => mergeByReqIdPreferIncoming(prev, swapResult.swapRequests));
-    } else if (swapResult?.swapRequests === null) {
-      setSwapRequests([]);
     }
+    // Don't clear on null/error — null means "no records found" but an error
+    // means the query failed; wiping state on failure hides existing data.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programId, academicYearId]);
 
