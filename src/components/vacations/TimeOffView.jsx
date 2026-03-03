@@ -20,7 +20,7 @@ function Badge({ children, className = "" }) {
 
 function Button({ children, className = "", disabled, onClick, title, variant = "default" }) {
   const base =
-    "px-2 py-1 rounded border text-xs disabled:opacity-50 transition-colors";
+    "px-3 py-2 rounded border text-xs disabled:opacity-50 transition-colors";
   const variants = {
     default:
       "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600",
@@ -75,7 +75,7 @@ function ConfirmModal({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 border-gray-200 dark:border-gray-600"
+            className="px-4 py-2 rounded border text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 border-gray-200 dark:border-gray-600"
           >
             {cancelText}
           </button>
@@ -83,7 +83,7 @@ function ConfirmModal({
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="px-3 py-1.5 rounded bg-red-600 text-white text-sm hover:opacity-90 disabled:opacity-50"
+            className="px-4 py-2 rounded bg-red-600 text-white text-sm hover:opacity-90 disabled:opacity-50"
           >
             {confirmText}
           </button>
@@ -664,13 +664,22 @@ return (
             className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-2 text-sm"
           >
             <option value="">Select</option>
-{(weeklyBlocks || []).map((b, idx) => (
-  <option key={`${b.id ?? b.label ?? 'w'}-${idx}`} value={b.id}>
-    {b.label}
-  </option>
-))}
+{((splitLocalWeeks?.length ? splitLocalWeeks : weeklyBlocks) || []).map((b, idx) => {
+  const id = b.id ?? b.block;
+  let label = b.label;
+  if (!label) {
+    const weekNum = b.parentBlock != null ? (b.parentBlock - 1) * 2 + (b.part ?? 1) : idx + 1;
+    const fmt = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    label = `Wk ${weekNum}: ${fmt(b.start)} – ${fmt(b.end)}`;
+  }
+  return (
+    <option key={`${id}-${idx}`} value={id}>
+      {label}
+    </option>
+  );
+})}
           </select>
-          {(!weeklyBlocks || weeklyBlocks.length === 0) && (
+          {(!splitLocalWeeks?.length && (!weeklyBlocks || weeklyBlocks.length === 0)) && (
             <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
               No weeks available. Check block dates loading.
             </div>

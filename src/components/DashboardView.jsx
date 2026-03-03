@@ -264,7 +264,7 @@ const pendingSwaps = useMemo(
             <div className="space-y-3">
               {myRotation && (
                 <div>
-                  <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-medium mb-1">
+                  <div className="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-medium mb-1">
                     Current Rotation
                   </div>
                   <span
@@ -276,7 +276,7 @@ const pendingSwaps = useMemo(
               )}
               {myNextRotation && (
                 <div>
-                  <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-medium mb-1">
+                  <div className="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-medium mb-1">
                     Up Next
                   </div>
                   <span

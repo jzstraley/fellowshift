@@ -489,17 +489,22 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
 
   // swap_requests has: block_number, block_date_id, from_week_part, to_week_part
   // (no start_block_id / end_block_id — those are vacation_requests columns)
+  // Use inline JOINs for fellow names (same pattern as vacations) so a failed
+  // secondary lookup can't silently drop all records.
   const { data, error } = await supabase
     .from('swap_requests')
     .select(`
       id,
+      created_at,
       block_number,
       from_week_part,
       to_week_part,
       reason,
       status,
       requester_fellow_id,
-      target_fellow_id
+      target_fellow_id,
+      requester:fellows!requester_fellow_id(id, name),
+      target:fellows!target_fellow_id(id, name)
     `)
     .eq('program_id', programId)
     .eq('academic_year_id', academicYearId)
@@ -508,28 +513,22 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
   if (error) return { error: error.message, swapRequests: null };
   if (!data?.length) return { error: null, swapRequests: null };
 
-  // Resolve fellow IDs → names via fellows table
-  const { data: fellowsData } = await supabase
-    .from('fellows')
-    .select('id, name')
-    .eq('program_id', programId)
-    .eq('is_active', true);
-
-  const idToName = Object.fromEntries((fellowsData ?? []).map((f) => [f.id, f.name]));
-
   const swapRequests = data
     .filter((r) => r.requester_fellow_id)
     .map((r) => ({
-      fellow: idToName[r.requester_fellow_id] ?? null,
+      id: r.id,
+      created_at: r.created_at ?? null,
+      fellow: r.requester?.name ?? null,
+      requester: r.requester?.name ?? null,
+      target: r.target?.name ?? null,
+      target_fellow: r.target?.name ?? null,
       from_block: r.block_number ?? null,
       to_block: r.block_number ?? null,
       from_week_part: r.from_week_part ?? null,
       to_week_part: r.to_week_part ?? null,
-      target_fellow: idToName[r.target_fellow_id] ?? null,
       reason: r.reason || '',
-      status: r.status || 'pending',
-    }))
-    .filter((r) => r.fellow);
+      status: String(r.status || 'pending').trim().toLowerCase(),
+    }));
 
   return { error: null, swapRequests: swapRequests.length ? swapRequests : null };
 }

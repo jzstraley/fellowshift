@@ -228,7 +228,7 @@ export default function SwapsView({
               value={newDbSwap.requester_id}
               onChange={e => setNewDbSwap({ ...SWAP_RESET, requester_id: e.target.value })}
             >
-              <option value="">Select your fellow</option>
+              <option value="">Select fellow</option>
               {selectableFellows.map(f => <option key={f.id} value={f.id}>{f.name} (PGY-{f.pgy_level})</option>)}
             </select>
 
@@ -240,10 +240,10 @@ export default function SwapsView({
             >
               <option value="">
                 {!newDbSwap.requester_id
-                  ? 'First select your fellow above'
+                  ? 'First select fellow'
                   : myShifts.length === 0
                   ? 'No assigned call/float shifts found'
-                  : 'Choose your shift to swap away'}
+                  : 'Choose your shift to swap'}
               </option>
               {myShifts.map(s => (
                 <option key={`${s.type}|${s.key}`} value={`${s.type}|${s.key}`}>

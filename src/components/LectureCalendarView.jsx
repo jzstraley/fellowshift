@@ -18,6 +18,8 @@ import {
   Mail,
   RefreshCw,
   Loader2,
+  ClipboardList,
+  UserCheck,
 } from "lucide-react";
 import { LECTURE_SERIES, RECURRENCE, RSVP_STATUS } from "../data/lectureData";
 import { useAuth } from "../context/AuthContext";
@@ -25,6 +27,7 @@ import { isSupabaseConfigured } from "../lib/supabaseClient";
 import { useLectureState } from "./lectures/useLectureState";
 import LectureList from "./lectures/LectureList";
 import PresenterSchedule from "./lectures/PresenterSchedule";
+import AttendanceRoster from "./lectures/AttendanceRoster";
 
 export default function LectureCalendarView({
   lectures: propLectures,
@@ -71,7 +74,8 @@ export default function LectureCalendarView({
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLecture, setEditingLecture] = useState(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1)); // July 2026
+  const [currentMonth, setCurrentMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [attendanceRosterLecture, setAttendanceRosterLecture] = useState(null);
 
   // Listen for keyboard nav events (←/→ arrow keys)
   useEffect(() => {
@@ -97,6 +101,33 @@ export default function LectureCalendarView({
     window.addEventListener("fellowshift:escape", handleEscape);
     return () => window.removeEventListener("fellowshift:escape", handleEscape);
   }, [editingLecture, showAddModal, selectedLecture]);
+
+  // ── Attendance helpers ────────────────────────────────────────────────────
+  // Returns true when the check-in window is open for a lecture.
+  // check_in_open === true  → admin has manually opened it
+  // check_in_open === false → admin has manually closed it
+  // check_in_open === null  → auto: ±15 minutes around lecture start time
+  const isInCheckInWindow = (lecture) => {
+    if (lecture?.checkInOpen === true) return true;
+    if (lecture?.checkInOpen === false) return false;
+    if (!lecture?.date || !lecture?.time) return false;
+    const now = new Date();
+    const start = new Date(`${lecture.date}T${lecture.time}`);
+    return Math.abs(now - start) <= 15 * 60 * 1000;
+  };
+
+  const handleCheckIn = async (lectureId) => {
+    await dbState.checkIn(lectureId);
+  };
+
+  // Admin toggle: null (auto) ↔ true (force open). To force-close use false.
+  const handleToggleCheckInWindow = async (lecture) => {
+    const newVal = lecture.checkInOpen === true ? null : true;
+    await dbState.updateLecture(lecture.id, { ...lecture, checkInOpen: newVal });
+    setSelectedLecture(prev =>
+      prev?.id === lecture.id ? { ...prev, checkInOpen: newVal } : prev,
+    );
+  };
 
   // Form state for add/edit
   const [formData, setFormData] = useState({
@@ -302,14 +333,14 @@ export default function LectureCalendarView({
           )}
         </h2>
 
-        <div className="flex items-center gap-2">
-          {/* View Toggle */}
-          <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* View Toggle — scrollable on narrow phones */}
+          <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600 overflow-x-auto flex-1 sm:flex-none">
             {VIEW_MODES.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setViewMode(key)}
-                className={`px-3 py-1 text-xs font-semibold ${
+                className={`px-3 py-2 text-xs font-semibold shrink-0 ${
                   viewMode === key
                     ? "bg-blue-600 text-white"
                     : darkMode
@@ -325,7 +356,7 @@ export default function LectureCalendarView({
           {canManageLectures && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded"
+              className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded shrink-0"
             >
               <Plus className="w-3 h-3" />
               Add Lecture
@@ -345,8 +376,11 @@ export default function LectureCalendarView({
       {viewMode === "agenda" && (
         <LectureList
           lectures={lectures}
+          attendance={dbState.attendance ?? []}
           onSelect={setSelectedLecture}
           canManage={canManageLectures}
+          onCheckIn={handleCheckIn}
+          myFellowId={dbState.myFellowId}
         />
       )}
 
@@ -583,7 +617,8 @@ export default function LectureCalendarView({
 
       {/* Selected Lecture Detail Modal */}
       {selectedLecture && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
           <div
             className={`w-full max-w-lg rounded-lg shadow-xl ${
               darkMode ? "bg-gray-800" : "bg-white"
@@ -593,7 +628,7 @@ export default function LectureCalendarView({
               <h3 className="font-bold">{selectedLecture.title}</h3>
               <button
                 onClick={() => setSelectedLecture(null)}
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -651,6 +686,93 @@ export default function LectureCalendarView({
                 )}
               </div>
 
+              {/* Attendance Section */}
+              {useDatabase && (
+                <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4" />
+                    Attendance
+                    {isInCheckInWindow(selectedLecture) && (
+                      <span className="text-xs text-green-500 dark:text-green-400 font-semibold">
+                        ● Live
+                      </span>
+                    )}
+                  </h4>
+
+                  {/* Fellow: self-check-in */}
+                  {!canManageLectures && dbState.myFellowId && (() => {
+                    const myRow = (dbState.attendance ?? []).find(
+                      a => a.lecture_id === selectedLecture.id && a.fellow_id === dbState.myFellowId,
+                    );
+                    if (myRow) {
+                      return (
+                        <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+                          <UserCheck className="w-4 h-4" />
+                          Marked {myRow.status}
+                        </div>
+                      );
+                    }
+                    if (isInCheckInWindow(selectedLecture)) {
+                      return (
+                        <button
+                          onClick={() => handleCheckIn(selectedLecture.id)}
+                          disabled={dbState.submitting}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded disabled:opacity-50"
+                        >
+                          {dbState.submitting
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <UserCheck className="w-3 h-3" />}
+                          Check In
+                        </button>
+                      );
+                    }
+                    return (
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
+                        Check-in window is not open
+                      </div>
+                    );
+                  })()}
+
+                  {/* Admin: summary + controls */}
+                  {canManageLectures && (() => {
+                    const rows = (dbState.attendance ?? []).filter(
+                      a => a.lecture_id === selectedLecture.id,
+                    );
+                    const present = rows.filter(a => ['present', 'late'].includes(a.status)).length;
+                    const total = dbState.fellows.length;
+                    return (
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {rows.length
+                            ? `${present} of ${total} present`
+                            : `0 of ${total} recorded`}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleToggleCheckInWindow(selectedLecture)}
+                            disabled={dbState.submitting}
+                            className={`text-xs px-2 py-1 rounded font-semibold disabled:opacity-50 transition-colors ${
+                              selectedLecture.checkInOpen === true
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                            }`}
+                          >
+                            {selectedLecture.checkInOpen === true ? '● Open' : 'Open Check-in'}
+                          </button>
+                          <button
+                            onClick={() => setAttendanceRosterLecture(selectedLecture)}
+                            className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded font-semibold hover:opacity-80"
+                          >
+                            <ClipboardList className="w-3 h-3" />
+                            Roster
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               {/* RSVP Section */}
               <div>
                 <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
@@ -679,7 +801,7 @@ export default function LectureCalendarView({
                                       RSVP_STATUS.ATTENDING
                                     )
                                   }
-                                  className={`p-1 rounded ${
+                                  className={`p-2 rounded ${
                                     status === RSVP_STATUS.ATTENDING
                                       ? "bg-green-500 text-white"
                                       : "bg-gray-200 dark:bg-gray-700 hover:bg-green-200"
@@ -696,7 +818,7 @@ export default function LectureCalendarView({
                                       RSVP_STATUS.NOT_ATTENDING
                                     )
                                   }
-                                  className={`p-1 rounded ${
+                                  className={`p-2 rounded ${
                                     status === RSVP_STATUS.NOT_ATTENDING
                                       ? "bg-red-500 text-white"
                                       : "bg-gray-200 dark:bg-gray-700 hover:bg-red-200"
@@ -713,7 +835,7 @@ export default function LectureCalendarView({
                                       RSVP_STATUS.MAYBE
                                     )
                                   }
-                                  className={`p-1 rounded ${
+                                  className={`p-2 rounded ${
                                     status === RSVP_STATUS.MAYBE
                                       ? "bg-yellow-500 text-white"
                                       : "bg-gray-200 dark:bg-gray-700 hover:bg-yellow-200"
@@ -765,18 +887,39 @@ export default function LectureCalendarView({
               </div>
             </div>
           </div>
+          </div>
         </div>
+      )}
+
+      {/* Attendance Roster Modal — admin/PD/chief only */}
+      {attendanceRosterLecture && (
+        <AttendanceRoster
+          lecture={attendanceRosterLecture}
+          attendance={(dbState.attendance ?? []).filter(
+            a => a.lecture_id === attendanceRosterLecture.id,
+          )}
+          fellows={dbState.fellows}
+          onUpsert={async (fellowId, status, notes) => {
+            await dbState.upsertAttendance(attendanceRosterLecture.id, fellowId, status, notes);
+          }}
+          onFinalize={async () => {
+            await dbState.finalizeAttendance(attendanceRosterLecture.id);
+          }}
+          onClose={() => setAttendanceRosterLecture(null)}
+          submitting={dbState.submitting}
+        />
       )}
 
       {/* Add/Edit Modal */}
       {canManageLectures && (showAddModal || editingLecture) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
           <div
-            className={`w-full max-w-lg rounded-lg shadow-xl max-h-[90vh] overflow-y-auto ${
+            className={`w-full max-w-lg rounded-lg shadow-xl ${
               darkMode ? "bg-gray-800" : "bg-white"
             }`}
           >
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between sticky top-0 bg-inherit">
+            <div className={`p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between sticky top-0 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
               <h3 className="font-bold">
                 {editingLecture ? "Edit Lecture" : "Add New Lecture"}
               </h3>
@@ -786,7 +929,7 @@ export default function LectureCalendarView({
                   setEditingLecture(null);
                   resetForm();
                 }}
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -979,6 +1122,7 @@ export default function LectureCalendarView({
                 </button>
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}

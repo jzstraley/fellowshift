@@ -441,6 +441,44 @@ if (Array.isArray(swapResult?.swapRequests)) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataReady, profile?.institution_id]);
 
+  // Lightweight refresh of requests only — runs on dashboard visit and tab refocus.
+  const refreshRequests = useCallback(async () => {
+    if (!isSupabaseConfigured || !programId || !academicYearId) return;
+    const [vacResult, swapResult] = await Promise.all([
+      pullVacationsFromSupabase({ programId, academicYearId }),
+      pullSwapRequestsFromSupabase({ programId, academicYearId }),
+    ]);
+    if (Array.isArray(vacResult?.vacations)) {
+      setVacations((prev) => mergeByReqIdPreferIncoming(prev, vacResult.vacations));
+    } else if (vacResult?.vacations === null) {
+      setVacations([]);
+    }
+    if (Array.isArray(swapResult?.swapRequests)) {
+      setSwapRequests((prev) => mergeByReqIdPreferIncoming(prev, swapResult.swapRequests));
+    } else if (swapResult?.swapRequests === null) {
+      setSwapRequests([]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programId, academicYearId]);
+
+  // Re-fetch requests whenever the user navigates to the dashboard.
+  useEffect(() => {
+    if (activeView === 'dashboard' && supabaseInitLoadDoneRef.current) {
+      refreshRequests();
+    }
+  }, [activeView, refreshRequests]);
+
+  // Re-fetch requests when the browser tab regains focus while on the dashboard.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && activeView === 'dashboard' && supabaseInitLoadDoneRef.current) {
+        refreshRequests();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [activeView, refreshRequests]);
+
   // Push the full schedule to Supabase — called by ScheduleEditorView's Validate button.
   const onSaveToSupabase = useCallback(async () => {
     if (!isSupabaseConfigured || !profile?.institution_id) return { error: 'Supabase not available' };
@@ -618,23 +656,24 @@ if (Array.isArray(swapResult?.swapRequests)) {
     }
   }, [fellows, schedule, isSupabaseConfigured, profile?.institution_id, user?.id]);
 
-  // Debounced stats calculation when schedule changes to avoid frequent heavy work
-  // Preserve call/float counts from the previous stats (set by generateCallAndFloat)
+  // Debounced stats calculation when schedule or call/float schedules change
   useEffect(() => {
     const t = setTimeout(() => {
-      setStats((prev) => {
-        const fresh = buildCounts(schedule);
-        if (prev) {
-          Object.keys(fresh).forEach((f) => {
-            fresh[f].call = prev[f]?.call ?? 0;
-            fresh[f].float = prev[f]?.float ?? 0;
-          });
-        }
-        return fresh;
+      const fresh = buildCounts(schedule);
+      // Compute call/float counts directly from the current schedules
+      Object.keys(fresh).forEach((f) => { fresh[f].call = 0; fresh[f].float = 0; });
+      Object.values(callSchedule).forEach((e) => {
+        const name = typeof e === 'string' ? e : e?.name;
+        if (name && fresh[name] !== undefined) fresh[name].call += 1;
       });
+      Object.values(nightFloatSchedule).forEach((e) => {
+        const name = typeof e === 'string' ? e : e?.name;
+        if (name && fresh[name] !== undefined) fresh[name].float += 1;
+      });
+      setStats(fresh);
     }, 150);
     return () => clearTimeout(t);
-  }, [schedule]);
+  }, [schedule, callSchedule, nightFloatSchedule]);
 
 
 

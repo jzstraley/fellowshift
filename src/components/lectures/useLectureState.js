@@ -1,18 +1,23 @@
 // useLectureState.js
-// Supabase hook for lectures + speakers.
+// Supabase hook for lectures + speakers + attendance.
 // Actual DB schema (confirmed via OpenAPI introspection 2026-03-02):
 //
 //   lectures: id, institution_id, program_id, program, title, topic_id,
 //             speaker_id (FK→speakers.id), presenter_fellow_id (FK→fellows.id),
 //             date (date), time (time), duration, location, series, recurrence,
-//             notes, reminder_sent, created_by, created_at, updated_at
+//             notes, reminder_sent, check_in_open (bool|null), created_by, created_at, updated_at
 //
 //   speakers: id, institution_id, name, title, email, type  ← NEW table (uuid PK)
 //   lecture_speakers: id (text PK) — OLD table, still in DB but FK is to speakers
 //   lecture_rsvps: id, lecture_id, user_id (FK→profiles), status
 //   lecture_topics: id, institution_id, name, series, duration
+//
+//   lecture_attendance: id, lecture_id (FK→lectures), fellow_id (FK→fellows),
+//                       status (present|absent|excused|late), checked_in_at,
+//                       checked_in_by (FK→profiles), notes
+//                       UNIQUE (lecture_id, fellow_id)
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 
 const asArray = (v) => (Array.isArray(v) ? v : []);
@@ -34,6 +39,8 @@ const mapLecture = (row) => ({
   series:             row.series              ?? '',
   recurrence:         row.recurrence          ?? 'none',
   reminderSent:       row.reminder_sent       ?? false,
+  // null = auto time-window; true = manually open; false = manually closed
+  checkInOpen:        row.check_in_open       ?? null,
   notes:              row.notes               ?? '',
   rsvps:              {},   // populated separately if needed
   // enriched joins
@@ -58,9 +65,16 @@ export function useLectureState({
   const [error, setError]           = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [dbLectures, setDbLectures] = useState([]);
-  const [dbSpeakers, setDbSpeakers] = useState([]);
-  const [dbFellows,  setDbFellows]  = useState([]);
+  const [dbLectures,   setDbLectures]   = useState([]);
+  const [dbSpeakers,   setDbSpeakers]   = useState([]);
+  const [dbFellows,    setDbFellows]    = useState([]);
+  const [dbAttendance, setDbAttendance] = useState([]);
+
+  // Current user's fellow_id (for self-check-in)
+  const myFellowId = useMemo(
+    () => dbFellows.find(f => f.user_id === uid)?.id ?? null,
+    [dbFellows, uid],
+  );
 
   // ── fetch ────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -77,9 +91,8 @@ export function useLectureState({
           .select(`
             id, topic_id, title, speaker_id, presenter_fellow_id,
             date, time, duration, location, series,
-            recurrence, reminder_sent, notes, created_by, created_at,
-            speaker:speakers(id, name, title, email, type),
-            presenter:fellows!lectures_presenter_fellow_id_fkey(id, name, pgy_level)
+            recurrence, reminder_sent, notes, check_in_open,
+            created_by, created_at
           `)
           .eq('institution_id', iid)
           .order('date', { ascending: true }),
@@ -102,7 +115,15 @@ export function useLectureState({
       if (spRes.error)  throw spRes.error;
       if (!fRes.error)  setDbFellows(asArray(fRes.data));
 
-      const mappedLectures = asArray(lecRes.data).map(mapLecture);
+      // Enrich lectures client-side using already-fetched speakers/fellows
+      const speakersById = Object.fromEntries(asArray(spRes.data).map(s => [s.id, s]));
+      const fellowsById  = Object.fromEntries(asArray(fRes.data).map(f => [f.id, f]));
+
+      const mappedLectures = asArray(lecRes.data).map((row) => mapLecture({
+        ...row,
+        speaker:   speakersById[row.speaker_id]          ?? null,
+        presenter: fellowsById[row.presenter_fellow_id]  ?? null,
+      }));
       const mappedSpeakers = asArray(spRes.data);
 
       setDbLectures(mappedLectures);
@@ -110,6 +131,18 @@ export function useLectureState({
 
       if (typeof setLectures === 'function') setLectures(mappedLectures);
       if (typeof setSpeakers === 'function') setSpeakers(mappedSpeakers);
+
+      // Fetch attendance scoped to this institution's lectures
+      const lectureIds = asArray(lecRes.data).map(l => l.id);
+      if (lectureIds.length > 0) {
+        const attRes = await supabase
+          .from('lecture_attendance')
+          .select('id, lecture_id, fellow_id, status, checked_in_at, checked_in_by, notes')
+          .in('lecture_id', lectureIds);
+        if (!attRes.error) setDbAttendance(asArray(attRes.data));
+      } else {
+        setDbAttendance([]);
+      }
     } catch (e) {
       console.error('useLectureState fetch error:', e);
       setError(e?.message || String(e));
@@ -135,6 +168,7 @@ export function useLectureState({
     series:              fields.series             ?? null,
     recurrence:          fields.recurrence         ?? 'none',
     reminder_sent:       fields.reminderSent       ?? false,
+    check_in_open:       fields.checkInOpen        ?? null,
     notes:               fields.notes              ?? null,
     created_by:          uid || null,
   });
@@ -218,20 +252,104 @@ export function useLectureState({
     finally { setSubmitting(false); }
   }, [fetchAll]);
 
+  // ── Attendance ───────────────────────────────────────────────────────────
+
+  // Fellow self-check-in: upserts present for the current user's fellow record
+  const checkIn = useCallback(async (lectureId) => {
+    if (!myFellowId) {
+      setError('No fellow record linked to your account');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { error } = await supabase
+        .from('lecture_attendance')
+        .upsert(
+          {
+            lecture_id:    lectureId,
+            fellow_id:     myFellowId,
+            status:        'present',
+            checked_in_at: new Date().toISOString(),
+            checked_in_by: uid || null,
+          },
+          { onConflict: 'lecture_id,fellow_id' },
+        );
+      if (error) throw error;
+      await fetchAll();
+    } catch (e) { setError(e?.message || String(e)); }
+    finally { setSubmitting(false); }
+  }, [myFellowId, uid, fetchAll]);
+
+  // Admin upsert: set any fellow's status (present/absent/excused/late)
+  const upsertAttendance = useCallback(async (lectureId, fellowId, status, notes = null) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { error } = await supabase
+        .from('lecture_attendance')
+        .upsert(
+          {
+            lecture_id:    lectureId,
+            fellow_id:     fellowId,
+            status,
+            notes:         notes ?? null,
+            checked_in_at: new Date().toISOString(),
+            checked_in_by: uid || null,
+          },
+          { onConflict: 'lecture_id,fellow_id' },
+        );
+      if (error) throw error;
+      await fetchAll();
+    } catch (e) { setError(e?.message || String(e)); }
+    finally { setSubmitting(false); }
+  }, [uid, fetchAll]);
+
+  // Admin finalize: inserts absent rows for all fellows with no record
+  const finalizeAttendance = useCallback(async (lectureId) => {
+    const existing = dbAttendance.filter(a => a.lecture_id === lectureId);
+    const recordedIds = new Set(existing.map(a => a.fellow_id));
+    const missing = dbFellows.filter(f => !recordedIds.has(f.id));
+    if (missing.length === 0) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const rows = missing.map(f => ({
+        lecture_id:    lectureId,
+        fellow_id:     f.id,
+        status:        'absent',
+        checked_in_at: new Date().toISOString(),
+        checked_in_by: uid || null,
+      }));
+      const { error } = await supabase
+        .from('lecture_attendance')
+        .upsert(rows, { onConflict: 'lecture_id,fellow_id' });
+      if (error) throw error;
+      await fetchAll();
+    } catch (e) { setError(e?.message || String(e)); }
+    finally { setSubmitting(false); }
+  }, [uid, dbAttendance, dbFellows, fetchAll]);
+
   return {
     loading,
     error,
     setError,
     submitting,
-    lectures:  dbLectures,
-    speakers:  dbSpeakers,
-    fellows:   dbFellows,
+    lectures:   dbLectures,
+    speakers:   dbSpeakers,
+    fellows:    dbFellows,
+    attendance: dbAttendance,
+    myFellowId,
     addLecture,
     updateLecture,
     deleteLecture,
     addSpeaker,
     updateSpeaker,
     deleteSpeaker,
+    checkIn,
+    upsertAttendance,
+    finalizeAttendance,
     refetch: fetchAll,
   };
 }

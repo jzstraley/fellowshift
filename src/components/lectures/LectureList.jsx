@@ -5,7 +5,7 @@
 // TODO: wire to useLectureState or receive lectures/attendance as props.
 
 import { useState, useMemo } from 'react';
-import { Calendar, Clock, MapPin, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, ChevronDown, ChevronUp, UserCheck } from 'lucide-react';
 import { LECTURE_SERIES } from '../../data/lectureData';
 
 const SERIES_COLOR = {
@@ -22,6 +22,17 @@ const SERIES_COLOR = {
 };
 
 const today = new Date().toISOString().split('T')[0];
+
+// Returns true when the ±15-minute check-in window is open.
+// Respects admin override: checkInOpen === true/false overrides the time window.
+function isInCheckInWindow(lecture) {
+  if (lecture?.checkInOpen === true) return true;
+  if (lecture?.checkInOpen === false) return false;
+  if (!lecture?.date || !lecture?.time) return false;
+  const now = new Date();
+  const start = new Date(`${lecture.date}T${lecture.time}`);
+  return Math.abs(now - start) <= 15 * 60 * 1000;
+}
 
 function fmt12(time) {
   const [h, m] = time.split(':');
@@ -51,7 +62,14 @@ function groupByWeek(lectures) {
   return groups;
 }
 
-export default function LectureList({ lectures = [], attendance = [], onSelect, canManage = false }) {
+export default function LectureList({
+  lectures = [],
+  attendance = [],
+  onSelect,
+  canManage = false,
+  onCheckIn,      // async (lectureId) => void — fellow self-check-in
+  myFellowId,     // uuid of the current user's fellow record (null if not a fellow / offline)
+}) {
   const [showPast, setShowPast] = useState(false);
 
   const { upcoming, past } = useMemo(() => {
@@ -65,68 +83,95 @@ export default function LectureList({ lectures = [], attendance = [], onSelect, 
   const upcomingGroups = useMemo(() => groupByWeek(upcoming), [upcoming]);
   const pastGroups     = useMemo(() => groupByWeek(past),     [past]);
 
-  // Quick attendance summary for a lecture
+  // Quick attendance summary for a lecture (admin only)
   const attSummary = (lectureId) => {
     const rows = attendance.filter(a => a.lecture_id === lectureId);
-    const present = rows.filter(a => a.status === 'present').length;
+    const present = rows.filter(a => a.status === 'present' || a.status === 'late').length;
     const absent  = rows.filter(a => a.status === 'absent').length;
     return rows.length ? `${present}✓ ${absent}✗` : null;
   };
 
   const renderLecture = (lec) => {
-    const speaker = lec.speaker?.name || lec.presenter?.name || 'TBD';
-    const summary = attSummary(lec.id);
-    const isToday = lec.date === today;
+    const speaker    = lec.speaker?.name || lec.presenter?.name || 'TBD';
+    const summary    = canManage ? attSummary(lec.id) : null;
+    const isToday    = lec.date === today;
+    const inWindow   = isInCheckInWindow(lec);
+    const myRow      = myFellowId
+      ? attendance.find(a => a.lecture_id === lec.id && a.fellow_id === myFellowId)
+      : null;
+    const checkedIn  = myRow?.status === 'present' || myRow?.status === 'late';
 
     return (
-      <button
-        key={lec.id}
-        onClick={() => onSelect?.(lec)}
-        className="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-      >
-        {/* Date chip */}
-        <div className={`flex-shrink-0 w-12 text-center rounded-lg py-1 ${
-          isToday ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-        }`}>
-          <div className="text-xs font-semibold">
-            {new Date(`${lec.date}T00:00:00`).toLocaleDateString('en-US', { month: 'short' })}
+      // Outer div so we can place the check-in button as a sibling to the card button
+      <div key={lec.id} className="flex items-stretch">
+        <button
+          onClick={() => onSelect?.(lec)}
+          className="flex-1 text-left flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          {/* Date chip */}
+          <div className={`flex-shrink-0 w-12 text-center rounded-lg py-1 ${
+            isToday ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+          }`}>
+            <div className="text-xs font-semibold">
+              {new Date(`${lec.date}T00:00:00`).toLocaleDateString('en-US', { month: 'short' })}
+            </div>
+            <div className="text-lg font-bold leading-none">
+              {new Date(`${lec.date}T00:00:00`).getDate()}
+            </div>
           </div>
-          <div className="text-lg font-bold leading-none">
-            {new Date(`${lec.date}T00:00:00`).getDate()}
-          </div>
-        </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${SERIES_COLOR[lec.series] || 'bg-gray-100 text-gray-600'}`}>
-              {lec.series}
-            </span>
-            {isToday && <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">Today</span>}
-          </div>
-          <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{lec.title}</div>
-          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />{fmt12(lec.time)} · {lec.duration_min || lec.duration || 60} min
-            </span>
-            {lec.location && (
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3" />{lec.location}
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${SERIES_COLOR[lec.series] || 'bg-gray-100 text-gray-600'}`}>
+                {lec.series}
               </span>
-            )}
-            <span className="flex items-center gap-1">
-              <User className="w-3 h-3" />{speaker}
-            </span>
+              {isToday && <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">Today</span>}
+              {inWindow && <span className="text-xs text-green-500 dark:text-green-400 font-semibold">● Live</span>}
+            </div>
+            <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{lec.title}</div>
+            <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />{fmt12(lec.time)} · {lec.duration_min || lec.duration || 60} min
+              </span>
+              {lec.location && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />{lec.location}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <User className="w-3 h-3" />{speaker}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Attendance summary (admin only) */}
-        {canManage && summary && (
-          <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono pt-1">
-            {summary}
+          {/* Attendance summary (admin only) */}
+          {canManage && summary && (
+            <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono pt-1">
+              {summary}
+            </div>
+          )}
+        </button>
+
+        {/* Check In button — fellows only, during the live window */}
+        {!canManage && inWindow && myFellowId && (
+          <div className="flex items-center px-3 border-l border-gray-100 dark:border-gray-700">
+            {checkedIn ? (
+              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-semibold whitespace-nowrap">
+                <UserCheck className="w-3.5 h-3.5" />
+                In
+              </span>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCheckIn?.(lec.id); }}
+                className="text-xs px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded whitespace-nowrap"
+              >
+                Check In
+              </button>
+            )}
           </div>
         )}
-      </button>
+      </div>
     );
   };
 

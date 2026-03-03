@@ -17,6 +17,7 @@
 /* Match html/body background to theme so mobile overscroll doesn't show white */
 html, body {
   background-color: #f9fafb; /* gray-50 */
+  overscroll-behavior-y: none; /* prevent pull-to-refresh on mobile */
 }
 
 html.dark, html.dark body {

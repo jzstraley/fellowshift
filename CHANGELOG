@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-03 — Lecture Attendance Tracking
+
+- Added `lecture_attendance` table (new): `lecture_id`, `fellow_id`, `status` (present/absent/excused/late), `checked_in_at`, `checked_in_by`, `notes` with a UNIQUE constraint on `(lecture_id, fellow_id)`
+- Added `check_in_open` boolean column to `lectures` table: `null` = auto time window, `true` = manually open, `false` = manually closed
+- **Fellow self-check-in**: "Check In" button appears on lecture cards in the Agenda view and in the lecture detail modal during a ±15-minute window around lecture start time; shows "In ✓" once recorded; only visible when a fellow record is linked to the user's account
+- **Admin attendance roster** (`AttendanceRoster.jsx`, new): modal listing all active fellows sorted by PGY then name; P/L/E/A status buttons per row; notes field (expands on excused or when notes exist); summary bar showing present/absent/excused/no-record counts; "Finalize" button bulk-inserts absent rows for all fellows with no record (with confirmation)
+- **Admin check-in controls** in lecture detail modal: "Open Check-in" toggle overrides the auto time window; "Roster" button opens the attendance roster; shows live count ("X of Y present")
+- **"● Live" badge** on lecture cards in the Agenda view when the check-in window is open
+- `useLectureState.js`: added `attendance` state, `myFellowId` (derived from `fellows.user_id`), `checkIn()`, `upsertAttendance()`, `finalizeAttendance()`, and `check_in_open` mapping; attendance rows are fetched after lectures using lecture IDs as scope
+- Attendance data and controls are visible only to admin/PD/chief fellows (`canManage`); fellows only see their own check-in status
+
+## 2026-03-02 — Supabase Schema Audit & Reference Fixes
+
+- Audited all 17 pages/hooks/services against the live Supabase schema (confirmed via OpenAPI introspection)
+- Fixed `App.jsx`: 9 incorrect Supabase sync function call params across 3 call sites — `pullScheduleFromSupabase` and `pushScheduleToSupabase` were called with `institutionId` instead of `programId`+`academicYearId`; `pullLecturesFromSupabase` was called with `programId` (wrong key) instead of `institutionId`; `pullClinicDaysFromSupabase` and `pushClinicDaysToSupabase` were called with `institutionId` instead of `programId`; `pushScheduleToSupabase` received unused `blockDates` param and was missing `academicYearId`
+- Fixed `scheduleSupabaseSync.js`: `pullSwapRequestsFromSupabase` was selecting `start_block_id`/`end_block_id` (vacation_requests columns) on the `swap_requests` table where those columns don't exist; rewrote to use correct columns (`block_number`, `from_week_part`, `to_week_part`, `requester_fellow_id`, `target_fellow_id`) scoped by `program_id`/`academic_year_id`
+- Fixed `LectureCalendarView.jsx`: (1) `handleRSVP` called non-existent `dbState.setRsvp` — fixed to local state update; (2) presenter dropdown was storing fellow name strings instead of UUIDs — renamed form field to `presenterFellowId`, iterate `fellowObjects` with `value={f.id}`
+- Fixed `requestService.js`: `swap_requests` SELECT was missing `from_week_part` and `to_week_part` columns that `SwapsView.jsx` reads directly; `submitDbSwap` INSERT also did not write those columns despite having the values in scope (`myM[2]`/`tgtM[2]`)
+- Fixed `AuthContext.jsx`: added missing `updateProfile` function and exported it — `ProfileSettings.jsx` destructures it from `useAuth()` and would always show "updateProfile is not available" when attempting to save
+
 ## 2026-02-28 — Dashboard Pending Approvals Breakdown
 
 - Dashboard "Pending Approvals" card now shows vacation, day off, and swap requests as separate labeled rows with individual counts
