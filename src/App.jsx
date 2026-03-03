@@ -428,9 +428,9 @@ if (Array.isArray(vacResult?.vacations)) {
 
 if (Array.isArray(swapResult?.swapRequests)) {
   setSwapRequests(swapResult.swapRequests);
-} else if (swapResult?.swapRequests === null) {
-  setSwapRequests([]);
 }
+// Don't clear on null — null means no rows found, not a query failure;
+// wiping state would hide any swaps already hydrated from localStorage.
       if (lectResult.lectures) setLectures(lectResult.lectures);
       if (lectResult.speakers) setSpeakers(lectResult.speakers);
       if (lectResult.topics) setTopics(lectResult.topics);
@@ -439,9 +439,11 @@ if (Array.isArray(swapResult?.swapRequests)) {
       console.error('Initial Supabase load failed:', err);
       setSyncError(err?.message ?? 'Failed to connect to server');
     });
-  // fellows and blockDates are stable module-level constants
+  // fellows and blockDates are stable module-level constants.
+  // programId and academicYearId are loaded async by AuthContext after the profile,
+  // so they must be in the dep array or the effect exits early and never retries.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, profile?.institution_id]);
+  }, [dataReady, profile?.institution_id, programId, academicYearId]);
 
   // Lightweight refresh of requests only — runs on dashboard visit and tab refocus.
   const refreshRequests = useCallback(async () => {
@@ -464,8 +466,9 @@ if (Array.isArray(swapResult?.swapRequests)) {
   }, [programId, academicYearId]);
 
   // Re-fetch requests whenever the user navigates to the dashboard.
+  // No ref guard — refreshRequests already bails if programId/academicYearId are null.
   useEffect(() => {
-    if (activeView === 'dashboard' && supabaseInitLoadDoneRef.current) {
+    if (activeView === 'dashboard') {
       refreshRequests();
     }
   }, [activeView, refreshRequests]);
@@ -473,7 +476,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
   // Re-fetch requests when the browser tab regains focus while on the dashboard.
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && activeView === 'dashboard' && supabaseInitLoadDoneRef.current) {
+      if (document.visibilityState === 'visible' && activeView === 'dashboard') {
         refreshRequests();
       }
     };

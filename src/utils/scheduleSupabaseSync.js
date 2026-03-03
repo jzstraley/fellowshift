@@ -485,16 +485,19 @@ export async function pullVacationsFromSupabase({ programId, academicYearId }) {
 export async function pullSwapRequestsFromSupabase({ programId, academicYearId }) {
   if (!supabase) return { error: 'Supabase not configured', swapRequests: null };
   if (!programId) return { error: 'No programId provided', swapRequests: null };
-  if (!academicYearId) return { error: 'No academicYearId provided', swapRequests: null };
+  // academicYearId is intentionally optional — rows inserted before the year
+  // scope was resolved may have academic_year_id = NULL and must still be found.
 
-  // swap_requests — plain select, no JOINs (two FKs to fellows requires the
-  // full pg constraint name for PostgREST disambiguation; skip the complexity).
-  const { data, error } = await supabase
+  // Plain select, no JOINs. Two FKs to the same table require the full pg
+  // constraint name for PostgREST disambiguation — skip the complexity.
+  let q = supabase
     .from('swap_requests')
     .select('id, created_at, block_number, from_week_part, to_week_part, reason, status, requester_fellow_id, target_fellow_id')
     .eq('program_id', programId)
-    .eq('academic_year_id', academicYearId)
     .order('created_at', { ascending: false });
+  if (academicYearId) q = q.eq('academic_year_id', academicYearId);
+
+  const { data, error } = await q;
 
   if (error) return { error: error.message, swapRequests: null };
   if (!data?.length) return { error: null, swapRequests: null };
