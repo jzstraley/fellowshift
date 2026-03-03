@@ -37,8 +37,13 @@ const handleSubmit = async (e) => {
       });
 
       if (lookupError) {
-        // Don’t leak whether a username exists
-        setError('Sign-in failed');
+        // P0001 is our rate-limit ERRCODE; surface a clear message for that case only.
+        if (lookupError.code === ‘P0001’ || lookupError.message?.includes(‘Too many login attempts’)) {
+          setError(‘Too many login attempts. Please wait a minute and try again.’);
+        } else {
+          // Don’t leak whether a username exists for any other error.
+          setError(‘Sign-in failed’);
+        }
         return;
       }
 

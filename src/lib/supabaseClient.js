@@ -31,16 +31,6 @@ export const supabase =
       })
     : null;
 
-    // --- TEMP DEBUG TRAP: find unexpected signouts ---
-if (typeof window !== "undefined" && supabase) {
-  const originalSignOut = supabase.auth.signOut.bind(supabase.auth);
-  supabase.auth.signOut = async (...args) => {
-    console.error("[TRAP] supabase.auth.signOut called", args);
-    console.trace("[TRAP] signOut stack");
-    return originalSignOut(...args);
-  };
-}
-
 // Export a flag to check if Supabase is configured
 export const isSupabaseConfigured = Boolean(supabase);
 
@@ -99,8 +89,6 @@ if (supabase) {
  * This guarantees your app cache clears on real user sign-out.
  */
 export async function signOutAndClear(reason = "unknown") {
-  console.error("[TRAP] signOutAndClear called. reason:", reason);
-  console.trace("[TRAP] signOutAndClear stack");
   if (!supabase) return;
 
   userInitiatedSignOut = true;

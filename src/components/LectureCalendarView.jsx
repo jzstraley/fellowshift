@@ -24,6 +24,7 @@ import {
 import { LECTURE_SERIES, RECURRENCE, RSVP_STATUS } from "../data/lectureData";
 import { useAuth } from "../context/AuthContext";
 import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { toast } from "./Toast";
 import { useLectureState } from "./lectures/useLectureState";
 import LectureList from "./lectures/LectureList";
 import PresenterSchedule from "./lectures/PresenterSchedule";
@@ -76,6 +77,7 @@ export default function LectureCalendarView({
   const [editingLecture, setEditingLecture] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [attendanceRosterLecture, setAttendanceRosterLecture] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   // Listen for keyboard nav events (←/→ arrow keys)
   useEffect(() => {
@@ -231,14 +233,23 @@ export default function LectureCalendarView({
     resetForm();
   };
 
-  const handleDeleteLecture = async (id) => {
-    if (confirm("Delete this lecture?")) {
+  const handleDeleteLecture = (id) => {
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
+    try {
       if (useDatabase) {
         await dbState.deleteLecture(id);
       } else {
         setLectures((propLectures ?? []).filter((l) => l.id !== id));
       }
       setSelectedLecture(null);
+      toast.success('Lecture deleted.');
+    } catch {
+      toast.error('Failed to delete lecture.');
     }
   };
 
@@ -908,6 +919,30 @@ export default function LectureCalendarView({
           onClose={() => setAttendanceRosterLecture(null)}
           submitting={dbState.submitting}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
+          <div className={`w-full max-w-sm rounded-lg shadow-xl p-5 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+            <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-1">Delete lecture?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">This action cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 text-sm font-semibold rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 text-sm font-semibold rounded bg-red-600 hover:bg-red-700 text-white"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Add/Edit Modal */}

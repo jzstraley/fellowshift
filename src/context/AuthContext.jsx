@@ -143,7 +143,7 @@ export const AuthProvider = ({ children }) => {
       if (!alive) return;
 
       clearTimeout(timeout);
-      console.log('AUTH EVENT:', event, !!session?.user);
+      if (import.meta.env.DEV) console.log('AUTH EVENT:', event, !!session?.user);
 
       setUser(session?.user ?? null);
       setLoading(false);

@@ -48,9 +48,21 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
       return;
     }
 
+    const trimmedName = fullName?.trim() || null;
+    const normalizedUsername = normalizeUsername(username) || null;
+
+    if (trimmedName && trimmedName.length > 100) {
+      setMessage({ type: "error", text: "Full name must be 100 characters or fewer." });
+      return;
+    }
+    if (normalizedUsername && normalizedUsername.length > 50) {
+      setMessage({ type: "error", text: "Username must be 50 characters or fewer." });
+      return;
+    }
+
     const payload = {
-      full_name: fullName?.trim() || null,
-      username: normalizeUsername(username) || null,
+      full_name: trimmedName,
+      username: normalizedUsername,
     };
 
     setSaving(true);

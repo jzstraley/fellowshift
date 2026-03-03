@@ -22,6 +22,8 @@ import {
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 import useIdleTimeout from "./hooks/useIdleTimeout";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { ToastContainer, toast } from "./components/Toast";
+import DashboardSkeleton from "./components/DashboardSkeleton";
 
 // ✅ LAZY LOAD ALL VIEWS
 const LoginPage = lazy(() => import("./components/auth/LoginPage"));
@@ -724,9 +726,9 @@ if (Array.isArray(swapResult?.swapRequests)) {
     });
 
     if (issues.length === 0) {
-      alert('✅ Perfect Balance!\n\nAll rotations, call, and float are balanced correctly.');
+      toast.success('Perfect Balance! All rotations, call, and float are balanced.');
     } else {
-      alert('⚠️ Balance Issues:\n\n' + issues.join('\n'));
+      toast.error(`Balance issues (${issues.length}):\n` + issues.slice(0, 5).join(' · ') + (issues.length > 5 ? ` · +${issues.length - 5} more` : ''), 6000);
     }
   }, [stats, fellows]);
 
@@ -818,9 +820,10 @@ if (Array.isArray(swapResult?.swapRequests)) {
         </div>
       )}
 
-      <div className="p-3 pb-16">
-        <Suspense fallback={<ViewLoader />}>
-          {activeView === "dashboard" && (
+      <div className="p-3 pb-20 md:pb-4">
+        {/* Dashboard gets its own Suspense so it shows a skeleton instead of a spinner */}
+        {activeView === "dashboard" && (
+          <Suspense fallback={<DashboardSkeleton />}>
             <DashboardView
               fellows={fellows}
               schedule={schedule}
@@ -833,8 +836,10 @@ if (Array.isArray(swapResult?.swapRequests)) {
               workHourViolations={workHourViolations}
               setActiveView={setActiveView}
             />
-          )}
+          </Suspense>
+        )}
 
+        <Suspense fallback={<ViewLoader />}>
           {activeView === "schedule" && (
             <ScheduleView
               fellows={fellows}
@@ -962,6 +967,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
               schedule={schedule}
               vacations={vacations}
               setVacations={setVacations}
+              setSwapRequests={setSwapRequests}
               callSchedule={callSchedule}
               nightFloatSchedule={nightFloatSchedule}
               setCallSchedule={setCallSchedule}
@@ -1065,6 +1071,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
 
       <Footer />
       <CookieConsent />
+      <ToastContainer />
     </div>
   );
 }

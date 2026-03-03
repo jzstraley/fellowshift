@@ -50,6 +50,7 @@ export function useVacationState({
   schedule = {},
   vacations = [],
   setVacations,
+  setSwapRequests,
   callSchedule = {},
   nightFloatSchedule = {},
   clinicDays = {},
@@ -319,6 +320,22 @@ export function useVacationState({
           block_date: (r.block_date_id && blockById.get(r.block_date_id)) ? blockById.get(r.block_date_id) : null,
         }));
         setDbSwapRequests(swapRows);
+        // Sync back to App.jsx's swapRequests state so the Dashboard count stays current.
+        if (typeof setSwapRequests === 'function') {
+          setSwapRequests(swapRows.map((r) => ({
+            id: r.id,
+            created_at: r.created_at ?? null,
+            fellow: r.requester?.name ?? null,
+            requester: r.requester?.name ?? null,
+            target: r.target?.name ?? null,
+            target_fellow: r.target?.name ?? null,
+            block_number: r.block_number ?? null,
+            from_week_part: r.from_week_part ?? null,
+            to_week_part: r.to_week_part ?? null,
+            reason: r.reason || '',
+            status: r.status,
+          })));
+        }
       }
     } catch (e) {
       console.error(e);
