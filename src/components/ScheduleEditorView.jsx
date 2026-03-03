@@ -683,13 +683,13 @@ function DayOverrideEditor({
                   isOverridden ? "ring-2 ring-amber-400 ring-inset" : ""
                 }`}
               >
-                <div className="text-[9px] text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-[9px] text-gray-500 dark:text-gray-400 mb-1 text-center">
                   {day.month} {day.dayNum}
                 </div>
                 <select
                   value={currentValue}
                   onChange={(e) => handleDayChange(day.date, e.target.value)}
-                  className={`w-full text-[9px] font-semibold px-1 py-1 rounded cursor-pointer ${
+                  className={`w-full text-[9px] font-semibold px-1 py-1 rounded cursor-pointer text-center ${
                     isOverridden
                       ? getRotationColor(currentValue)
                       : "bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500"

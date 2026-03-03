@@ -144,7 +144,9 @@ export default function LectureCalendarView({
     series: LECTURE_SERIES.CORE_CURRICULUM,
     recurrence: RECURRENCE.NONE,
     notes: "",
+    checkInOpen: null,  // null=auto, true=forced open, false=forced closed
   });
+  const [formErrors, setFormErrors] = useState({});
 
   // Get lectures for a specific date
   const getLecturesForDate = (dateStr) => {
@@ -208,7 +210,19 @@ export default function LectureCalendarView({
     return colors[series] || "bg-gray-500";
   };
 
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.title.trim()) errors.title = 'Title is required';
+    if (!formData.date)         errors.date  = 'Date is required';
+    if (!formData.time)         errors.time  = 'Time is required';
+    if (!formData.series)       errors.series = 'Series is required';
+    return errors;
+  };
+
   const handleAddLecture = async () => {
+    const errors = validateForm();
+    if (Object.keys(errors).length) { setFormErrors(errors); return; }
+    setFormErrors({});
     if (useDatabase) {
       await dbState.addLecture({ ...formData, rsvps: {}, reminderSent: false });
     } else {
@@ -220,6 +234,9 @@ export default function LectureCalendarView({
   };
 
   const handleUpdateLecture = async () => {
+    const errors = validateForm();
+    if (Object.keys(errors).length) { setFormErrors(errors); return; }
+    setFormErrors({});
     if (useDatabase) {
       await dbState.updateLecture(editingLecture.id, formData);
     } else {
@@ -277,7 +294,9 @@ export default function LectureCalendarView({
       series: LECTURE_SERIES.CORE_CURRICULUM,
       recurrence: RECURRENCE.NONE,
       notes: "",
+      checkInOpen: null,
     });
+    setFormErrors({});
   };
 
   const openEditModal = (lecture) => {
@@ -293,7 +312,9 @@ export default function LectureCalendarView({
       series: lecture.series,
       recurrence: lecture.recurrence,
       notes: lecture.notes || "",
+      checkInOpen: lecture.checkInOpen ?? null,
     });
+    setFormErrors({});
     setEditingLecture(lecture);
   };
 
@@ -977,12 +998,14 @@ export default function LectureCalendarView({
                 <input
                   type="text"
                   value={formData.title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
-                  className={`w-full px-3 py-2 text-sm border rounded ${inputClasses}`}
+                  onChange={(e) => {
+                    setFormData({ ...formData, title: e.target.value });
+                    if (formErrors.title) setFormErrors(prev => ({ ...prev, title: undefined }));
+                  }}
+                  className={`w-full px-3 py-2 text-sm border rounded ${inputClasses} ${formErrors.title ? 'border-red-500' : ''}`}
                   placeholder="Lecture title"
                 />
+                {formErrors.title && <p className="text-xs text-red-500 mt-0.5">{formErrors.title}</p>}
               </div>
 
               {/* Series */}
@@ -990,10 +1013,11 @@ export default function LectureCalendarView({
                 <label className="block text-xs font-semibold mb-1">Series *</label>
                 <select
                   value={formData.series}
-                  onChange={(e) =>
-                    setFormData({ ...formData, series: e.target.value })
-                  }
-                  className={`w-full px-3 py-2 text-sm border rounded ${inputClasses}`}
+                  onChange={(e) => {
+                    setFormData({ ...formData, series: e.target.value });
+                    if (formErrors.series) setFormErrors(prev => ({ ...prev, series: undefined }));
+                  }}
+                  className={`w-full px-3 py-2 text-sm border rounded ${inputClasses} ${formErrors.series ? 'border-red-500' : ''}`}
                 >
                   {Object.values(LECTURE_SERIES).map((s) => (
                     <option key={s} value={s}>
@@ -1001,6 +1025,7 @@ export default function LectureCalendarView({
                     </option>
                   ))}
                 </select>
+                {formErrors.series && <p className="text-xs text-red-500 mt-0.5">{formErrors.series}</p>}
               </div>
 
               {/* Date & Time */}
@@ -1010,22 +1035,26 @@ export default function LectureCalendarView({
                   <input
                     type="date"
                     value={formData.date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, date: e.target.value })
-                    }
-                    className={`w-full px-3 py-2 text-sm border rounded ${inputClasses}`}
+                    onChange={(e) => {
+                      setFormData({ ...formData, date: e.target.value });
+                      if (formErrors.date) setFormErrors(prev => ({ ...prev, date: undefined }));
+                    }}
+                    className={`w-full px-3 py-2 text-sm border rounded ${inputClasses} ${formErrors.date ? 'border-red-500' : ''}`}
                   />
+                  {formErrors.date && <p className="text-xs text-red-500 mt-0.5">{formErrors.date}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold mb-1">Time *</label>
                   <input
                     type="time"
                     value={formData.time}
-                    onChange={(e) =>
-                      setFormData({ ...formData, time: e.target.value })
-                    }
-                    className={`w-full px-3 py-2 text-sm border rounded ${inputClasses}`}
+                    onChange={(e) => {
+                      setFormData({ ...formData, time: e.target.value });
+                      if (formErrors.time) setFormErrors(prev => ({ ...prev, time: undefined }));
+                    }}
+                    className={`w-full px-3 py-2 text-sm border rounded ${inputClasses} ${formErrors.time ? 'border-red-500' : ''}`}
                   />
+                  {formErrors.time && <p className="text-xs text-red-500 mt-0.5">{formErrors.time}</p>}
                 </div>
               </div>
 
@@ -1136,6 +1165,37 @@ export default function LectureCalendarView({
                 />
               </div>
 
+              {/* Check-In Override */}
+              <div>
+                <label className="block text-xs font-semibold mb-1">Check-In Window Override</label>
+                <div className="flex gap-2">
+                  {[
+                    { value: null,  label: 'Auto',   desc: '±15 min around start', cls: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' },
+                    { value: true,  label: 'Open',   desc: 'Force open now',        cls: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' },
+                    { value: false, label: 'Closed', desc: 'Force closed',          cls: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50' },
+                  ].map(opt => (
+                    <button
+                      key={String(opt.value)}
+                      type="button"
+                      title={opt.desc}
+                      onClick={() => setFormData({ ...formData, checkInOpen: opt.value })}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded border transition-colors ${
+                        formData.checkInOpen === opt.value
+                          ? `${opt.cls} ring-2 ring-offset-1 ring-current border-transparent`
+                          : 'border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  {formData.checkInOpen === true  && 'Check-in is forced open regardless of time.'}
+                  {formData.checkInOpen === false && 'Check-in is forced closed regardless of time.'}
+                  {formData.checkInOpen === null  && 'Check-in opens automatically ±15 min around the lecture start time.'}
+                </p>
+              </div>
+
               {/* Submit */}
               <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -1150,10 +1210,11 @@ export default function LectureCalendarView({
                 </button>
                 <button
                   onClick={editingLecture ? handleUpdateLecture : handleAddLecture}
-                  disabled={!formData.title || !formData.date}
-                  className="px-4 py-2 text-sm font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                  disabled={dbState.submitting}
+                  className="px-4 py-2 text-sm font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {editingLecture ? "Update" : "Add"} Lecture
+                  {dbState.submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {editingLecture ? "Save Changes" : "Add Lecture"}
                 </button>
               </div>
             </div>
