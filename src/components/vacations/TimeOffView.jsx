@@ -23,7 +23,7 @@ function Button({ children, className = "", disabled, onClick, title, variant = 
     "px-3 py-2 rounded border text-xs disabled:opacity-50 transition-colors";
   const variants = {
     default:
-      "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600",
+      "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200",
     danger:
       "bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-950/40 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300",
     approve:
@@ -546,7 +546,7 @@ return (
             value={denyText}
             onChange={(e) => setDenyText(e.target.value)}
             rows={3}
-            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-sm"
+            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-2 text-sm"
             placeholder="Reason for denial (optional)"
           />
         </div>
@@ -692,7 +692,7 @@ return (
             type="button"
             disabled={submitting}
             onClick={() => setNewDbReq({ fellow_id: "", start_block_id: "", reason: "Vacation" })}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-gray-600 text-sm hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+            className="px-3 py-2 rounded border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
           >
             Reset
           </button>

@@ -491,6 +491,7 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
 
   const { data, error } = await q;
 
+  console.log('[pullSwapRequests] programId:', programId, 'rowCount:', data?.length, 'error:', error?.message);
   if (error) return { error: error.message, swapRequests: null };
   if (!data?.length) return { error: null, swapRequests: null };
 
@@ -520,6 +521,7 @@ export async function pullSwapRequestsFromSupabase({ programId, academicYearId }
       status: String(r.status || 'pending').trim().toLowerCase(),
     }));
 
+  console.log('[pullSwapRequests] mapped swapRequests count:', swapRequests.length, 'sample status:', swapRequests[0]?.status);
   return { error: null, swapRequests: swapRequests.length ? swapRequests : null };
 }
 

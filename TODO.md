@@ -13,7 +13,6 @@
 - [X] Move csv exporters to bottom.
 - [X] Need to fix button bar
 - [ ] Change IMport background dark
-- [ ] Dark light icon not centered
 - [X] Background for tables not dark
 - [X] Remove inport/export/reset from vacations tab
 - [X] Click a name, header, or cell to highlight.
@@ -24,9 +23,6 @@
 - [ ] harden session persistence across tabs
 - [ ] add silent retry for profile loads so auth never looks broken when RLS/network hiccups
 - [ ] Unify role/permission gating so admin UX feels stable everywhere (dashboard, approvals, stats, schedule edit)
-- [ ] Currently there is a vacation request for fellow Ali, for some reason it appears he is on vacation already on the schedule view. Maybe Ali and Alkhawlani got switched around because Alkhawlani already has two weeks of vacation approved. Also on the schedule view, Alkhawlani is not on vacation. Also if vacation is only one week of a 2 week block, the schedule view should show like "AI/VAC" or "VAC/AI" depending on which week was chosen. The schedule view should not update with vacations until they are approved.
-- [ ] Local mode?
-- [ ] Also should have an option for an individual day off like a sick day on the requests tab Can be a different tab in the requests page
 
 ---
 

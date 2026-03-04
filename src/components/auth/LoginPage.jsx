@@ -38,11 +38,11 @@ const handleSubmit = async (e) => {
 
       if (lookupError) {
         // P0001 is our rate-limit ERRCODE; surface a clear message for that case only.
-        if (lookupError.code === ‘P0001’ || lookupError.message?.includes(‘Too many login attempts’)) {
-          setError(‘Too many login attempts. Please wait a minute and try again.’);
+        if (lookupError.code === 'P0001' || lookupError.message?.includes('Too many login attempts')) {
+          setError('Too many login attempts. Please wait a minute and try again.');
         } else {
-          // Don’t leak whether a username exists for any other error.
-          setError(‘Sign-in failed’);
+          // Don't leak whether a username exists for any other error.
+          setError('Sign-in failed');
         }
         return;
       }
@@ -64,7 +64,7 @@ const handleSubmit = async (e) => {
     const { error: signInError } = await signIn(email, password);
 
     if (signInError) {
-      // Keep Supabase’s message for wrong password etc.
+      // Keep Supabase's message for wrong password etc.
       // But if you want to avoid enumeration completely, replace with "Sign-in failed"
       setError(signInError.message);
       return;

@@ -426,6 +426,7 @@ if (Array.isArray(vacResult?.vacations)) {
   setVacations([]); // server says none, clear
 }
 
+console.log('[App initLoad] swapResult:', swapResult);
 if (Array.isArray(swapResult?.swapRequests)) {
   setSwapRequests(swapResult.swapRequests);
 }
@@ -801,7 +802,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
         setActiveView={setActiveView}
         darkMode={darkMode}
         toggleDarkMode={toggleDarkMode}
-        onLogoClick={() => setShowLanding(true)}
+        onLogoClick={() => setActiveView("dashboard")}
         onSignOut={async () => { await signOut(); setShowLanding(true);}}
         violationCount={workHourViolations.length}
         showStats={!isSupabaseConfigured || canApprove}
