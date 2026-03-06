@@ -274,6 +274,7 @@ export function useVacationState({
           fellow: r.fellow?.name || '',
           startBlock: r.start_block?.block_number ?? null,
           endBlock: r.end_block?.block_number ?? null,
+          weekPart: r.week_part ?? null,
           reason: r.reason || 'Vacation',
           status: r.status,
         })));
@@ -482,6 +483,21 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
       const wk = safeStr(newDbReq?.start_block_id);
       if (!fid || !wk) return;
 
+      // Client-side fellow-scope guard: non-approvers can only submit for fellows
+      // linked to their own account (fellows.user_id = uid). This catches the case
+      // before the DB trigger fires "No active fellow scope for this user."
+      if (!userCanApprove) {
+        const myFellows = asArray(dbFellows).filter(f => f?.user_id === uid);
+        if (myFellows.length === 0) {
+          setDbError('Your account is not linked to a fellow record. Contact your program director to link your account.');
+          return;
+        }
+        if (!myFellows.some(f => f.id === fid)) {
+          setDbError('You can only submit vacation requests for your own fellow record.');
+          return;
+        }
+      }
+
       const blockId = await ensureBlockDateIdForUiWeek(wk);
 
       const { error } = await supabase.from('vacation_requests').insert({
@@ -506,7 +522,7 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
     } finally {
       setSubmitting(false);
     }
-  }, [userCanRequest, newDbReq, ensureBlockDateIdForUiWeek, uid, pid, yid, institutionId, profile?.program, profile?.academic_year, fetchRequests]);
+  }, [userCanRequest, userCanApprove, newDbReq, dbFellows, ensureBlockDateIdForUiWeek, uid, pid, yid, institutionId, profile?.program, profile?.academic_year, fetchRequests]);
 
   // ---- actions: day-off (stored in vacation_requests with notes=date) ----
   const approveDayOff = useCallback(async (requestId) => approveDbRequest(requestId), [approveDbRequest]);
@@ -521,6 +537,19 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
       const dateStr = safeStr(newDayOff?.date);
       const reasonType = safeStr(newDayOff?.reason_type) || 'Sick Day';
       if (!fid || !dateStr) return;
+
+      // Client-side fellow-scope guard (same as submitDbRequest)
+      if (!userCanApprove) {
+        const myFellows = asArray(dbFellows).filter(f => f?.user_id === uid);
+        if (myFellows.length === 0) {
+          setDbError('Your account is not linked to a fellow record. Contact your program director to link your account.');
+          return;
+        }
+        if (!myFellows.some(f => f.id === fid)) {
+          setDbError('You can only submit day-off requests for your own fellow record.');
+          return;
+        }
+      }
 
       const d = new Date(`${dateStr}T00:00:00`);
       let match = asArray(blockDates).find(b => {
@@ -564,7 +593,7 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
     } finally {
       setSubmitting(false);
     }
-  }, [userCanRequest, newDayOff, blockDates, splitLocalWeeks, weeklyBlocks, ensureBlockDateIdForUiWeek, uid, pid, yid, institutionId, profile?.program, profile?.academic_year, fetchRequests]);
+  }, [userCanRequest, userCanApprove, newDayOff, dbFellows, blockDates, splitLocalWeeks, weeklyBlocks, ensureBlockDateIdForUiWeek, uid, pid, yid, institutionId, profile?.program, profile?.academic_year, fetchRequests]);
 
   // ---- swaps (minimal CRUD so UI renders; uses your real swap_requests schema) ----
   const submitDbSwap = useCallback(async () => {

@@ -432,6 +432,7 @@ export async function pullVacationsFromSupabase({ programId, academicYearId }) {
       updated_at,
       reason,
       status,
+      week_part,
       fellow_id,
       start_block_id,
       end_block_id,
@@ -467,6 +468,7 @@ export async function pullVacationsFromSupabase({ programId, academicYearId }) {
       startBlock: r.start_block.block_number,
       // fallback end to start if end_block is null (single-block vacations)
       endBlock: r.end_block?.block_number ?? r.start_block.block_number,
+      weekPart: r.week_part ?? null,
       reason: r.reason || "Vacation",
       status: String(r.status || "pending").trim().toLowerCase(),
     }));

@@ -54,32 +54,20 @@ export const getBlockDisplay = (fellow, blockIdx, schedule, vacations, blockDate
 
   const vacStart = vacation.startBlock;
   const vacEnd = vacation.endBlock;
+  const weekPart = vacation.weekPart ?? null;
 
   // Multi-block vacation: entire block is vacation
   if (vacEnd - vacStart >= 1) {
     return 'VAC';
   }
 
-  // Single-block vacation: show which week of the 2-block rotation is vacation
+  // Single-block vacation: use weekPart if present
   const abbrev = abbreviateRotation(rotation);
 
-  if (blockDates.length > 0) {
-    const currentBD = blockDates[blockIdx];
-    if (currentBD) {
-      const rotationBlocks = blockDates
-        .filter(bd => bd.rotation === currentBD.rotation)
-        .sort((a, b) => a.block - b.block);
-      const positionInRotation = rotationBlocks.findIndex(bd => bd.block === currentBD.block);
-      if (positionInRotation === 0) {
-        // First week of rotation is vacation
-        return abbrev ? `VAC/${abbrev}` : 'VAC';
-      } else {
-        // Second week of rotation is vacation
-        return abbrev ? `${abbrev}/VAC` : 'VAC';
-      }
-    }
-  }
+  if (weekPart === 1) return abbrev ? `VAC/${abbrev}` : 'VAC';
+  if (weekPart === 2) return abbrev ? `${abbrev}/VAC` : 'VAC';
 
+  // No weekPart: full block is vacation
   return 'VAC';
 };
 

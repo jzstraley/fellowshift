@@ -26,19 +26,19 @@ export const initialClinicDays = {
 };
 
 export const initialSchedule = {
-  'Elkholy': ['Cath', 'Cath', 'Echo', 'Echo', 'Floor A', 'Floor A', 'Nuclear', 'Nuclear', 'EP', 'EP', 'AI', 'AI', 'Floor B', 'Floor B', 'Echo', 'Echo', 'ICU', 'Nuclear', 'Nights', 'SPC', 'Floor A', 'Floor A', 'Nuclear', 'ICU', 'E', 'Nights'],
-  'Naeem': ['Echo', 'Echo', 'Floor A', 'Floor A', 'Nuclear', 'Nuclear', 'EP', 'EP', 'Cath', 'Cath', 'Floor B', 'Floor B', 'Echo', 'Echo', 'ICU', 'Nuclear', 'Nights', 'SPC', 'Floor A', 'Floor A', 'Nuclear', 'ICU', 'E', 'Nights', 'AI', 'AI'],
-  'Nor': ['Nuclear', 'Nuclear', 'EP', 'EP', 'Cath', 'Cath', 'Echo', 'Echo', 'Floor A', 'Floor A', 'Nuclear', 'ICU', 'Nuclear', 'Nights', 'AI', 'AI', 'Floor B', 'Floor B', 'Echo', 'Echo', 'ICU', 'AI', 'Nights', 'SPC', 'Floor A', 'Floor A'],
-  'Selvam': ['Floor A', 'Floor A', 'Nuclear', 'Nuclear', 'EP', 'EP', 'Cath', 'Cath', 'Floor B', 'Floor B', 'Echo', 'Echo', 'ICU', 'Nuclear', 'Nights', 'SPC', 'Floor A', 'Floor A', 'Nuclear', 'ICU', 'Research', 'Nights', 'AI', 'AI', 'Echo', 'Echo'],
-  'Varga': ['EP', 'EP', 'Cath', 'Cath', 'Echo', 'Echo', 'Floor A', 'Floor A', 'Nuclear', 'Nuclear', 'Nights', 'E', 'AI', 'AI', 'Floor B', 'Floor B', 'Echo', 'Echo', 'ICU', 'Nuclear', 'Nights', 'SPC', 'Floor A', 'Floor A', 'Nuclear', 'ICU'],
-  'Alkhawlani': ['Nights', 'Floor B', 'Nuclear 2', 'Nuclear 2', 'ICU', 'AI 2', 'Floor B', 'Cath 2', 'ICU', 'AI', 'Nuclear 2', 'Nuclear 2', 'Floor A', 'Cath 2', 'EP', 'EP', 'Cath 2', 'Echo 2', 'AI', 'Floor B', 'Echo 2', 'Echo 2', 'ICU', 'Echo 2', 'Nights', 'Cath 2'],
-  'Ali': ['Floor B', 'Nights', 'AI', 'ICU', 'Nuclear 2', 'Floor B', 'Nuclear 2', 'Nuclear 2', 'Echo 2', 'ICU', 'AI 2', 'AI 2', 'Cath 2', 'ICU', 'Floor A', 'Cath 2', 'Echo 2', 'Nights', 'Echo 2', 'Echo 2', 'EP', 'EP', 'Cath 2', 'Cath 2', 'Nuclear 2', 'Floor B'],
-  'Elsayed': ['AI', 'ICU', 'Cath 2', 'Nights', 'Floor B', 'Echo 2', 'Cath 2', 'Floor B', 'Cath 2', 'Cath 2', 'Floor A', 'Echo 2', 'Nuclear 2', 'Nuclear 2', 'Echo 2', 'Echo 2', 'Nuclear 2', 'ICU', 'AI 2', 'Nights', 'Nuclear 2', 'Floor B', 'EP', 'EP', 'ICU', 'AI 2'],
-  'Ezaldin': ['Cath 2', 'Cath 2', 'ICU', 'AI', 'Nights', 'AI', 'ICU', 'Echo 2', 'Nights', 'Echo 2', 'ICU', 'Floor A', 'Echo 2', 'Echo 2', 'Nuclear 2', 'Nuclear 2', 'EP', 'EP', 'Floor B', 'AI', 'Cath 2', 'Cath 2', 'Floor B', 'Nuclear 2', 'Floor B', 'Nuclear 2'],
-  'Sharma': ['ICU', 'Echo 2', 'Echo 2', 'Floor B', 'Cath 2', 'ICU', 'AI', 'Nights', 'Nuclear 2', 'Nuclear 2', 'EP', 'Nights', 'EP', 'Floor A', 'Cath 2', 'ICU', 'AI', 'AI', 'Cath 2', 'Cath 2', 'Floor B', 'Nuclear 2', 'Nuclear 2', 'Floor B', 'Echo 2', 'Echo 2'],
-  'Mahmoud': ['Nuclear 2', 'Nuclear 2', 'AI 2', 'AI 2', '', '', 'Echo 2', 'ICU', '', 'Nights', 'Research', 'Structural', 'Nights', 'Vascular', 'Cath', 'Cath', 'AI 2', 'AI 2', 'CTS', '', '', '', '', '', 'Research', 'Research'],
-  'Straley': ['Echo 2', 'Vascular', 'Nights', 'Cath 2', 'Cath 3', 'Nuclear 2', 'Nights', 'Structural', 'AI 2', 'AI 2', 'Echo 2', '', 'AI 2', 'AI 2', 'AI 2', 'Floor A', '', 'CTS', 'Nuclear 2', 'Nuclear 2', '', '', 'Admin', 'Admin', 'AI 2', 'AI 3'],
-  'Yousafzai': ['AI 2', 'AI 2', 'Floor B', 'Echo 2', 'Echo 2', 'Nights', 'AI 2', 'AI 2', '', '', 'Cath 2', 'Cath 2', 'Vascular', '', 'CTS', 'Nights', '', 'Admin', 'Structural', '', 'AI 2', 'AI 2', '', '', 'Research 2', 'Research 2']
+'Elkholy': ['EP', 'EP', 'Floor A', 'Floor A', 'Nuclear', 'Nuclear', 'Cath', 'Cath', 'Echo', 'Echo', 'ICU', 'SPC', 'Floor A', 'Floor A', 'Nuclear', 'ICU', 'AI', 'AI', 'Echo', 'Nights', 'Nuclear', 'Floor A', 'Floor B', 'Echo', 'Nights', 'E'],
+'Naeem': ['Cath', 'Cath', 'Echo', 'Echo', 'EP', 'EP', 'Floor A', 'Floor A', 'AI', 'ICU', 'Nuclear', 'Nuclear', 'SPC', 'Nights', 'AI', 'AI', 'Floor A', 'Floor A', 'Nuclear', 'ICU', 'Echo', 'Nights', 'Nuclear', 'Floor A', 'Floor B', 'Echo'],
+'Nor': ['Echo', 'Echo', 'EP', 'EP', 'Floor A', 'Floor A', 'Nuclear', 'Nuclear', 'Cath', 'Cath', 'SPC', 'ICU', 'Echo', 'Echo', 'Floor A', 'Floor A', 'Nuclear', 'ICU', 'AI', 'AI', 'Nights', 'Nuclear', 'Floor A', 'Floor B', 'E', 'Nights'],
+'Selvam': ['Floor A', 'Floor A', 'Nuclear', 'Nuclear', 'Cath', 'Cath', 'Echo', 'Echo', 'EP', 'EP', 'Floor A', 'Floor A', 'AI', 'AI', 'ICU', 'Nuclear', 'SPC', 'Research', 'Nights', 'Nuclear', 'Floor A', 'Floor B', 'Echo', 'Nights', 'Echo', 'ICU'],
+'Varga': ['Nuclear', 'Nuclear', 'Cath', 'Cath', 'Echo', 'Echo', 'EP', 'EP', 'Floor A', 'Floor A', 'Echo', 'Echo', 'ICU', 'SPC', 'Nights', 'Cath', 'ICU', 'Nuclear', 'Floor A', 'Floor B', 'AI', 'AI', 'Nights', 'Nuclear', 'Floor A', 'Floor A'],
+'Alkhawlani': ['Nights', 'Floor B', 'Nuclear 2', 'Nuclear 2', 'ICU', 'Cath 2', 'Floor B', 'Cath 2', 'ICU', 'AI', 'EP', 'Floor B', 'Echo 2', 'Echo 2', 'AI 2', 'Floor B', 'EP', 'Nights', 'Nuclear 2', 'Nuclear 2', 'ICU', 'AI 2', 'Cath 2', 'Cath 2', 'Echo 2', 'Echo 2'],
+'Ali': ['Floor B', 'Nights', 'Nuclear 3', 'ICU', 'AI 2', 'Floor B', 'Echo 2', 'Echo 2', 'Floor B', 'AI 2', 'Cath 2', 'Cath 2', 'Nuclear 2', 'Nuclear 2', 'Floor B', 'AI 2', 'Nights', 'Nuclear 2', 'ICU', 'EP', 'EP', 'ICU', 'Echo 2', 'Echo 2', 'Cath 2', 'Cath 2'],
+'Elsayed': ['Cath 2', 'ICU', 'Cath 2', 'Nights', 'Echo 2', 'AI 2', 'Nuclear 2', 'Floor B', 'Echo 2', 'Echo 2', 'Nights', 'Nuclear 2', 'AI 2', 'ICU', 'Cath 2', 'Cath 2', 'Floor B', 'EP', 'AI 2', 'Floor A', 'Nuclear 2', 'Nuclear 2', 'ICU', 'EP', 'Echo 3', 'Floor B'],
+'Ezaldin': ['AI', 'Cath 2', 'ICU', 'Echo 2', 'Nights', 'Echo 2', 'ICU', 'AI 2', 'Nights', 'Cath 2', 'Floor B', 'EP', 'Floor B', 'Cath 2', 'Nuclear 2', 'Nuclear 2', 'Echo 2', 'Echo 2', 'Floor B', 'AI 2', 'Floor B', 'Cath 2', 'EP', 'ICU', 'Nuclear 2', 'Nuclear 2'],
+'Sharma': ['ICU', 'Echo 2', 'Echo 2', 'Floor B', 'AI', 'ICU', 'AI 2', 'Nights', 'Cath 2', 'Floor B', 'Nuclear 2', 'Nights', 'Cath 2', 'Floor B', 'EP', 'EP', 'Nuclear 2', 'Floor B', 'Cath 2', 'Cath 2', 'Echo 2', 'Echo 2', 'Nuclear 2', 'Nuclear 2', 'ICU', 'AI 2'],
+'Mahmoud': ['Nuclear 2', 'Nuclear 2', 'AI 2', 'AI 2', 'Nuclear 2', 'Vascular', 'CTS', 'ICU', 'Structural', 'Nights', 'AI 2', 'AI 2', 'Nights', '', 'Echo 2', 'Echo 2', 'Cath 2', 'Cath 2', 'AI 3', 'AI 3', 'Echo 3', 'Echo 3', '', '', 'Research', 'Research'],
+'Straley': ['Echo 2', 'AI 2', 'Nights', 'Cath 2', 'Floor B', 'Nuclear 2', 'Nights', 'Nuclear 2', 'AI 2', 'CTS', 'Echo 2', 'Echo 2', 'Vascular', 'Structural', 'Cath 3', 'Cath 3', 'Echo', 'Echo', 'Cath 3', 'Echo 2', 'Cath 2', 'Admin', 'AI 2', 'AI 2', 'AI 2', 'AI'],
+'Yousafzai': ['AI 2', 'Vascular', 'Floor B', 'Echo 3', 'Echo 3', 'Nights', 'Cath 2', 'AI', 'Nuclear 2', 'Nuclear 2', 'CTS', 'Structural', 'Cath', 'AI 2', 'Echo 3', 'Nights', 'AI 2', 'AI 2', 'Echo 3', '', 'AI 2', 'Admin', '', '', 'Research', 'Research']
 };
 
 export const blockDates = [
@@ -71,7 +71,8 @@ export const blockDates = [
 ];
 
 export const initialVacations = [
-  { fellow: 'Alkhawlani', startBlock: 3, endBlock: 3, reason: 'Vacation', status: 'approved' }
+  { fellow: 'Alkhawlani', startBlock: 3, endBlock: 3, reason: 'Vacation', status: 'approved' },
+  { fellow: 'Nor', startBlock: 19, endBlock: 19, weekPart: 1, reason: 'Vacation', status: 'approved' }
 ];
 
 // Initial call and night-float base provided by user
