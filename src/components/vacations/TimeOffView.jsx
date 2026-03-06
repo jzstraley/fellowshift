@@ -128,6 +128,35 @@ const DUTY_BADGE = {
   N: 'bg-purple-600 text-white',
 };
 
+const ROTATION_COLORS = [
+  'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
+  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+  'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
+  'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-200',
+  'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-200',
+  'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200',
+  'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
+  'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200',
+];
+
+function rotationColorClass(name) {
+  if (!name || name === '—') return 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500';
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return ROTATION_COLORS[h % ROTATION_COLORS.length];
+}
+
+function getRotationLabel(r, getBlockDetails) {
+  const name = r?.fellow?.name;
+  const blockNum = r?.start_block?.block_number;
+  if (!name || !blockNum || !getBlockDetails) return null;
+  const details = getBlockDetails(name, blockNum);
+  const val = details?.find(d => d.label === 'Rotation')?.value;
+  return val && val !== '—' ? val : null;
+}
+
 // Collapsible mini-calendar showing the vacation week(s) in context
 function ScheduleContextDropdown({ r, getBlockDetails }) {
   const [open, setOpen] = useState(false);
@@ -292,6 +321,7 @@ function RequestCard({
   rightBadge,
   rightBadgeClass,
   extraRight,
+  rotation,
 }) {
   const fellowName = r?.fellow?.name ?? "Unknown Fellow";
   const pgy = r?.fellow?.pgy_level ?? "?";
@@ -301,25 +331,32 @@ function RequestCard({
   const approvedAt = r?.approved_at ? new Date(r.approved_at).toLocaleDateString() : null;
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="text-sm text-gray-900 dark:text-gray-100">
-        <div className="font-semibold">
-          {fellowName}
-          <span className="ml-2 text-xs font-normal opacity-80">
-            PGY-{pgy}
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-start gap-2 min-w-0">
+        {rotation ? (
+          <span className={`mt-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-tight ${rotationColorClass(rotation)}`}>
+            {rotation}
           </span>
-        </div>
-
-        <div className="text-xs opacity-80">
-          {rangeText} {" — "} {reason}
-        </div>
-
-        {approvedAt ? (
-          <div className="text-xs opacity-70 mt-0.5">Approved {approvedAt}</div>
         ) : null}
+        <div className="text-sm text-gray-900 dark:text-gray-100 min-w-0">
+          <div className="font-semibold">
+            {fellowName}
+            <span className="ml-2 text-xs font-normal opacity-80">
+              PGY-{pgy}
+            </span>
+          </div>
+
+          <div className="text-xs opacity-80">
+            {rangeText} {" — "} {reason}
+          </div>
+
+          {approvedAt ? (
+            <div className="text-xs opacity-70 mt-0.5">Approved {approvedAt}</div>
+          ) : null}
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {showApprove ? (
           <Button
             variant="approve"
@@ -396,6 +433,10 @@ export default function TimeOffView({
   selectableFellows,
   getBlockDetails = null,
 }) {
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [approvedOpen, setApprovedOpen] = useState(false);
+  const [deniedOpen, setDeniedOpen] = useState(false);
+
   const [denyOpen, setDenyOpen] = useState(false);
   const [denyTargetId, setDenyTargetId] = useState(null);
   const [denyText, setDenyText] = useState("");
@@ -428,107 +469,156 @@ export default function TimeOffView({
 return (
   <div className="space-y-3">
     {/* Pending */}
-    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-      <div className="mb-2 font-semibold dark:text-gray-100">
-        Pending Vacations ({pendingRequests.length})
-      </div>
+    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
+      <button
+        type="button"
+        onClick={() => setPendingOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors rounded-t"
+      >
+        <span className="flex items-center gap-2 font-semibold dark:text-gray-100 text-sm">
+          Pending Vacations
+          {pendingRequests.length > 0 && (
+            <span className="min-w-[18px] h-[18px] rounded-full bg-yellow-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+              {pendingRequests.length}
+            </span>
+          )}
+        </span>
+        {pendingOpen
+          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
 
-      {pendingRequests.length === 0 ? (
-        <div className="text-xs text-gray-500 dark:text-gray-400">No pending vacations</div>
-      ) : (
-        <div className="space-y-2">
-          {pendingRequests.map((r) => (
-            <div
-              key={r.id}
-              className="border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/40 rounded p-2"
-            >
-              <RequestCard
-                r={r}
-                submitting={submitting}
-                userCanApprove={userCanApprove}
-                userId={userId}
-                getRequestExtras={getRequestExtras}
-                formatBlockRange={formatBlockRange}
-                onApprove={approveDbRequest}
-                onDeny={openDeny}
-                onCancel={() => openCancel(r, false)}
-                showApprove={userCanApprove}
-                showDeny={userCanApprove}
-                showCancel={canCancelNonApproved(r)}
-                rightBadge="Pending"
-                rightBadgeClass="bg-yellow-600 text-white"
-              />
-              <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
+      {pendingOpen && (
+        <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-600">
+          {pendingRequests.length === 0 ? (
+            <div className="text-xs text-gray-500 dark:text-gray-400">No pending vacations</div>
+          ) : (
+            <div className="space-y-2">
+              {pendingRequests.map((r) => (
+                <div
+                  key={r.id}
+                  className="border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/40 rounded p-2"
+                >
+                  <RequestCard
+                    r={r}
+                    submitting={submitting}
+                    userCanApprove={userCanApprove}
+                    userId={userId}
+                    getRequestExtras={getRequestExtras}
+                    formatBlockRange={formatBlockRange}
+                    onApprove={approveDbRequest}
+                    onDeny={openDeny}
+                    onCancel={() => openCancel(r, false)}
+                    showApprove={userCanApprove}
+                    showDeny={userCanApprove}
+                    showCancel={canCancelNonApproved(r)}
+                    rightBadge="Pending"
+                    rightBadgeClass="bg-yellow-600 text-white"
+                    rotation={getRotationLabel(r, getBlockDetails)}
+                  />
+                  <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
 
     {/* Approved */}
-    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-      <div className="mb-2 font-semibold dark:text-gray-100">
-        Approved Vacations ({approvedRequests.length})
-      </div>
+    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
+      <button
+        type="button"
+        onClick={() => setApprovedOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors rounded-t"
+      >
+        <span className="flex items-center gap-2 font-semibold dark:text-gray-100 text-sm">
+          Approved Vacations
+          <span className="text-xs font-normal opacity-60">({approvedRequests.length})</span>
+        </span>
+        {approvedOpen
+          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
 
-      {approvedRequests.length === 0 ? (
-        <div className="text-xs text-gray-500 dark:text-gray-400">No approved vacations</div>
-      ) : (
-        <div className="space-y-2">
-          {approvedRequests.map((r) => (
-            <div
-              key={r.id}
-              className="border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/40 rounded p-2"
-            >
-              <RequestCard
-                r={r}
-                submitting={submitting}
-                userCanApprove={userCanApprove}
-                userId={userId}
-                getRequestExtras={getRequestExtras}
-                formatBlockRange={formatBlockRange}
-                onCancel={() => openCancel(r, true)}
-                showCancel={userCanApprove} // leadership only
-                rightBadge="Approved"
-                rightBadgeClass="bg-green-600 text-white"
-              />
-              <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
+      {approvedOpen && (
+        <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-600">
+          {approvedRequests.length === 0 ? (
+            <div className="text-xs text-gray-500 dark:text-gray-400">No approved vacations</div>
+          ) : (
+            <div className="space-y-2">
+              {approvedRequests.map((r) => (
+                <div
+                  key={r.id}
+                  className="border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/40 rounded p-2"
+                >
+                  <RequestCard
+                    r={r}
+                    submitting={submitting}
+                    userCanApprove={userCanApprove}
+                    userId={userId}
+                    getRequestExtras={getRequestExtras}
+                    formatBlockRange={formatBlockRange}
+                    onCancel={() => openCancel(r, true)}
+                    showCancel={userCanApprove}
+                    rightBadge="Approved"
+                    rightBadgeClass="bg-green-600 text-white"
+                    rotation={getRotationLabel(r, getBlockDetails)}
+                  />
+                  <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
 
     {/* Denied */}
-    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-      <div className="mb-2 font-semibold dark:text-gray-100">
-        Denied Vacations ({deniedRequests.length})
-      </div>
+    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
+      <button
+        type="button"
+        onClick={() => setDeniedOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors rounded-t"
+      >
+        <span className="flex items-center gap-2 font-semibold dark:text-gray-100 text-sm">
+          Denied Vacations
+          <span className="text-xs font-normal opacity-60">({deniedRequests.length})</span>
+        </span>
+        {deniedOpen
+          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
 
-      {deniedRequests.length === 0 ? (
-        <div className="text-xs text-gray-500 dark:text-gray-400">No denied vacations</div>
-      ) : (
-        <div className="space-y-2">
-          {deniedRequests.map((r) => (
-            <div
-              key={r.id}
-              className="border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 rounded p-2"
-            >
-              <RequestCard
-                r={r}
-                submitting={submitting}
-                userCanApprove={userCanApprove}
-                userId={userId}
-                getRequestExtras={getRequestExtras}
-                formatBlockRange={formatBlockRange}
-                onCancel={() => openCancel(r, false)}
-                showCancel={canCancelNonApproved(r)}
-                rightBadge="Denied"
-                rightBadgeClass="bg-red-600 text-white"
-              />
-              <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
+      {deniedOpen && (
+        <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-600">
+          {deniedRequests.length === 0 ? (
+            <div className="text-xs text-gray-500 dark:text-gray-400">No denied vacations</div>
+          ) : (
+            <div className="space-y-2">
+              {deniedRequests.map((r) => (
+                <div
+                  key={r.id}
+                  className="border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 rounded p-2"
+                >
+                  <RequestCard
+                    r={r}
+                    submitting={submitting}
+                    userCanApprove={userCanApprove}
+                    userId={userId}
+                    getRequestExtras={getRequestExtras}
+                    formatBlockRange={formatBlockRange}
+                    onCancel={() => openCancel(r, false)}
+                    showCancel={canCancelNonApproved(r)}
+                    rightBadge="Denied"
+                    rightBadgeClass="bg-red-600 text-white"
+                    rotation={getRotationLabel(r, getBlockDetails)}
+                  />
+                  <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

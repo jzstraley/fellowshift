@@ -6,7 +6,7 @@ import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
 import CookieConsent from "./components/CookieConsent";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { initialSchedule, initialVacations, initialSwapRequests, pgyLevels, initialClinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule, allRotationTypes } from "./data/scheduleData";
+import { scheduleVersion, initialSchedule, initialVacations, initialSwapRequests, pgyLevels, initialClinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule, allRotationTypes } from "./data/scheduleData";
 import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
 import { generateCallAndFloat as runGenerator } from "./engine/callFloatGenerator";
 import { checkAllWorkHourViolations } from "./engine/workHourChecker";
@@ -142,6 +142,8 @@ function AppContent() {
   const [dataReady, setDataReady] = useState(false);
   // Prevents the one-shot Supabase initial load from running more than once per session
   const supabaseInitLoadDoneRef = useRef(false);
+  // Set to true when scheduleVersion bumped — causes init load to seed instead of merge
+  const pendingScheduleSeedRef = useRef(false);
 
   const [clinicDays, setClinicDays] = useState(initialClinicDays);
   const [schedule, setSchedule] = useState(initialSchedule);
@@ -163,6 +165,7 @@ useEffect(() => {
     cryptoKeyRef.current = null;
     setDataReady(false);
     supabaseInitLoadDoneRef.current = false;
+    pendingScheduleSeedRef.current = false;
     return;
   }
 
@@ -186,7 +189,17 @@ useEffect(() => {
 
       if (cancelled) return;
 
-      if (persisted?.schedule && typeof persisted.schedule === "object") setSchedule(persisted.schedule);
+      // Version-based seeding: if scheduleVersion was bumped, ignore the persisted
+      // schedule so initialSchedule is used as the base, and queue a Supabase push.
+      const SEED_VERSION_KEY = 'schedule_seed_version';
+      const storedSeedVersion = parseInt(localStorage.getItem(SEED_VERSION_KEY) || '0', 10);
+      if (scheduleVersion > storedSeedVersion) {
+        pendingScheduleSeedRef.current = true;
+        localStorage.setItem(SEED_VERSION_KEY, String(scheduleVersion));
+        // Leave schedule state as initialSchedule (the useState default) — do not restore persisted.
+      } else if (persisted?.schedule && typeof persisted.schedule === "object") {
+        setSchedule(persisted.schedule);
+      }
 if (Array.isArray(persisted?.vacations) && !supabaseInitLoadDoneRef.current) {
   setVacations(persisted.vacations);
 }
@@ -379,8 +392,13 @@ if (Array.isArray(persisted?.swapRequests)) {
     if (supabaseInitLoadDoneRef.current) return;
     supabaseInitLoadDoneRef.current = true;
 
+    const isSeedLoad = pendingScheduleSeedRef.current;
+    if (isSeedLoad) pendingScheduleSeedRef.current = false;
+
     Promise.all([
-  pullScheduleFromSupabase({ fellows, blockDates, programId, academicYearId }),
+  isSeedLoad
+    ? pushScheduleToSupabase({ schedule: initialSchedule, fellows, programId, academicYearId, userId: user?.id, pgyLevels })
+    : pullScheduleFromSupabase({ fellows, blockDates, programId, academicYearId }),
   pullCallFloatFromSupabase({ programId, academicYearId }),
   pullVacationsFromSupabase({ programId, academicYearId }),
   pullSwapRequestsFromSupabase({ programId, academicYearId }),
@@ -389,7 +407,10 @@ if (Array.isArray(persisted?.swapRequests)) {
 ]).then(([schedResult, callFloatResult, vacResult, swapResult, lectResult, clinicResult]) => {
       const firstError = schedResult.error || callFloatResult.error || vacResult.error || swapResult.error || lectResult.error || clinicResult.error;
       if (firstError) setSyncError(typeof firstError === 'string' ? firstError : firstError.message ?? 'Failed to load data from server');
-      if (schedResult.schedule) {
+      if (isSeedLoad) {
+        // Seeding: initialSchedule is already in state and now pushed to Supabase — nothing to merge.
+        setSchedule(initialSchedule);
+      } else if (schedResult.schedule) {
         // Merge: apply non-empty Supabase rotations on top of current schedule.
         // Avoids wiping local data when Supabase only has partial records (e.g. vacation approvals).
         setSchedule(prev => {
@@ -1018,7 +1039,6 @@ if (Array.isArray(swapResult?.swapRequests)) {
               <ImportExportBar
                 fellows={fellows}
                 schedule={schedule}
-                setSchedule={setSchedule}
                 violations={violations}
                 showExportViolations={
                   activeView === "violations" &&
@@ -1046,7 +1066,6 @@ if (Array.isArray(swapResult?.swapRequests)) {
                 <ImportExportBar
                   fellows={fellows}
                   schedule={schedule}
-                  setSchedule={setSchedule}
                   violations={violations}
                 />
               </div>

@@ -1,5 +1,9 @@
 // src/data/scheduleData.js
 
+// Bump this number to re-seed the schedule from initialSchedule on next app load.
+// Once seeded, in-app edits persist normally in Supabase. Bump again to re-seed.
+export const scheduleVersion = 1;
+
 export const pgyLevels = {
   'Elkholy': 4, 'Naeem': 4, 'Nor': 4, 'Selvam': 4, 'Varga': 4,
   'Alkhawlani': 5, 'Ali': 5, 'Elsayed': 5, 'Ezaldin': 5, 'Sharma': 5,

@@ -1,6 +1,37 @@
-import { CheckCircle, AlertTriangle, ArrowLeftRight, X } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle, AlertTriangle, ArrowLeftRight, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { SWAP_RESET, parseSwapReason, fmtSwapBlock } from '../../utils/vacationHelpers';
 import SwapPreview from './SwapPreview';
+
+function CollapsibleSection({ title, count, badgeColor, open, onToggle, children }) {
+  return (
+    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors rounded-t"
+      >
+        <span className="flex items-center gap-2 font-semibold dark:text-gray-100 text-sm">
+          {title}
+          {count > 0 && (
+            <span className={`min-w-[18px] h-[18px] rounded-full text-white text-[10px] font-bold flex items-center justify-center px-1 ${badgeColor}`}>
+              {count}
+            </span>
+          )}
+        </span>
+        {open
+          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-600">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SwapsView({
   pendingSwaps,
@@ -20,155 +51,173 @@ export default function SwapsView({
   getBlockDetails, getShiftDateLabel,
   blockDates,
 }) {
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [approvedOpen, setApprovedOpen] = useState(false);
+  const [deniedOpen, setDeniedOpen] = useState(false);
+
+  const visibleDenied = deniedSwaps.filter(r => !dismissedSwapIds.has(r.id));
+
   return (
     <>
       {/* Pending Swaps */}
-      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-        <div className="mb-2 font-semibold dark:text-gray-100">
-          Pending Swaps ({pendingSwaps.length})
-        </div>
-        {pendingSwaps.length === 0 && (
+      <CollapsibleSection
+        title="Pending Swaps"
+        count={pendingSwaps.length}
+        badgeColor="bg-yellow-500"
+        open={pendingOpen}
+        onToggle={() => setPendingOpen(o => !o)}
+      >
+        {pendingSwaps.length === 0 ? (
           <div className="text-xs text-gray-500 dark:text-gray-400">No pending swap requests</div>
-        )}
-        <div className="space-y-2">
-          {pendingSwaps.map((r) => {
-            const parsed = parseSwapReason(r.reason);
-            const label = parsed.swapType
-              ? `${parsed.swapType.toUpperCase()} W${parsed.weekend ?? 1}`
-              : 'Rotation swap';
-            const note = parsed.note ? ` - ${parsed.note}` : '';
-            // Requester's block: stored column or fall back to parsing from reason/reqKey
-            const reqBlockMatch = (parsed.reqKey || r.reason || '').match(/B(\d+)/);
-            const swapBlockNum = r.block_number || (reqBlockMatch ? Number(reqBlockMatch[1]) : null);
-            // Target's block: bilateral format stores it in tgtKey (e.g. "B4-W2")
-            const tgtKeyMatch = parsed.tgtKey?.match(/^B(\d+)-W([12])$/);
-            const tgtBlock = tgtKeyMatch ? Number(tgtKeyMatch[1]) : swapBlockNum;
-            const toWk = r.to_week_part ?? (tgtKeyMatch ? Number(tgtKeyMatch[2]) : null);
-            return (
-              <div key={r.id} className="border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">
-                    <div className="font-semibold dark:text-gray-100 flex items-center gap-1">
-                      {r.requester?.name ?? '?'}
-                      <ArrowLeftRight className="w-3 h-3 text-blue-500" />
-                      {r.target?.name ?? '?'}
+        ) : (
+          <div className="space-y-2">
+            {pendingSwaps.map((r) => {
+              const parsed = parseSwapReason(r.reason);
+              const label = parsed.swapType
+                ? `${parsed.swapType.toUpperCase()} W${parsed.weekend ?? 1}`
+                : 'Rotation swap';
+              const note = parsed.note ? ` - ${parsed.note}` : '';
+              const reqBlockMatch = (parsed.reqKey || r.reason || '').match(/B(\d+)/);
+              const swapBlockNum = r.block_number || (reqBlockMatch ? Number(reqBlockMatch[1]) : null);
+              const tgtKeyMatch = parsed.tgtKey?.match(/^B(\d+)-W([12])$/);
+              const tgtBlock = tgtKeyMatch ? Number(tgtKeyMatch[1]) : swapBlockNum;
+              const toWk = r.to_week_part ?? (tgtKeyMatch ? Number(tgtKeyMatch[2]) : null);
+              return (
+                <div key={r.id} className="border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-gray-100 flex items-center gap-1">
+                        {r.requester?.name ?? '?'}
+                        <ArrowLeftRight className="w-3 h-3 text-blue-500" />
+                        {r.target?.name ?? '?'}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} - {label}{note}
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                        Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
-                      {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} - {label}{note}
-                    </div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                      Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {userCanApprove && (
-                      <>
-                        <button
-                          onClick={() => approveDbSwap(r.id)}
-                          disabled={submitting}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
-                        >
-                          <CheckCircle className="w-3 h-3" /> Approve
-                        </button>
-                        {denyingId === r.id ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              className="p-1 border rounded text-xs w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
-                              placeholder="Denial reason…"
-                              value={denyReason}
-                              onChange={e => setDenyReason(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') denyDbSwap(r.id, denyReason);
-                                if (e.key === 'Escape') { setDenyingId(null); setDenyReason(''); }
-                              }}
-                              autoFocus
-                            />
-                            <button onClick={() => denyDbSwap(r.id, denyReason)} disabled={submitting} className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
-                            <button onClick={() => { setDenyingId(null); setDenyReason(''); }} className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
-                          </div>
-                        ) : (
+                    <div className="flex items-center gap-2">
+                      {userCanApprove && (
+                        <>
                           <button
-                            onClick={() => { setDenyingId(r.id); setDenyReason(''); }}
+                            onClick={() => approveDbSwap(r.id)}
                             disabled={submitting}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
                           >
-                            <AlertTriangle className="w-3 h-3" /> Deny
+                            <CheckCircle className="w-3 h-3" /> Approve
                           </button>
-                        )}
-                      </>
-                    )}
-                    {r.requested_by === userId && (
-                      <button
-                        onClick={() => cancelDbSwap(r.id)}
-                        disabled={submitting}
-                        className="px-3 py-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
-                      >
-                        <X className="w-3 h-3" /> Cancel
-                      </button>
-                    )}
+                          {denyingId === r.id ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                className="p-1 border rounded text-xs w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
+                                placeholder="Denial reason…"
+                                value={denyReason}
+                                onChange={e => setDenyReason(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') denyDbSwap(r.id, denyReason);
+                                  if (e.key === 'Escape') { setDenyingId(null); setDenyReason(''); }
+                                }}
+                                autoFocus
+                              />
+                              <button onClick={() => denyDbSwap(r.id, denyReason)} disabled={submitting} className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
+                              <button onClick={() => { setDenyingId(null); setDenyReason(''); }} className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setDenyingId(r.id); setDenyReason(''); }}
+                              disabled={submitting}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                            >
+                              <AlertTriangle className="w-3 h-3" /> Deny
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {r.requested_by === userId && (
+                        <button
+                          onClick={() => cancelDbSwap(r.id)}
+                          disabled={submitting}
+                          className="px-3 py-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                        >
+                          <X className="w-3 h-3" /> Cancel
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {r.requester?.name && r.target?.name && (swapBlockNum || tgtBlock) && (
+                    <SwapPreview
+                      requester={r.requester.name}
+                      target={r.target.name}
+                      reqBlock={swapBlockNum}
+                      fromWk={r.from_week_part ?? parsed.weekend ?? null}
+                      tgtBlock={tgtBlock}
+                      toWk={toWk}
+                      getBlockDetails={getBlockDetails}
+                    />
+                  )}
                 </div>
-                {r.requester?.name && r.target?.name && (swapBlockNum || tgtBlock) && (
-                  <SwapPreview
-                    requester={r.requester.name}
-                    target={r.target.name}
-                    reqBlock={swapBlockNum}
-                    fromWk={r.from_week_part ?? parsed.weekend ?? null}
-                    tgtBlock={tgtBlock}
-                    toWk={toWk}
-                    getBlockDetails={getBlockDetails}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              );
+            })}
+          </div>
+        )}
+      </CollapsibleSection>
 
       {/* Approved Swaps */}
-      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-        <div className="mb-2 font-semibold dark:text-gray-100">Approved Swaps ({approvedSwaps.length})</div>
-        {approvedSwaps.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved swaps</div>}
-        <div className="space-y-2">
-          {approvedSwaps.map((r) => {
-            const parsed = parseSwapReason(r.reason);
-            const label = parsed.swapType
-              ? `${parsed.swapType === 'call' ? 'Call' : 'Float'} W${parsed.weekend ?? 1}`
-              : 'Rotation swap';
-            return (
-              <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
-                <div className="text-sm">
-                  <div className="font-semibold dark:text-green-100 flex items-center gap-1">
-                    {r.requester?.name ?? '?'} <ArrowLeftRight className="w-3 h-3 text-green-500" /> {r.target?.name ?? '?'}
+      <CollapsibleSection
+        title={`Approved Swaps (${approvedSwaps.length})`}
+        count={0}
+        badgeColor="bg-green-600"
+        open={approvedOpen}
+        onToggle={() => setApprovedOpen(o => !o)}
+      >
+        {approvedSwaps.length === 0 ? (
+          <div className="text-xs text-gray-500 dark:text-gray-400">No approved swaps</div>
+        ) : (
+          <div className="space-y-2">
+            {approvedSwaps.map((r) => {
+              const parsed = parseSwapReason(r.reason);
+              const label = parsed.swapType
+                ? `${parsed.swapType === 'call' ? 'Call' : 'Float'} W${parsed.weekend ?? 1}`
+                : 'Rotation swap';
+              return (
+                <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                  <div className="text-sm">
+                    <div className="font-semibold dark:text-green-100 flex items-center gap-1">
+                      {r.requester?.name ?? '?'} <ArrowLeftRight className="w-3 h-3 text-green-500" /> {r.target?.name ?? '?'}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-green-200">
+                      {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} — {label}{parsed.note ? ` — ${parsed.note}` : ''}
+                    </div>
+                    {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-green-200">
-                    {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} — {label}{parsed.note ? ` — ${parsed.note}` : ''}
-                  </div>
-                  {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
+                  <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
                 </div>
-                <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              );
+            })}
+          </div>
+        )}
+      </CollapsibleSection>
 
       {/* Denied Swaps */}
-      {deniedSwaps.filter(r => !dismissedSwapIds.has(r.id)).length > 0 && (
-        <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-          <div className="mb-2 font-semibold dark:text-gray-100 text-red-700 dark:text-red-400">
-            Denied Swaps ({deniedSwaps.filter(r => !dismissedSwapIds.has(r.id)).length})
-          </div>
+      {visibleDenied.length > 0 && (
+        <CollapsibleSection
+          title={`Denied Swaps (${visibleDenied.length})`}
+          count={0}
+          badgeColor="bg-red-600"
+          open={deniedOpen}
+          onToggle={() => setDeniedOpen(o => !o)}
+        >
           <div className="space-y-2">
-            {deniedSwaps.filter(r => !dismissedSwapIds.has(r.id)).map((r) => {
+            {visibleDenied.map((r) => {
               const parsed = parseSwapReason(r.reason);
               const swapLabel = parsed.swapType === 'call' ? 'Call' : parsed.swapType === 'float' ? 'Float' : null;
               const fromWk = r.from_week_part ?? parsed.weekend ?? null;
               const toWk = r.to_week_part ?? null;
               const violationLines = r.notes ? r.notes.split('\n').filter(Boolean) : [];
 
-              // Human-readable swap direction: "Austin gives up Call Wk 1 · Alex gives up Call Wk 2"
               let swapDetail;
               if (swapLabel && fromWk) {
                 const reqPart = `${r.requester?.name ?? 'Requester'} gives up ${swapLabel} Wk ${fromWk}`;
@@ -215,7 +264,7 @@ export default function SwapsView({
               );
             })}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* Request Schedule Swap */}
