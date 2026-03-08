@@ -77,7 +77,7 @@ export default function VacationsView({
 
         <SubViewTabs subView={subView} setSubView={setSubView} />
 
-        {!programId && (
+        {!programId && !userCanApprove && (
           <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded p-3 text-sm text-yellow-800 dark:text-yellow-300">
             No program scope found — your account may not have a program membership yet. Requests cannot be loaded until this is set up.
           </div>

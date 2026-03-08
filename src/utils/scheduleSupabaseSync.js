@@ -72,6 +72,20 @@ const toDbBlockRows = (programId, academicYearId, institutionId) =>
     end_date: b.end,
   }));
 
+// Read-only: just fetch existing block_dates for a program/year.
+// Safe for all roles including fellows.
+async function getBlockDates({ programId, academicYearId }) {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: blocks, error } = await supabase
+    .from('block_dates')
+    .select('id, block_number')
+    .eq('program_id', programId)
+    .eq('academic_year_id', academicYearId);
+  if (error) throw new Error(error.message);
+  return blocks ?? [];
+}
+
+// Write: upsert block_dates then return them. Requires program_admin / program_director / chief_fellow.
 export async function ensureBlockDatesInDb({ programId, academicYearId }) {
   if (!supabase) throw new Error('Supabase not configured');
   if (!programId) throw new Error('ensureBlockDatesInDb: programId required');
@@ -80,22 +94,13 @@ export async function ensureBlockDatesInDb({ programId, academicYearId }) {
   const institutionId = await getProgramInstitutionId(programId);
   const rows = toDbBlockRows(programId, academicYearId, institutionId);
 
-  // Seed/repair block_dates idempotently
   const { error: ue } = await supabase
     .from('block_dates')
     .upsert(rows, { onConflict: 'program_id,academic_year_id,block_number' });
 
   if (ue) throw new Error(ue.message);
 
-  // Return mapping rows
-  const { data: blocks, error: re } = await supabase
-    .from('block_dates')
-    .select('id, block_number')
-    .eq('program_id', programId)
-    .eq('academic_year_id', academicYearId);
-
-  if (re) throw new Error(re.message);
-  return blocks ?? [];
+  return getBlockDates({ programId, academicYearId });
 }
 
 async function loadFellowsByScope({ programId, institutionId }) {
@@ -323,6 +328,8 @@ export async function pushScheduleToSupabase({
         fellow_id: fellowId,
         block_date_id: blockDateId,
         rotation: rotations[idx] ?? '',
+        program_id: programId,
+        academic_year_id: academicYearId,
         created_by: userId ?? null,
       });
     }
@@ -359,12 +366,12 @@ export async function pullScheduleFromSupabase({
   if (!academicYearId) return { error: 'No academicYearId provided', schedule: null };
   if (!Array.isArray(fellows) || fellows.length === 0) return { error: 'No fellows provided', schedule: null };
 
-  // Make sure blocks exist so we can map block_date_id -> block_number
+  // Read block dates — no upsert, safe for fellows
   let dbBlocks = [];
   try {
-    dbBlocks = await ensureBlockDatesInDb({ programId, academicYearId });
+    dbBlocks = await getBlockDates({ programId, academicYearId });
   } catch (e) {
-    return { error: `Block date ensure failed: ${e.message}`, schedule: null };
+    return { error: `Block date load failed: ${e.message}`, schedule: null };
   }
   if (!dbBlocks.length) return { error: 'No block dates found for this program/year.', schedule: null };
 

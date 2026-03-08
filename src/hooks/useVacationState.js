@@ -159,7 +159,9 @@ export function useVacationState({
       setDbRequests([]);
       setDbSwapRequests([]);
       setLoadingDb(false);
-      setDbError('No program scope found. Make sure your account has a program membership.');
+      if (!userCanApprove) {
+        setDbError('No program scope found. Make sure your account has a program membership.');
+      }
       return;
     }
 

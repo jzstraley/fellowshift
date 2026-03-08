@@ -796,7 +796,7 @@ return (
             onClick={submitDbRequest}
             className="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:opacity-90 disabled:opacity-50"
           >
-            {submitting ? "Submitting..." : "Submit"}
+            {submitting ? "Submitting..." : userCanApprove ? "Submit on Behalf of Fellow" : "Submit"}
           </button>
         </div>
       </div>
