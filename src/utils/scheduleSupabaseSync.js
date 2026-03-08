@@ -13,31 +13,6 @@
 // dayOverrides are NOT synced — no table exists for per-day overrides.
 
 import { supabase } from '../lib/supabaseClient';
-import { blockDates as localBlockDates } from '../data/scheduleData';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Notes on required schema (matches your current DB reality)
-// ─────────────────────────────────────────────────────────────────────────────
-// block_dates NOT NULL columns in your DB:
-//   institution_id (uuid)
-//   program_id (uuid)
-//   academic_year_id (uuid)
-//   block_number (int)
-//   rotation_number (int)
-//   start_date (date)
-//   end_date (date)
-//
-// Unique constraint:
-//   UNIQUE (program_id, academic_year_id, block_number)
-//
-// schedule_assignments should have a unique constraint on (fellow_id, block_date_id).
-//
-// call_float_assignments should be migrated to support program_id + academic_year_id scope.
-// If you still have legacy (institution_id only), we keep a fallback in code.
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 const BLOCKS = 26;
 const WEEKENDS_PER_BLOCK = 2;
@@ -49,31 +24,6 @@ const parseEntry = (v) => {
   return { name: null, relaxed: false };
 };
 
-async function getProgramInstitutionId(programId) {
-  const { data, error } = await supabase
-    .from('programs')
-    .select('institution_id')
-    .eq('id', programId)
-    .single();
-
-  if (error) throw new Error(error.message);
-  if (!data?.institution_id) throw new Error('Program missing institution_id');
-  return data.institution_id;
-}
-
-const toDbBlockRows = (programId, academicYearId, institutionId) =>
-  (localBlockDates ?? []).map((b) => ({
-    institution_id: institutionId,
-    program_id: programId,
-    academic_year_id: academicYearId,
-    block_number: Number(b.block),
-    rotation_number: Number(b.rotation ?? b.block),
-    start_date: b.start,
-    end_date: b.end,
-  }));
-
-// Read-only: just fetch existing block_dates for a program/year.
-// Safe for all roles including fellows.
 async function getBlockDates({ programId, academicYearId }) {
   if (!supabase) throw new Error('Supabase not configured');
   const { data: blocks, error } = await supabase
@@ -85,30 +35,12 @@ async function getBlockDates({ programId, academicYearId }) {
   return blocks ?? [];
 }
 
-// Write: upsert block_dates then return them. Requires program_admin / program_director / chief_fellow.
-export async function ensureBlockDatesInDb({ programId, academicYearId }) {
-  if (!supabase) throw new Error('Supabase not configured');
-  if (!programId) throw new Error('ensureBlockDatesInDb: programId required');
-  if (!academicYearId) throw new Error('ensureBlockDatesInDb: academicYearId required');
-
-  const institutionId = await getProgramInstitutionId(programId);
-  const rows = toDbBlockRows(programId, academicYearId, institutionId);
-
-  const { error: ue } = await supabase
-    .from('block_dates')
-    .upsert(rows, { onConflict: 'program_id,academic_year_id,block_number' });
-
-  if (ue) throw new Error(ue.message);
-
-  return getBlockDates({ programId, academicYearId });
-}
+export { getBlockDates as ensureBlockDatesInDb };
 
 async function loadFellowsByScope({ programId, institutionId }) {
   const q = supabase.from('fellows').select('id, name').eq('is_active', true);
-
   const { data, error } = await (programId ? q.eq('program_id', programId) : q.eq('institution_id', institutionId));
   if (error) throw new Error(error.message);
-
   return data ?? [];
 }
 
@@ -237,35 +169,26 @@ export async function pullCallFloatFromSupabase({
 // Full schedule sync (schedule_assignments)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Push the full schedule to Supabase schedule_assignments.
- *
- * Scope: program_id + academic_year_id
- * Requires:
- *   - fellows exist for program_id (or we auto-seed)
- *   - block_dates exist for (program_id, academic_year_id) (we ensure/seed)
- */
 export async function pushScheduleToSupabase({
   schedule,
   fellows,        // array of fellow names
   programId,      // REQUIRED uuid
   academicYearId, // REQUIRED uuid
   userId,
-  pgyLevels = {}, // { [name]: number }
 }) {
   if (!supabase) return { error: 'Supabase not configured' };
   if (!programId) return { error: 'No programId provided' };
   if (!academicYearId) return { error: 'No academicYearId provided' };
   if (!Array.isArray(fellows) || fellows.length === 0) return { error: 'No fellows provided' };
 
-  // 0) Ensure blocks exist and get mapping (block_number -> block_date_id)
+  // 0) Get block_dates mapping (block_number -> block_date_id)
   let dbBlocks = [];
   try {
-    dbBlocks = await ensureBlockDatesInDb({ programId, academicYearId });
+    dbBlocks = await getBlockDates({ programId, academicYearId });
   } catch (e) {
-    return { error: `Block date seed failed: ${e.message}` };
+    return { error: `Block date load failed: ${e.message}` };
   }
-  if (!dbBlocks.length) return { error: 'No block dates found after seeding.' };
+  if (!dbBlocks.length) return { error: 'No block dates found for this program/year.' };
 
   const numToId = Object.fromEntries(dbBlocks.map((b) => [Number(b.block_number), b.id]));
 
@@ -276,40 +199,11 @@ export async function pushScheduleToSupabase({
   } catch (e) {
     return { error: e.message };
   }
-
-  // 2) Auto-seed fellows if empty (program scoped)
-  if (!dbFellows.length) {
-    let institutionId;
-    try {
-      institutionId = await getProgramInstitutionId(programId);
-    } catch (e) {
-      return { error: e.message };
-    }
-
-    const uniqueNames = [...new Set(fellows.map((n) => (n ?? '').trim()).filter(Boolean))];
-
-    const toInsert = uniqueNames.map((name) => ({
-      name,
-      institution_id: institutionId,
-      program_id: programId,
-      is_active: true,
-      pgy_level: pgyLevels[name] ?? 1,
-    }));
-
-    const { data: seeded, error: seedErr } = await supabase
-      .from('fellows')
-      .insert(toInsert)
-      .select('id, name');
-
-    if (seedErr) return { error: `Fellows auto-seed failed: ${seedErr.message}` };
-
-    dbFellows = seeded ?? [];
-    if (!dbFellows.length) return { error: 'Fellows auto-seed returned no rows.' };
-  }
+  if (!dbFellows.length) return { error: 'No fellows found in database for this program.' };
 
   const nameToId = Object.fromEntries(dbFellows.map((f) => [f.name, f.id]));
 
-  // 3) Build schedule_assignments
+  // 2) Build schedule_assignments
   const assignments = [];
   for (const name of fellows) {
     const trimmed = (name ?? '').trim();

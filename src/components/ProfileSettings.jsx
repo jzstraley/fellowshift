@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { User, Save, CheckCircle, AlertCircle } from "lucide-react";
+import { User, Save, CheckCircle, AlertCircle, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabaseClient";
 
 const roleLabels = {
   admin: "Admin",
@@ -28,6 +29,53 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
   const [username, setUsername] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMessage, setPwMessage] = useState(null);
+
+  const handleChangePassword = async () => {
+    setPwMessage(null);
+    if (!currentPw || !newPw || !confirmPw) {
+      setPwMessage({ type: "error", text: "All password fields are required." });
+      return;
+    }
+    if (newPw.length < 8) {
+      setPwMessage({ type: "error", text: "New password must be at least 8 characters." });
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setPwMessage({ type: "error", text: "New passwords do not match." });
+      return;
+    }
+    setPwSaving(true);
+    try {
+      // Re-authenticate first to verify current password
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPw,
+      });
+      if (authError) {
+        setPwMessage({ type: "error", text: "Current password is incorrect." });
+        return;
+      }
+      const { error } = await supabase.auth.updateUser({ password: newPw });
+      if (error) {
+        setPwMessage({ type: "error", text: error.message || "Failed to update password." });
+      } else {
+        setPwMessage({ type: "success", text: "Password updated successfully." });
+        setCurrentPw("");
+        setNewPw("");
+        setConfirmPw("");
+      }
+    } catch (e) {
+      setPwMessage({ type: "error", text: e?.message || "Failed to update password." });
+    } finally {
+      setPwSaving(false);
+    }
+  };
 
   // Keep local inputs in sync with profile as it loads/refreshes
   useEffect(() => {
@@ -183,6 +231,72 @@ export default function ProfileSettings({ darkMode, toggleDarkMode }) {
               {saving ? "Saving..." : "Save"}
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Change Password Card */}
+      <div className={card}>
+        <h3 className={`text-sm font-semibold mb-3 flex items-center gap-2 ${darkMode ? "text-gray-200" : "text-gray-700"}`}>
+          <Lock className="w-4 h-4" /> Change Password
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <label className={label}>Current Password</label>
+            <input
+              type="password"
+              className={input}
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              placeholder="Enter current password"
+              autoComplete="current-password"
+            />
+          </div>
+          <div>
+            <label className={label}>New Password</label>
+            <input
+              type="password"
+              className={input}
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
+            />
+          </div>
+          <div>
+            <label className={label}>Confirm New Password</label>
+            <input
+              type="password"
+              className={input}
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              placeholder="Repeat new password"
+              autoComplete="new-password"
+            />
+          </div>
+
+          {pwMessage && (
+            <div
+              className={`flex items-center gap-1.5 text-xs ${
+                pwMessage.type === "error" ? "text-red-400" : "text-green-400"
+              }`}
+            >
+              {pwMessage.type === "error" ? (
+                <AlertCircle className="w-3.5 h-3.5" />
+              ) : (
+                <CheckCircle className="w-3.5 h-3.5" />
+              )}
+              {pwMessage.text}
+            </div>
+          )}
+
+          <button
+            onClick={handleChangePassword}
+            disabled={pwSaving || !currentPw || !newPw || !confirmPw}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-semibold rounded"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            {pwSaving ? "Updating..." : "Update Password"}
+          </button>
         </div>
       </div>
 
