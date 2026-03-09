@@ -3,7 +3,7 @@
 // Bump this number to re-seed the schedule from initialSchedule on next app load.
 // Once seeded, in-app edits persist normally in Supabase. Bump again to re-seed.
 // 03/08/2026
-export const scheduleVersion = 4;
+export const scheduleVersion = 5;
 
 export const pgyLevels = {
   'Elkholy': 4, 'Naeem': 4, 'Nor': 4, 'Selvam': 4, 'Varga': 4,
