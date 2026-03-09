@@ -89,7 +89,7 @@ function getBlockWeekendSaturdays(blockStart) {
  * Build a day-by-day duty record for a single fellow.
  * Returns: Map<isoDate, { hours, shifts: [{ type, startHour, endHour, hours }], isNight, block }>
  */
-function buildTimeline(fellow, schedule, callSchedule, nightFloatSchedule, blockDates, vacationBlocks) {
+function buildTimeline(fellow, schedule, callSchedule, nightFloatSchedule, blockDates, vacDates) {
   const timeline = new Map();
 
   const getCallName = (sched, key) => {
@@ -105,13 +105,13 @@ function buildTimeline(fellow, schedule, callSchedule, nightFloatSchedule, block
     const blockNum = block.block;
     const rotation = schedule[fellow]?.[bi] ?? '';
     const template = SHIFT_TEMPLATES[rotation] || SHIFT_TEMPLATES[''];
-    const isVacation = vacationBlocks.has(blockNum);
 
     // Iterate each day in the block
     const start = parseDate(block.start);
     const end = parseDate(block.end);
     for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
       const iso = toISO(d);
+      const isVacation = vacDates.has(iso);
       const entry = { hours: 0, shifts: [], isNight: false, block: blockNum, date: iso, isVacation };
 
       if (!isVacation) {
@@ -546,15 +546,38 @@ export function checkAllWorkHourViolations({ fellows, schedule, callSchedule, ni
   const allViolations = [];
 
   for (const fellow of fellows) {
-    // Build vacation block set for this fellow
-    const vacBlocks = new Set();
+    // Build vacation date set for this fellow, respecting weekPart for partial-block vacations.
+    // 1 vacation week (weekPart=1 or 2) should exclude only 7 days, not the full ~14-day block.
+    const vacDates = new Set();
     (vacations || []).forEach(v => {
       if (v.fellow === fellow && v.status === 'approved' && v.reason === 'Vacation') {
-        for (let b = v.startBlock; b <= v.endBlock; b++) vacBlocks.add(b);
+        for (let b = v.startBlock; b <= v.endBlock; b++) {
+          const blockInfo = blockDates.find(bd => bd.block === b);
+          if (!blockInfo) continue;
+          const bStart = parseDate(blockInfo.start);
+          const bEnd = parseDate(blockInfo.end);
+
+          // For a single-block vacation, respect weekPart (1 = first week, 2 = second week)
+          let vacStart = bStart;
+          let vacEnd = bEnd;
+          if (v.startBlock === v.endBlock && (v.weekPart === 1 || v.weekPart === 2)) {
+            const w2Start = addDays(bStart, 7);
+            if (v.weekPart === 1) {
+              vacEnd = addDays(bStart, 6);
+              if (vacEnd > bEnd) vacEnd = bEnd;
+            } else {
+              vacStart = w2Start < bEnd ? w2Start : bEnd;
+            }
+          }
+
+          for (let d = new Date(vacStart); d <= vacEnd; d = addDays(d, 1)) {
+            vacDates.add(toISO(d));
+          }
+        }
       }
     });
 
-    const timeline = buildTimeline(fellow, schedule, callSchedule, nightFloatSchedule, blockDates, vacBlocks);
+    const timeline = buildTimeline(fellow, schedule, callSchedule, nightFloatSchedule, blockDates, vacDates);
 
     allViolations.push(
       ...check80HourRule(fellow, timeline, blockDates),

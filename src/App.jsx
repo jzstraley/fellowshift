@@ -14,7 +14,7 @@ import { deriveKey, encryptAndStore, loadAndDecrypt, clearSensitiveStorage } fro
 import {
   pushScheduleToSupabase, pullScheduleFromSupabase,
   pushCallFloatToSupabase, pullCallFloatFromSupabase,
-  pullVacationsFromSupabase, pullSwapRequestsFromSupabase,
+  pushVacationsToSupabase, pullVacationsFromSupabase, pullSwapRequestsFromSupabase,
   pushLecturesToSupabase, pullLecturesFromSupabase,
   pushClinicDaysToSupabase, pullClinicDaysFromSupabase,
 } from "./utils/scheduleSupabaseSync";
@@ -88,7 +88,7 @@ const mergeByReqIdPreferIncoming = (prev = [], incoming = []) => {
 };
 
 function AppContent() {
-  const { signOut, profile, user, loading, isSupabaseConfigured, canApprove, isAdmin, programId, academicYearId } = useAuth();
+  const { signOut, profile, user, loading, isSupabaseConfigured, canApprove, isAdmin, programId, academicYearId, memberships } = useAuth();
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("fellowshift_darkmode");
@@ -519,7 +519,8 @@ if (Array.isArray(swapResult?.swapRequests)) {
       pgyLevels,
     });
     if (schedResult.error) return { error: schedResult.error, count: 0 };
-    const [callFloatResult, lectResult, clinicResult] = await Promise.all([
+    const programName = memberships?.find(m => m.program_id === programId)?.program?.name ?? '';
+    const [callFloatResult, lectResult, clinicResult, vacResult] = await Promise.all([
       pushCallFloatToSupabase({
         callSchedule,
         nightFloatSchedule,
@@ -538,11 +539,19 @@ if (Array.isArray(swapResult?.swapRequests)) {
         clinicDays,
         programId,
       }),
+      pushVacationsToSupabase({
+        vacations,
+        programId,
+        academicYearId,
+        institutionId: profile.institution_id,
+        programName,
+        userId: user?.id,
+      }),
     ]);
-    const error = callFloatResult.error || lectResult.error || clinicResult.error || null;
-    const count = (schedResult.count ?? 0) + (callFloatResult.count ?? 0) + (lectResult.count ?? 0);
+    const error = callFloatResult.error || lectResult.error || clinicResult.error || vacResult.error || null;
+    const count = (schedResult.count ?? 0) + (callFloatResult.count ?? 0) + (lectResult.count ?? 0) + (vacResult.count ?? 0);
     return { error, count };
-  }, [schedule, callSchedule, nightFloatSchedule, lectures, speakers, topics, clinicDays, fellows, pgyLevels, programId, academicYearId, profile?.institution_id, user?.id]);
+  }, [schedule, callSchedule, nightFloatSchedule, lectures, speakers, topics, clinicDays, vacations, fellows, pgyLevels, programId, academicYearId, memberships, profile?.institution_id, user?.id]);
 
   // Pull schedule from Supabase on demand — called by ScheduleEditorView's Sync button.
   const onPullFromSupabase = useCallback(async () => {

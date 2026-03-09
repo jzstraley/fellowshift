@@ -313,6 +313,78 @@ export async function pullScheduleFromSupabase({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Vacations push
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Seed/upsert vacation_requests from the initialVacations array.
+ * Requires a unique constraint: UNIQUE NULLS NOT DISTINCT (fellow_id, start_block_id, end_block_id, week_part)
+ */
+export async function pushVacationsToSupabase({
+  vacations,       // array of { fellow, startBlock, endBlock, weekPart?, reason, status }
+  programId,
+  academicYearId,
+  institutionId,
+  programName,     // text — denormalized `program` column (NOT NULL in DB)
+  userId,
+}) {
+  if (!supabase) return { error: 'Supabase not configured' };
+  if (!programId || !academicYearId || !institutionId) return { error: 'Missing scope (programId, academicYearId, institutionId required)' };
+  if (!Array.isArray(vacations) || !vacations.length) return { error: null, count: 0 };
+
+  let dbBlocks = [];
+  try {
+    dbBlocks = await getBlockDates({ programId, academicYearId });
+  } catch (e) {
+    return { error: `Block date load failed: ${e.message}` };
+  }
+  if (!dbBlocks.length) return { error: 'No block dates found for this program/year.' };
+
+  const numToId = Object.fromEntries(dbBlocks.map((b) => [Number(b.block_number), b.id]));
+
+  let dbFellows = [];
+  try {
+    dbFellows = await loadFellowsByScope({ programId, institutionId: null });
+  } catch (e) {
+    return { error: e.message };
+  }
+  if (!dbFellows.length) return { error: 'No fellows found in database for this program.' };
+
+  const nameToId = Object.fromEntries(dbFellows.map((f) => [f.name, f.id]));
+
+  const rows = [];
+  for (const v of vacations) {
+    const fellowId = nameToId[(v.fellow ?? '').trim()];
+    const startBlockId = numToId[Number(v.startBlock)];
+    const endBlockId = numToId[Number(v.endBlock ?? v.startBlock)];
+    if (!fellowId || !startBlockId || !endBlockId) continue;
+
+    rows.push({
+      fellow_id: fellowId,
+      start_block_id: startBlockId,
+      end_block_id: endBlockId,
+      week_part: v.weekPart ?? null,
+      reason: v.reason ?? 'Vacation',
+      status: v.status ?? 'pending',
+      program_id: programId,
+      academic_year_id: academicYearId,
+      institution_id: institutionId,
+      program: programName ?? '',
+      requested_by: userId,
+    });
+  }
+
+  if (!rows.length) return { error: 'No vacations matched. Verify fellow names match DB and blocks exist.' };
+
+  const { error: ue } = await supabase
+    .from('vacation_requests')
+    .upsert(rows, { onConflict: 'fellow_id,start_block_id,end_block_id,week_part' });
+
+  if (ue) return { error: ue.message };
+  return { error: null, count: rows.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Vacations / Swaps (read-only helpers)
 // ─────────────────────────────────────────────────────────────────────────────
 
