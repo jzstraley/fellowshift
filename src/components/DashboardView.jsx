@@ -22,7 +22,6 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { getRotationColor } from "../utils/scheduleUtils";
 import { announcements } from "../data/announcements";
-import { policies } from "../data/policies";
 
 export default function DashboardView({
   fellows,
@@ -240,7 +239,7 @@ const pendingSwaps = useMemo(
           </div>
           <button
             onClick={dismissGreeting}
-            className="p-1 rounded-md hover:bg-white/20 transition-colors text-white/70 hover:text-white"
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/20 transition-colors text-white/70 hover:text-white"
             aria-label="Dismiss"
           >
             <X className="w-4 h-4" />
@@ -296,7 +295,7 @@ const pendingSwaps = useMemo(
             </div>
             <button
               onClick={dismissUpdates}
-              className="p-1 rounded-md hover:bg-amber-200/60 dark:hover:bg-amber-800/40 transition-colors text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-200"
+              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-amber-200/60 dark:hover:bg-amber-800/40 transition-colors text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-200"
               aria-label="Dismiss updates"
             >
               <X className="w-3.5 h-3.5" />
@@ -625,34 +624,21 @@ const pendingSwaps = useMemo(
         )}
       </div>
 
-      {/* Policies Card (full width) */}
+      {/* Policies row link */}
       <button
         onClick={() => setActiveView("policies")}
-        className="group w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm hover:shadow-md hover:border-slate-400 dark:hover:border-slate-500 transition-all duration-200"
+        className="group w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md hover:border-slate-400 dark:hover:border-slate-500 transition-all duration-200"
       >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400">
-              <Shield className="w-4 h-4" />
-            </div>
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-              Policies & Documents
-            </span>
-          </div>
-          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-slate-500 transition-colors" />
+        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 shrink-0">
+          <Shield className="w-4 h-4" />
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {policies.slice(0, 4).map((p) => (
-            <span key={p.id} className="text-xs text-gray-400 dark:text-gray-500">
-              {p.title}
-            </span>
-          ))}
-          {policies.length > 4 && (
-            <span className="text-xs text-gray-400 dark:text-gray-500">
-              +{policies.length - 4} more
-            </span>
-          )}
-        </div>
+        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+          Policies & Documents
+        </span>
+        <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+          — program reference library
+        </span>
+        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-slate-500 transition-colors ml-auto shrink-0" />
       </button>
     </div>
   );

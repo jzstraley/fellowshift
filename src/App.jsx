@@ -908,7 +908,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
             />
           )}
 
-          {activeView === "stats" && (!isSupabaseConfigured || canApprove) && <StatsView stats={stats} fellows={fellows} />}
+          {activeView === "stats" && (!isSupabaseConfigured || canApprove) && <StatsView stats={stats} fellows={fellows} vacations={vacations} />}
 
           {activeView === "call" && (
             <CallView
@@ -1008,7 +1008,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
             <ProfileSettings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
           )}
 
-          {activeView === "policies" && <PoliciesView />}
+          {activeView === "policies" && <PoliciesView programId={programId} />}
 
           {activeView === "admin" && isAdmin && (
             <AdminView
@@ -1039,7 +1039,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
         </Suspense>
 
         {/* Global Import/Export/Reset bar - non-dashboard views inline */}
-        {activeView !== "vacRequests" && activeView !== "dashboard" && (
+        {(activeView === "call" || activeView === "clinic") && ['program_director', 'admin', 'chief_fellow'].includes(profile?.role) && (
           <div className={`mt-4 p-3 rounded border ${
             darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-300"
           }`}>
@@ -1064,48 +1064,9 @@ if (Array.isArray(swapResult?.swapRequests)) {
                 )}
               </div>
             )}
-
-            {/* Import/Export - stacked on mobile */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-              <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-                Import/Export
-              </span>
-              <ImportExportBar
-                fellows={fellows}
-                schedule={schedule}
-                violations={violations}
-                showExportViolations={
-                  activeView === "violations" &&
-                  ['admin', 'program_director', 'chief_fellow'].includes(profile?.role)
-                }
-              />
-            </div>
           </div>
         )}
 
-        {/* Dashboard Import/Export — admin/PD/chief only, inline card below dashboard grid */}
-        {activeView === "dashboard" && ['admin', 'program_director', 'chief_fellow'].includes(profile?.role) && (
-          <div className="max-w-4xl mx-auto mt-5">
-            <div className={`rounded-xl p-5 shadow-sm border ${
-              darkMode
-                ? "bg-gray-800 border-gray-700"
-                : "bg-white border-gray-200"
-            }`}>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                <span className={`text-xs font-semibold uppercase tracking-wider ${
-                  darkMode ? "text-gray-400" : "text-gray-500"
-                }`}>
-                  Import / Export
-                </span>
-                <ImportExportBar
-                  fellows={fellows}
-                  schedule={schedule}
-                  violations={violations}
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Idle timeout warning modal */}

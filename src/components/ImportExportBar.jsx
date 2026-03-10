@@ -9,6 +9,7 @@ export default function ImportExportBar({
   violations,
   showExportViolations = false,
 }) {
+  return null;
   const exportSchedule = () => {
     const csv = buildScheduleCSV(schedule, fellows, 26);
     downloadTextFile("schedule_export.csv", csv);

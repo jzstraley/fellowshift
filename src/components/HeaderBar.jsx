@@ -115,8 +115,8 @@ export default function HeaderBar({
           <div className="flex items-center gap-2">
             <button
               onClick={toggleDarkMode}
-              className={`p-2 rounded ${
-                darkMode ? "hover:bg-gray-700 text-yellow-400" : "hover:bg-gray-200 text-gray-600"
+              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+                darkMode ? "text-gray-300 hover:text-white hover:bg-gray-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
               }`}
             >
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -140,8 +140,8 @@ export default function HeaderBar({
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className={`p-2 rounded ${
-                  darkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-200 text-gray-600"
+                className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+                  darkMode ? "text-gray-300 hover:text-white hover:bg-gray-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
                 }`}
               >
                 <CircleUser className="w-4 h-4" />
@@ -309,8 +309,8 @@ export default function HeaderBar({
                     active
                       ? "text-blue-600 dark:text-blue-400"
                       : darkMode
-                      ? "text-gray-400 hover:text-gray-200"
-                      : "text-gray-500 hover:text-gray-800"
+                      ? "text-gray-300 hover:text-white"
+                      : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
                   <Icon className={`w-5 h-5 ${active ? "stroke-[2.5]" : ""}`} />
@@ -326,8 +326,8 @@ export default function HeaderBar({
                 moreSheetOpen || (!primaryKeys.includes(activeView))
                   ? "text-blue-600 dark:text-blue-400"
                   : darkMode
-                  ? "text-gray-400 hover:text-gray-200"
-                  : "text-gray-500 hover:text-gray-800"
+                  ? "text-gray-300 hover:text-white"
+                  : "text-gray-600 hover:text-gray-900"
               }`}
             >
               <MoreHorizontal className="w-5 h-5" />

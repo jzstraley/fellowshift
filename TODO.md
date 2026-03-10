@@ -59,6 +59,12 @@
 
 ## ✅ Recently Completed
 
+- [X] PoliciesView rewritten: DB-backed CRUD (add/edit/delete) for admins/PDs/chiefs, categorized with icons, falls back to static list. Backed by new `policies` table (migration 016).
+- [X] StatsView: added "Time Off Summary" table showing approved vacation blocks and day-off counts per fellow, grouped by PGY.
+- [X] TimeOffView: vacation date ranges now display as human-readable dates ("Jan 15 – Jan 28"); request cards show approver name.
+- [X] Fixed `ensureBlockDateIdForUiWeek` block number lookup (was using wrong weekly block number); `week_part` now stored on vacation_requests.
+- [X] Import/Export bar scoped to call/clinic views and admin/PD/chief roles only; removed duplicate dashboard card.
+- [X] Migration 015: fixed vacation_requests UPDATE RLS for users missing program_memberships rows; seeded missing membership rows.
 - [X] Dashboard "Pending Approvals" card now lists vacation, day off, and swap requests as separate line items (admin and fellow views).
 - [X] Smart schedule-swap picker: select your own assigned shift → app shows only valid partners (filtered by vacation/away, grouped by fellow), bilateral swap encoded in reason string, bilateral approval updates both slots. Auth schema aligned (booleans, not function calls). All stub UI sections (timeoff, dayoff, swaps) fully implemented.
 
@@ -103,3 +109,5 @@ React scheduler libraries:
 FullCalendar - most feature-rich
 React Big Calendar - simpler, good for basic needs
 DayPilot - medical-specific features
+
+- [X] ON the pending vacations view, the dates requested are wrong, its showing the whole block dates rather than the ones requested. (Fixed: week_part stored on insert; TimeOffView formats as human-readable dates)

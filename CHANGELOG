@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-10 — Policies CRUD, Stats Time-Off Summary & RLS Fixes
+
+- **PoliciesView** fully rewritten: now fetches from a Supabase `policies` table scoped by `program_id`; falls back to static list when DB is unavailable. Admins/PDs/chiefs can add, edit, and delete documents via a modal form with title, category, description, URL, and sort order fields. Six categories supported: General, Leave & Time Off, Duty Hours, Clinical, Administrative, Education — each with a distinct icon and color accent. Non-managers see a read-only card list.
+- **StatsView** — Added "Time Off Summary" table below the rotation stats table: shows approved vacation block count and day-off count per fellow, grouped by PGY. Vacation blocks are summed from `startBlock`–`endBlock` range; day offs (Sick Day, Personal Day, Conference, CME) counted separately. Receives new `vacations` prop from `App.jsx`.
+- **Import/Export bar** — Scoped to `call` and `clinic` views only (was shown on every non-dashboard, non-vacation view); further gated to `program_director`, `admin`, and `chief_fellow` roles. Removed the duplicate dashboard Import/Export card. `ImportExportBar` component temporarily returns `null` (stub pending redesign).
+- **TimeOffView** — Vacation date range now formats as human-readable month/day strings (e.g. "Jan 15 – Jan 28") instead of raw ISO dates. Request cards now show the approver's name alongside the approval date ("Approved Jan 28 by Dr. Smith").
+- **useVacationState** — Fixed `ensureBlockDateIdForUiWeek`: was deriving a "weekly block number" (1–26) but the `block_dates` table uses parent block numbers (1–13). Now looks up by `parent` block number and stores the full parent-block date range with `week_part` stored separately. `week_part` (1 or 2) is now written to `vacation_requests` on insert.
+- **HeaderBar** — Icon buttons (dark mode toggle, user menu) restyled to fixed 8×8 size with `transition-colors` and improved contrast ratios in both light and dark modes. Mobile bottom-nav inactive tab text improved from `gray-400`/`gray-500` to `gray-300`/`gray-600`.
+- **db/migrations/015** — Fixed `vacation_requests` UPDATE RLS: replaced two broken policies (which checked `program_memberships` only) with a single four-path policy that also accepts `profiles.role` for users missing `program_memberships` rows. Seeded missing `program_memberships` rows from `profiles.role`. Cleaned up `pending` rows that had a stale `approved_at` value.
+- **db/migrations/016** — New `policies` table: `id`, `program_id`, `title`, `description`, `document_url`, `category`, `sort_order`, `is_active`, `created_by`, timestamps. RLS: all program members can SELECT; only admins/PDs/chiefs/program_admins can INSERT/UPDATE/DELETE.
+
 ## 2026-03-03 — Lecture Attendance Tracking
 
 - Added `lecture_attendance` table (new): `lecture_id`, `fellow_id`, `status` (present/absent/excused/late), `checked_in_at`, `checked_in_by`, `notes` with a UNIQUE constraint on `(lecture_id, fellow_id)`

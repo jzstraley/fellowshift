@@ -156,9 +156,8 @@ export default function DayOffView({
               onChange={e => setNewDayOff({ ...newDayOff, reason_type: e.target.value })}
             >
               <option value="Sick Day">Sick Day</option>
-              <option value="Personal Day">Personal Day</option>
               <option value="Conference">Conference</option>
-              <option value="CME">CME</option>
+              <option value="FLEX Day">Flex Day</option>
             </select>
           </div>
           <button

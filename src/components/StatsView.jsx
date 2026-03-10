@@ -1,5 +1,6 @@
 // src/components/StatsView.jsx
 import React, { useMemo } from "react";
+import { CalendarDays, Coffee } from "lucide-react";
 import { pgyLevels } from "../data/scheduleData";
 
 const PGYDividerRow = ({ pgy, colSpan }) => (
@@ -13,8 +14,28 @@ const PGYDividerRow = ({ pgy, colSpan }) => (
   </tr>
 );
 
-export default function StatsView({ stats, fellows }) {
+const DAY_OFF_REASONS = new Set(['Sick Day', 'Personal Day', 'Conference', 'CME']);
+
+export default function StatsView({ stats, fellows, vacations = [] }) {
   if (!stats) return null;
+
+  const vacSummary = useMemo(() => {
+    const map = {};
+    for (const v of vacations) {
+      const name = v.fellow || v.fellow_name;
+      if (!name || !fellows.includes(name)) continue;
+      if (!map[name]) map[name] = { vacation: 0, dayOff: 0 };
+      const isDayOff = DAY_OFF_REASONS.has(v.reason);
+      if (isDayOff) {
+        map[name].dayOff += 1;
+      } else {
+        const start = v.startBlock ?? 1;
+        const end = v.endBlock ?? start;
+        map[name].vacation += end - start + 1;
+      }
+    }
+    return map;
+  }, [vacations, fellows]);
 
   const fellowsByPGY = useMemo(
     () => ({
@@ -67,6 +88,7 @@ export default function StatsView({ stats, fellows }) {
   );
 
   return (
+    <div className="space-y-4">
     <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
       {/* Table without its own scroll container so page scrolls instead */}
       <div className="w-full">
@@ -113,6 +135,56 @@ export default function StatsView({ stats, fellows }) {
           </tbody>
         </table>
       </div>
+    </div>
+
+    {/* Vacation / Day-Off summary card */}
+    <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
+      <div className="px-3 py-2 bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 flex items-center gap-2">
+        <CalendarDays className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+        <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Time Off Summary</span>
+        <span className="ml-auto text-[10px] text-gray-500 dark:text-gray-400">approved requests · vacation counts by block</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-separate border-spacing-0">
+          <thead>
+            <tr className="bg-gray-100 dark:bg-gray-750">
+              <th className="px-3 py-1.5 text-left font-bold sticky left-0 bg-gray-100 dark:bg-gray-700 border-r border-b border-gray-200 dark:border-gray-600 dark:text-gray-100">Fellow</th>
+              <th className="px-3 py-1.5 text-center font-bold border-b border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-200">
+                <div className="flex items-center justify-center gap-1"><CalendarDays className="w-3 h-3" /> Vacation Blocks</div>
+              </th>
+              <th className="px-3 py-1.5 text-center font-bold border-b border-gray-200 dark:border-gray-600 bg-amber-50 dark:bg-amber-950 dark:text-amber-200">
+                <div className="flex items-center justify-center gap-1"><Coffee className="w-3 h-3" /> Days Off</div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {[4, 5, 6].map((pgy) => (
+              <React.Fragment key={pgy}>
+                <tr>
+                  <td colSpan={3} className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-sm font-extrabold text-gray-700 dark:text-gray-200">
+                    PGY-{pgy}
+                  </td>
+                </tr>
+                {fellowsByPGY[pgy].map((f, idx) => (
+                  <tr key={f} className={`border-b border-gray-200 dark:border-gray-700 ${idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"}`}>
+                    <td className="px-3 py-1.5 font-semibold sticky left-0 z-10 bg-inherit border-r border-gray-200 dark:border-gray-700 whitespace-nowrap dark:text-gray-100">
+                      {f}
+                      <span className="ml-1 text-[10px] text-gray-400 dark:text-gray-500">PGY{pgyLevels[f]}</span>
+                    </td>
+                    <td className="px-3 py-1.5 text-center bg-blue-50/50 dark:bg-blue-950/30 font-semibold dark:text-blue-100">
+                      {vacSummary[f]?.vacation ?? 0}
+                    </td>
+                    <td className="px-3 py-1.5 text-center bg-amber-50/50 dark:bg-amber-950/30 font-semibold dark:text-amber-100">
+                      {vacSummary[f]?.dayOff ?? 0}
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
     </div>
   );
 }

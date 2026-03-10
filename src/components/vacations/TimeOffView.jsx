@@ -294,7 +294,10 @@ function safeStr(v) {
 function defaultFormatBlockRange(r, getRequestExtras) {
   try {
     const ex = getRequestExtras ? getRequestExtras(r) : null;
-    if (ex?.start && ex?.end) return `${ex.start} to ${ex.end}`;
+    if (ex?.start && ex?.end) {
+      const fmt = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${fmt(ex.start)} – ${fmt(ex.end)}`;
+    }
   } catch (_) {}
 
   // fallback to block numbers if joined block_dates exist
@@ -329,6 +332,7 @@ function RequestCard({
   const rangeText = (formatBlockRange || ((x) => defaultFormatBlockRange(x, getRequestExtras)))(r);
   const reason = safeStr(r?.reason) || "Vacation";
   const approvedAt = r?.approved_at ? new Date(r.approved_at).toLocaleDateString() : null;
+  const approvedByName = r?.approved_by_profile?.full_name || r?.approved_by_profile?.email || null;
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -351,7 +355,9 @@ function RequestCard({
           </div>
 
           {approvedAt ? (
-            <div className="text-xs opacity-70 mt-0.5">Approved {approvedAt}</div>
+            <div className="text-xs opacity-70 mt-0.5">
+              Approved {approvedAt}{approvedByName ? ` by ${approvedByName}` : ""}
+            </div>
           ) : null}
         </div>
       </div>

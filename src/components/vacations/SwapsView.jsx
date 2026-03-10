@@ -270,7 +270,7 @@ export default function SwapsView({
       {/* Request Schedule Swap */}
       {userCanRequest && (
         <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-          <div className="mb-2 font-semibold dark:text-gray-100">Request Schedule Swap</div>
+          <div className="mb-2 font-semibold dark:text-gray-100">Request Call/Float Swap</div>
           <div className="space-y-2">
             <select
               className="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500 dark:text-gray-100"

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useCallback, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { blockDates as localBlockDates, allRotationTypes } from '../data/scheduleData';
-import { DAY_NAMES, DAY_OFF_REASONS, SWAP_RESET, getNameFromAssignment, formatPretty } from '../utils/vacationHelpers';
+import { DAY_NAMES, DAY_OFF_REASONS, SWAP_RESET, getNameFromAssignment, formatPretty, getWeekWindowWithinBlock } from '../utils/vacationHelpers';
 
 const asArray = (v) => (Array.isArray(v) ? v : []);
 const safeStr = (v) => (typeof v === 'string' ? v : '');
@@ -371,18 +371,20 @@ export function useVacationState({
       const match = asArray(source).find(w => String(w.block) === `${parent}-${part}`);
       if (!match) throw new Error('Selected week not found');
 
-      const weeklyNum = (parent - 1) * 2 + part;
-
-      const existing = asArray(blockDates).find(b => Number(b.block_number) === weeklyNum);
+      // Look up by parent block number (1–13) so both "1-1" and "1-2" resolve to
+      // the same 2-week block_date row. week_part is stored separately on the request.
+      const existing = asArray(blockDates).find(b => Number(b.block_number) === parent);
       if (existing?.id) return existing.id;
 
+      // Prefer the full parent-block date range so week_part narrowing works in display.
+      const parentBlock = asArray(localBlockDates).find(b => Number(b.block) === parent);
       const toInsert = {
         program_id: pid,
         academic_year_id: yid,
-        block_number: weeklyNum,
-        start_date: match.start,
-        end_date: match.end,
-        rotation_number: match.rotation ?? 0,
+        block_number: parent,
+        start_date: parentBlock?.start ?? match.start,
+        end_date: parentBlock?.end ?? match.end,
+        rotation_number: match.rotation ?? parentBlock?.rotation ?? 0,
         institution_id: institutionId || null,
         program: safeStr(profile?.program) || null,
         academic_year: safeStr(profile?.academic_year) || null,
@@ -500,12 +502,18 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
         }
       }
 
+      // Parse week_part (1 or 2) from the "parent-part" key so we can store it.
+      const wkParts = wk.split('-');
+      const weekPart = Number(wkParts[1]);
+      const resolvedWeekPart = (weekPart === 1 || weekPart === 2) ? weekPart : null;
+
       const blockId = await ensureBlockDateIdForUiWeek(wk);
 
       const { error } = await supabase.from('vacation_requests').insert({
         fellow_id: fid,
         start_block_id: blockId,
         end_block_id: blockId,
+        week_part: resolvedWeekPart,
         reason: safeStr(newDbReq?.reason) || 'Vacation',
         status: 'pending',
         requested_by: uid,
@@ -811,7 +819,7 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
     } catch (_) {}
 
     let start = req?.start_block?.start_date || null;
-    let end = req?.start_block?.end_date || null;
+    let end = req?.end_block?.end_date || req?.start_block?.end_date || null;
 
     if ((!start || !end) && (Array.isArray(localBlockDates) && localBlockDates.length)) {
       const match = splitLocalWeeks.find(w => String(w.block) === `${parent}-${part}`);
@@ -819,6 +827,14 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
         start = match.start;
         end = match.end;
       }
+    }
+
+    // Narrow to just the requested week if week_part is specified (1 = first week, 2 = second week)
+    const weekPart = req?.week_part ? Number(req.week_part) : null;
+    if (weekPart === 1 || weekPart === 2) {
+      const window = getWeekWindowWithinBlock(req?.start_block?.start_date, req?.start_block?.end_date, weekPart);
+      if (window.start) start = window.start.toISOString().split('T')[0];
+      if (window.end) end = window.end.toISOString().split('T')[0];
     }
 
     const key = `B${parent}-W${part}`;

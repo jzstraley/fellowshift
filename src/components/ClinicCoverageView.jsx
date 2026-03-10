@@ -328,11 +328,6 @@ const CANNOT_COVER_ROTATIONS = [
         {/* ── Mobile: one card per entry ── */}
         <div className="md:hidden p-2 space-y-1.5">
           {coverageEntries.map((entry, idx) => {
-            const { weekStart, weekEnd } = getWeekRange(
-              entry.blockStart,
-              entry.blockEnd,
-              entry.week
-            );
             const clinicDate = entry.clinicDate;
 
             const cardBorder = !entry.coverer
@@ -354,63 +349,43 @@ const CANNOT_COVER_ROTATIONS = [
               : "bg-gray-50 dark:bg-gray-800";
 
             return (
-              <div key={idx} className={`rounded border text-xs overflow-hidden ${cardBorder}`}>
-                {/* Card header: block + week + date range */}
-                <div className={`flex items-center justify-between px-2 py-1 ${cardBg} border-b ${cardBorder}`}>
-                  <div className="flex items-center gap-1.5 font-bold dark:text-gray-100">
-                    <span>Blk {entry.block} · W{entry.week}</span>
+              <div key={idx} className={`rounded border text-xs px-2 py-1.5 flex items-center gap-1.5 flex-wrap ${cardBg} ${cardBorder}`}>
+                {/* Absent fellow */}
+                <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold whitespace-nowrap">
+                  {entry.absent}
+                </span>
+                {/* Nights → clinic date */}
+                <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  Nights →{" "}
+                  {clinicDate
+                    ? clinicDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+                    : clinicDayName(entry.absentClinicDay)}
+                </span>
+                <span className="text-gray-400 dark:text-gray-500">covered by</span>
+                {/* Coverer */}
+                {entry.coverer ? (
+                  <>
+                    <span className={`px-1.5 py-0.5 rounded font-semibold whitespace-nowrap ${getRotationColor(entry.covererRotation)}`}>
+                      {entry.coverer}
+                    </span>
+                    {entry.covererRotation && (
+                      <span className={`px-1 py-0.5 rounded font-semibold whitespace-nowrap ${getRotationColor(entry.covererRotation)}`}>
+                        {entry.covererRotation}
+                      </span>
+                    )}
                     {entry.relaxedSameClinicDay && (
                       <span className="px-1 rounded text-[10px] font-bold bg-yellow-200 text-yellow-900">RELAX</span>
                     )}
                     {!entry.relaxedSameClinicDay && entry.relaxedBackToBack && (
                       <span className="px-1 rounded text-[10px] font-bold bg-amber-200 text-amber-900">B2B</span>
                     )}
-                  </div>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                    {weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–
-                    {weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </>
+                ) : (
+                  <span className="flex items-center gap-1 text-red-600 font-bold">
+                    <AlertTriangle className="w-3 h-3" />
+                    NONE
                   </span>
-                </div>
-
-                {/* Card body: absent → covered */}
-                <div className={`px-2 py-1.5 grid grid-cols-2 gap-x-2 items-center ${cardBg}`}>
-                  {/* Left: absent fellow + clinic date */}
-                  <div className="flex flex-col min-w-0">
-                    <span className="px-1.5 py-0.5 rounded bg-black text-white font-semibold truncate self-start max-w-full">
-                      {entry.absent}
-                    </span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                      Nights → {clinicDayName(entry.absentClinicDay)}
-                      {clinicDate ? ` ${clinicDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
-                    </span>
-                  </div>
-
-                  {/* Right: coverer info */}
-                  <div className="flex flex-col min-w-0">
-                    {entry.coverer ? (
-                      <>
-                        <span className={`px-1.5 py-0.5 rounded font-semibold truncate self-start max-w-full ${getRotationColor(entry.covererRotation)}`}>
-                          {entry.coverer}
-                        </span>
-                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                          <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                            ({clinicDayName(entry.covererClinicDay)})
-                          </span>
-                          {entry.covererRotation && (
-                            <span className={`px-1 py-0.5 rounded text-[10px] font-semibold ${getRotationColor(entry.covererRotation)}`}>
-                              {entry.covererRotation}
-                            </span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="flex items-center gap-1 text-red-600 font-bold">
-                        <AlertTriangle className="w-3 h-3" />
-                        NONE
-                      </span>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}
