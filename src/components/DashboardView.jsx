@@ -1,5 +1,5 @@
 // src/components/DashboardView.jsx
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Clock,
   FileText,
@@ -14,9 +14,15 @@ import {
   ArrowLeftRight,
   CalendarDays,
   TrendingUp,
+  Megaphone,
+  Pin,
+  Shield,
+  X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getRotationColor } from "../utils/scheduleUtils";
+import { announcements } from "../data/announcements";
+import { policies } from "../data/policies";
 
 export default function DashboardView({
   fellows,
@@ -193,16 +199,52 @@ const pendingSwaps = useMemo(
 
   const isAdmin = canApprove;
 
+  const todayKey = today; // "YYYY-MM-DD"
+
+  const [showGreeting, setShowGreeting] = useState(
+    () => localStorage.getItem("fs_greeting_dismissed") !== todayKey
+  );
+  const [showUpdates, setShowUpdates] = useState(
+    () => localStorage.getItem("fs_updates_dismissed") !== todayKey
+  );
+
+  const dismissGreeting = () => {
+    localStorage.setItem("fs_greeting_dismissed", todayKey);
+    setShowGreeting(false);
+  };
+  const dismissUpdates = () => {
+    localStorage.setItem("fs_updates_dismissed", todayKey);
+    setShowUpdates(false);
+  };
+
+  const sortedAnnouncements = useMemo(() => {
+    return [...announcements].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.date.localeCompare(a.date);
+    });
+  }, []);
+
   return (
     <div className="max-w-4xl mx-auto space-y-5">
       {/* Greeting Header */}
+      {showGreeting && (
       <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-800 p-5 text-white shadow-lg">
-        <div className="flex items-center gap-3 mb-1">
-          <GreetingIcon className="w-6 h-6 opacity-90" />
-          <h1 className="text-xl font-bold">
-            {greeting}
-            {myName ? `, ${myName}` : ""}
-          </h1>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-3">
+            <GreetingIcon className="w-6 h-6 opacity-90" />
+            <h1 className="text-xl font-bold">
+              {greeting}
+              {myName ? `, ${myName}` : ""}
+            </h1>
+          </div>
+          <button
+            onClick={dismissGreeting}
+            className="p-1 rounded-md hover:bg-white/20 transition-colors text-white/70 hover:text-white"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
         {currentBlock ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-blue-100">
@@ -240,6 +282,54 @@ const pendingSwaps = useMemo(
           </div>
         )}
       </div>
+      )}
+
+      {/* Updates Banner */}
+      {showUpdates && sortedAnnouncements.length > 0 && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/10 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Megaphone className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Updates
+              </span>
+            </div>
+            <button
+              onClick={dismissUpdates}
+              className="p-1 rounded-md hover:bg-amber-200/60 dark:hover:bg-amber-800/40 transition-colors text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-200"
+              aria-label="Dismiss updates"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="space-y-3">
+            {sortedAnnouncements.map((item) => (
+              <div key={item.id} className="flex gap-3">
+                <div className="shrink-0 mt-0.5">
+                  {item.pinned ? (
+                    <Pin className="w-3 h-3 text-amber-500 dark:text-amber-400" />
+                  ) : (
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                      {item.title}
+                    </span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-500">
+                      {fmtDate(item.date)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800/80 dark:text-amber-300/70 mt-0.5 leading-relaxed">
+                    {item.body}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -534,6 +624,36 @@ const pendingSwaps = useMemo(
           </div>
         )}
       </div>
+
+      {/* Policies Card (full width) */}
+      <button
+        onClick={() => setActiveView("policies")}
+        className="group w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm hover:shadow-md hover:border-slate-400 dark:hover:border-slate-500 transition-all duration-200"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400">
+              <Shield className="w-4 h-4" />
+            </div>
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+              Policies & Documents
+            </span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-slate-500 transition-colors" />
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {policies.slice(0, 4).map((p) => (
+            <span key={p.id} className="text-xs text-gray-400 dark:text-gray-500">
+              {p.title}
+            </span>
+          ))}
+          {policies.length > 4 && (
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              +{policies.length - 4} more
+            </span>
+          )}
+        </div>
+      </button>
     </div>
   );
 }

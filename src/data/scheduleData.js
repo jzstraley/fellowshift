@@ -3,7 +3,7 @@
 // Bump this number to re-seed the schedule from initialSchedule on next app load.
 // Once seeded, in-app edits persist normally in Supabase. Bump again to re-seed.
 // 03/09/2026
-export const scheduleVersion = 6;
+export const scheduleVersion = 7;
 
 export const pgyLevels = {
   'Elkholy': 4, 'Naeem': 4, 'Nor': 4, 'Selvam': 4, 'Varga': 4,
@@ -97,12 +97,14 @@ export const initialVacations = [
   { fellow: 'Yousafzai', startBlock: 20, endBlock: 20, weekPart: 2, reason: 'Vacation', status: 'pending' },
   { fellow: 'Yousafzai', startBlock: 21, endBlock: 21, weekPart: 1, reason: 'Vacation', status: 'pending' },
   { fellow: 'Naeem', startBlock: 21, endBlock: 21, weekPart: 1, reason: 'Vacation', status: 'pending' },
+  { fellow: 'Ezaldin', startBlock: 22, endBlock: 22, weekPart: 2, reason: 'Vacation', status: 'pending' },
   { fellow: 'Varga', startBlock: 24, endBlock: 24, weekPart: 2, reason: 'Vacation', status: 'pending' },
   { fellow: 'Alkhawlani', startBlock: 24, endBlock: 24, weekPart: 1, reason: 'Vacation', status: 'pending' },
   { fellow: 'Ali', startBlock: 24, endBlock: 24, weekPart: 2, reason: 'Vacation', status: 'pending' },
   { fellow: 'Elsayed', startBlock: 24, endBlock: 24, reason: 'Vacation', status: 'pending' },
   { fellow: 'Ali', startBlock: 25, endBlock: 25, reason: 'Vacation', status: 'pending' },
   { fellow: 'Straley', startBlock: 26, endBlock: 26, reason: 'Vacation', status: 'pending' },
+  { fellow: 'Ezaldin', startBlock: 25, endBlock: 25, reason: 'Vacation', status: 'pending' },
 ];
 
 // Initial call and night-float base provided by user
@@ -132,7 +134,7 @@ export const initialCallSchedule = {
 'B23-W1': 'Elkholy', 'B23-W2': 'Nor',		
 'B24-W1': 'Ezaldin', 'B24-W2': 'Naeem',		
 'B25-W1': 'Varga', 'B25-W2': 'Selvam',		
-'B26-W1': 'Sharma', 'B26-W2': 'Naeem',
+'B26-W1': 'Sharma', 'B26-W2': 'Naeem'
 };
 
 export const initialNightFloatSchedule = {

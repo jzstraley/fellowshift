@@ -41,6 +41,7 @@ const ViolationsView = lazy(() => import("./components/ViolationsView"));
 const ScheduleEditorView = lazy(() => import("./components/ScheduleEditorView"));
 const ProfileSettings = lazy(() => import("./components/ProfileSettings"));
 const AdminView = lazy(() => import("./components/AdminView"));
+const PoliciesView = lazy(() => import("./components/PoliciesView"));
 
 const STORAGE_KEY = "fellowship_scheduler_v1";
 const LECTURE_STORAGE_KEY = "fellowship_lectures_v1";
@@ -395,12 +396,15 @@ if (Array.isArray(persisted?.swapRequests)) {
     const isSeedLoad = pendingScheduleSeedRef.current;
     if (isSeedLoad) pendingScheduleSeedRef.current = false;
 
+    const seedProgramName = memberships?.find(m => m.program_id === programId)?.program?.name ?? '';
     Promise.all([
   isSeedLoad
     ? pushScheduleToSupabase({ schedule: initialSchedule, fellows, programId, academicYearId, userId: user?.id, pgyLevels })
     : pullScheduleFromSupabase({ fellows, blockDates, programId, academicYearId }),
   pullCallFloatFromSupabase({ programId, academicYearId }),
-  pullVacationsFromSupabase({ programId, academicYearId }),
+  isSeedLoad
+    ? pushVacationsToSupabase({ vacations: initialVacations, programId, academicYearId, institutionId: profile.institution_id, programName: seedProgramName, userId: user?.id })
+    : pullVacationsFromSupabase({ programId, academicYearId }),
   pullSwapRequestsFromSupabase({ programId, academicYearId }),
   pullLecturesFromSupabase({ institutionId: profile.institution_id }),
   pullClinicDaysFromSupabase({ programId }),
@@ -441,10 +445,22 @@ if (Array.isArray(persisted?.swapRequests)) {
         fellows.forEach(f => { fresh[f].call = callCounts[f] ?? 0; fresh[f].float = floatCounts[f] ?? 0; });
         setStats(fresh);
       }
-if (Array.isArray(vacResult?.vacations)) {
+if (Array.isArray(vacResult?.vacations) && vacResult.vacations.length > 0) {
   setVacations(vacResult.vacations);
-} else if (vacResult?.vacations === null) {
-  setVacations([]); // server says none, clear
+} else if (!isSeedLoad && initialVacations.length > 0 && programId && profile?.institution_id) {
+  // DB has no vacations — auto-seed them, then pull back with proper IDs
+  pushVacationsToSupabase({
+    vacations: initialVacations,
+    programId,
+    academicYearId,
+    institutionId: profile.institution_id,
+    programName: seedProgramName,
+    userId: user?.id,
+  }).then(r => {
+    if (!r?.error) return pullVacationsFromSupabase({ programId, academicYearId });
+  }).then(r => {
+    if (Array.isArray(r?.vacations) && r.vacations.length > 0) setVacations(r.vacations);
+  });
 }
 
 console.log('[App initLoad] swapResult:', swapResult);
@@ -526,6 +542,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
         nightFloatSchedule,
         programId,
         academicYearId,
+        institutionId: profile?.institution_id,
         userId: user?.id,
       }),
       pushLecturesToSupabase({
@@ -548,7 +565,13 @@ if (Array.isArray(swapResult?.swapRequests)) {
         userId: user?.id,
       }),
     ]);
-    const error = callFloatResult.error || lectResult.error || clinicResult.error || vacResult.error || null;
+    const errors = [
+      callFloatResult.error && `Call/Float: ${callFloatResult.error}`,
+      lectResult.error && `Lectures: ${lectResult.error}`,
+      clinicResult.error && `Clinic: ${clinicResult.error}`,
+      vacResult.error && `Vacations: ${vacResult.error}`,
+    ].filter(Boolean);
+    const error = errors.length ? errors.join(' | ') : null;
     const count = (schedResult.count ?? 0) + (callFloatResult.count ?? 0) + (lectResult.count ?? 0) + (vacResult.count ?? 0);
     return { error, count };
   }, [schedule, callSchedule, nightFloatSchedule, lectures, speakers, topics, clinicDays, vacations, fellows, pgyLevels, programId, academicYearId, memberships, profile?.institution_id, user?.id]);
@@ -984,6 +1007,8 @@ if (Array.isArray(swapResult?.swapRequests)) {
           {(activeView === "profile" || activeView === "settings") && (
             <ProfileSettings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
           )}
+
+          {activeView === "policies" && <PoliciesView />}
 
           {activeView === "admin" && isAdmin && (
             <AdminView

@@ -45,7 +45,16 @@ const CANNOT_COVER_ROTATIONS = [
     });
   }, [fellows, schedule, clinicDays, pgyLevels, blockDates]);
 
-  const { entries: coverageEntries, counts: coverageStats } = clinicCoverage;
+  const { entries: coverageEntries } = clinicCoverage;
+
+  // Count how many clinic slots each fellow covers for the year, computed directly from entries
+  const coverageCounts = useMemo(() => {
+    const counts = Object.fromEntries(fellows.map((f) => [f, 0]));
+    coverageEntries.forEach((e) => {
+      if (e.coverer && counts[e.coverer] !== undefined) counts[e.coverer]++;
+    });
+    return counts;
+  }, [fellows, coverageEntries]);
 
   // Month navigation for the clinic calendar
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1)); // July 2026
@@ -531,7 +540,7 @@ const CANNOT_COVER_ROTATIONS = [
       {showPrivileged && <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
           <h3 className="font-bold text-base dark:text-gray-100">Coverage Load Distribution</h3>
-          <p className="text-xs text-gray-600 dark:text-gray-400">Target: 4 per fellow</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Coverage target: 4 per fellow · Total = regular + coverage</p>
         </div>
 
         <div className="p-3 space-y-3">
@@ -540,7 +549,7 @@ const CANNOT_COVER_ROTATIONS = [
               <div className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">PGY-{pgy}</div>
               <div className="flex flex-wrap gap-2">
                 {statsByPGY[pgy].map((fellow) => {
-                  const count = coverageStats?.[fellow] || 0;
+                  const count = coverageCounts[fellow] ?? 0;
                   const isOverTarget = count > 4;
                   const isUnderTarget = count < 4;
 
@@ -557,11 +566,7 @@ const CANNOT_COVER_ROTATIONS = [
                     >
                       <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">{fellow}</div>
                       <div className="flex items-baseline gap-1">
-                        <span
-                          className={`text-xl font-bold ${
-                            isOverTarget ? "text-red-600" : isUnderTarget ? "text-yellow-600" : "text-gray-900 dark:text-gray-100"
-                          }`}
-                        >
+                        <span className={`text-xl font-bold ${isOverTarget ? "text-red-600" : isUnderTarget ? "text-yellow-600" : "text-gray-900 dark:text-gray-100"}`}>
                           {count}
                         </span>
                         <span className="text-[11px] text-gray-600 dark:text-gray-400">covers</span>

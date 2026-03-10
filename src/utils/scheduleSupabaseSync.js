@@ -91,7 +91,7 @@ export async function pushCallFloatToSupabase({
 
         rows.push({
           ...(useNewScope
-            ? { program_id: programId, academic_year_id: academicYearId }
+            ? { program_id: programId, academic_year_id: academicYearId, institution_id: institutionId ?? null }
             : { institution_id: institutionId }),
           block_number: b,
           weekend: w,

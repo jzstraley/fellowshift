@@ -236,7 +236,7 @@ export default function HeaderBar({
               >
                 {v.label}
                 {v.key === "violations" && violationCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-bold text-white bg-red-500 rounded-full">
+                  <span className="absolute -top-1.5 -right-1.5 z-10 min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-bold text-white bg-red-500 rounded-full">
                     {violationCount > 99 ? '99+' : violationCount}
                   </span>
                 )}
@@ -283,7 +283,7 @@ export default function HeaderBar({
                   >
                     {v.label}
                     {v.key === "violations" && violationCount > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[8px] font-bold text-white bg-red-500 rounded-full">
+                      <span className="absolute -top-1 -right-1 z-10 min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[8px] font-bold text-white bg-red-500 rounded-full">
                         {violationCount > 99 ? '99+' : violationCount}
                       </span>
                     )}
