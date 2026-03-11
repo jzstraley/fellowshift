@@ -335,7 +335,7 @@ function RequestCard({
   const approvedByName = r?.approved_by_profile?.full_name || r?.approved_by_profile?.email || null;
 
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
       <div className="flex items-start gap-2 min-w-0">
         {rotation ? (
           <span className={`mt-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-tight ${rotationColorClass(rotation)}`}>
@@ -362,7 +362,7 @@ function RequestCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
         {showApprove ? (
           <Button
             variant="approve"

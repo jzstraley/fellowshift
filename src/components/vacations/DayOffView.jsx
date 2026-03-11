@@ -31,7 +31,7 @@ export default function DayOffView({
         {pendingDayOffs.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No pending day off requests</div>}
         <div className="space-y-2">
           {pendingDayOffs.map((r) => (
-            <div key={r.id} className="flex items-center justify-between border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
+            <div key={r.id} className="flex flex-col gap-2 border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
               <div className="text-sm">
                 <div className="font-semibold dark:text-gray-100">
                   {r.fellow?.name ?? 'Unknown Fellow'}
@@ -47,17 +47,17 @@ export default function DayOffView({
                     : ''}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {userCanApprove && (
                   <>
                     <button onClick={() => approveDayOff(r.id)} disabled={submitting} className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
                       <CheckCircle className="w-3 h-3" /> Approve
                     </button>
                     {denyingId === r.id ? (
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 w-full sm:w-auto">
                         <input
                           type="text"
-                          className="p-1 border rounded text-xs w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
+                          className="p-1 border rounded text-xs w-full sm:w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
                           placeholder="Denial reason…"
                           value={denyReason}
                           onChange={e => setDenyReason(e.target.value)}
@@ -67,8 +67,10 @@ export default function DayOffView({
                           }}
                           autoFocus
                         />
-                        <button onClick={() => { denyDayOff(r.id, denyReason); setDenyingId(null); setDenyReason(''); }} disabled={submitting} className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
-                        <button onClick={() => { setDenyingId(null); setDenyReason(''); }} className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
+                        <div className="flex gap-1">
+                          <button onClick={() => { denyDayOff(r.id, denyReason); setDenyingId(null); setDenyReason(''); }} disabled={submitting} className="flex-1 sm:flex-none px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
+                          <button onClick={() => { setDenyingId(null); setDenyReason(''); }} className="flex-1 sm:flex-none px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
+                        </div>
                       </div>
                     ) : (
                       <button onClick={() => { setDenyingId(r.id); setDenyReason(''); }} disabled={submitting} className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1">
@@ -157,6 +159,7 @@ export default function DayOffView({
             >
               <option value="Sick Day">Sick Day</option>
               <option value="Conference">Conference</option>
+              <option value="Board Exam">Board Exam</option>
               <option value="FLEX Day">Flex Day</option>
             </select>
           </div>

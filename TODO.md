@@ -1,113 +1,102 @@
-# Fellowship Scheduler - TODO List
-
-## 🔴 Priority Fixes (Must Do)
-
-### Mobile Responsiveness
-
-- [X] Make all tables horizontally scrollable on mobile
-- [ ] Touch-friendly buttons and controls
-- [ ] Test on various screen sizes
-
-### UI Improvements
-
-- [X] Move csv exporters to bottom.
-- [X] Need to fix button bar
-- [ ] Change IMport background dark
-- [X] Background for tables not dark
-- [X] Remove inport/export/reset from vacations tab
-- [X] Click a name, header, or cell to highlight.
-- [ ] Toggle Vacation Mode to paint vacation blocks.
-- [X] Remove PGY year on Clinic schedule
-    - [X] Fix UI for Clinic on mobile, just equal space
-- [X] Could not find the table public.lecture_speaker when submitting a change request
-- [ ] harden session persistence across tabs
-- [ ] add silent retry for profile loads so auth never looks broken when RLS/network hiccups
-- [ ] Unify role/permission gating so admin UX feels stable everywhere (dashboard, approvals, stats, schedule edit)
-
----
-
-## 🟡 Logic Fixes
-
-### Access control
-
-- [X] Fellows see their own program's schedule
-- [X] Chiefs can edit their program
-- [X] Program directors see all
-
-### Call/Float Generator
-
-- [X] Constraint: Cannot do call weekend same weekend as night float
-- [X] Prioritize even float distribution
-- [X] PGY-4 targets prioritized over PGY-5 targets
-- [X] No night floats for PGy-6s last 3 months.
-
-### Clinic Coverage
-
-- [X] Change from bi-weekly to weekly coverage assignments
-- [X] Skip June 2026 for clinic coverage (blocks 25-26)
-- [X] Balance to ~2 coverage assignments per fellow
-- [X] Different person each week (no back-to-back same coverer)
-
----
-
-## 🟢 Restore Missing Features
-
-- [X] Restore Vacation/Request page
-- [ ] Vacation input and display functionality
+# FellowShift — TODO
 
 ---
 
 ## ✅ Recently Completed
 
-- [X] PoliciesView rewritten: DB-backed CRUD (add/edit/delete) for admins/PDs/chiefs, categorized with icons, falls back to static list. Backed by new `policies` table (migration 016).
-- [X] StatsView: added "Time Off Summary" table showing approved vacation blocks and day-off counts per fellow, grouped by PGY.
-- [X] TimeOffView: vacation date ranges now display as human-readable dates ("Jan 15 – Jan 28"); request cards show approver name.
-- [X] Fixed `ensureBlockDateIdForUiWeek` block number lookup (was using wrong weekly block number); `week_part` now stored on vacation_requests.
-- [X] Import/Export bar scoped to call/clinic views and admin/PD/chief roles only; removed duplicate dashboard card.
-- [X] Migration 015: fixed vacation_requests UPDATE RLS for users missing program_memberships rows; seeded missing membership rows.
-- [X] Dashboard "Pending Approvals" card now lists vacation, day off, and swap requests as separate line items (admin and fellow views).
-- [X] Smart schedule-swap picker: select your own assigned shift → app shows only valid partners (filtered by vacation/away, grouped by fellow), bilateral swap encoded in reason string, bilateral approval updates both slots. Auth schema aligned (booleans, not function calls). All stub UI sections (timeoff, dayoff, swaps) fully implemented.
-
-## 🔵 Future Features
-
-### Lecture Scheduler (New Module)
-
-- [ ] Lecture calendar with date/time/topic
-- [ ] Speaker/presenter assignments
-- [ ] Gmail integration for automated reminders
-- [ ] RSVP tracking
-- [ ] Topic/speaker management database
-- [ ] Recurring lecture series support
-
-### Other Ideas
-
-- [ ] Export to Google Calendar / iCal
-- [X] Print-friendly views
-- [X] Dark mode
-- [X] Undo/redo for schedule changes
-- [ ] Conflict detection warnings
-- [ ] Fellow preferences input (vacation requests, rotation preferences)
-- [ ] Analytics dashboard (workload metrics over time)
-- [ ] Multi-year schedule planning
-- [ ] Backup/restore functionality
-- [ ] Share schedule via link
+- [X] Supabase Realtime subscription: live toasts for request approvals/denials and schedule updates (App.jsx)
+- [X] Pending request badge on Requests nav tab (desktop, mobile bottom nav, More sheet)
+- [X] Request filter bar (search by fellow name) + newest/oldest sort in VacationsView
+- [X] Mobile responsiveness: request cards in TimeOffView, DayOffView, SwapsView now stack on narrow screens
+- [X] Board Exam and FLEX Day added as day-off reason types (form + DAY_OFF_SET classification)
+- [X] Deleted dead `src/services/requestService.js`
+- [X] PoliciesView rewritten: DB-backed CRUD (add/edit/delete) for admins/PDs/chiefs, categorized with icons, falls back to static list (migration 016)
+- [X] StatsView: "Time Off Summary" table showing approved vacation blocks and day-off counts per fellow, grouped by PGY
+- [X] TimeOffView: vacation date ranges display as human-readable dates ("Jan 15 – Jan 28"); request cards show approver name
+- [X] Fixed `ensureBlockDateIdForUiWeek` block number lookup; `week_part` stored on vacation_requests
+- [X] Import/Export bar scoped to call/clinic views and admin/PD/chief roles only
+- [X] Migration 015: fixed vacation_requests UPDATE RLS for users missing program_memberships rows
+- [X] Dashboard "Pending Approvals" card lists vacation, day off, and swap requests as separate line items
+- [X] Smart swap picker: valid partners filtered by vacation/away; bilateral swap approval updates both slots
+- [X] Lecture attendance tracking (check-in window, attendance roster, admin controls, fellow self-check-in)
+- [X] Fellows can cancel their own pending requests (status → cancelled)
+- [X] Request lists scoped: non-approvers see only their own requests
+- [X] Dashboard redesign with greeting, current block hero banner, quick links for fellows
+- [X] ACGME work-hour violation checker + Violations view with fix suggester
+- [X] Session idle timeout (15 min) with warning modal at 13 min
+- [X] AES-GCM encrypted localStorage for sensitive cached data
+- [X] Undo/redo for schedule changes (dual stack, Ctrl+Z / Ctrl+Shift+Z)
+- [X] Dark mode (full Tailwind dark: variants across all components)
 
 ---
 
-Data structure:
-Users table: user_id, name, fellowship_program, role
-Schedules table: schedule_id, program_id, date, user_id, shift_type, location
-Programs table: program_id, program_name (cardiology, etc.)
-Key features for medical scheduling:
+## 🔴 High Priority
 
-Calendar view (monthly/weekly)
-Export to personal calendar (iCal)
-Duty hour tracking (ACGME compliance)
+### Auth & Session Stability
 
-React scheduler libraries:
+- [ ] Harden session persistence across tabs (broadcast channel or storage event sync)
+- [ ] Silent retry for profile loads on RLS/network hiccup (avoid auth appearing broken on transient errors)
+- [ ] Unify role/permission gating so admin UX is consistent everywhere (dashboard, approvals, stats, schedule edit)
 
-FullCalendar - most feature-rich
-React Big Calendar - simpler, good for basic needs
-DayPilot - medical-specific features
+### Mobile
 
-- [X] ON the pending vacations view, the dates requested are wrong, its showing the whole block dates rather than the ones requested. (Fixed: week_part stored on insert; TimeOffView formats as human-readable dates)
+- [ ] Touch-friendly tap targets on all interactive elements (min 44×44px)
+- [ ] Test on iOS Safari and Android Chrome (safe-area insets, font scaling)
+- [ ] Horizontal-scroll tables on mobile (Schedule view still overflows on small screens)
+
+---
+
+## 🟡 Medium Priority
+
+### Requests / Vacations
+
+- [ ] Email notifications on request approval/denial (Supabase Edge Function → send email)
+- [ ] Push notification support (PWA service worker + Web Push API)
+- [ ] Request history: allow fellows to see all past (approved/denied/cancelled) requests in one list
+- [ ] Bulk approve: allow approvers to approve multiple pending requests at once
+- [ ] CME day tracking: link day-off requests to a CME budget per fellow per year
+
+### Schedule
+
+- [ ] Export schedule to Google Calendar / iCal format (ICS file download)
+- [ ] Conflict detection warnings in Schedule Editor before save (double-booked, coverage gaps)
+- [ ] Multi-year schedule planning / carry-forward from previous year
+- [ ] Schedule diff view: show what changed between two versions
+
+### Stats & Reporting
+
+- [ ] Analytics dashboard: workload metrics over time (call burden, night float frequency)
+- [ ] Exportable PDF/CSV report of time-off summary per fellow
+- [ ] Rotation equity metrics (who has gotten which rotations, year-over-year)
+
+---
+
+## 🟢 Lower Priority / Future
+
+### Lectures
+
+- [ ] Recurring lecture series support (weekly grand rounds, monthly M&M)
+- [ ] Gmail / calendar integration for automated lecture reminders
+- [ ] Speaker bio and contact info in lecture detail modal
+- [ ] Lecture topic archive / search across past lectures
+
+### Infrastructure
+
+- [ ] PWA manifest + service worker for offline support and home screen install
+- [ ] Backup/restore: export full program state (schedule + requests + fellows) as JSON
+- [ ] Share schedule via read-only link (public token-scoped view)
+- [ ] Multi-program admin view (institution-level super-admin sees all programs)
+
+### UX Polish
+
+- [ ] Keyboard shortcut reference modal (Ctrl+/ or ? key)
+- [ ] Onboarding flow for new programs: step-by-step setup wizard (fellows → blocks → schedule)
+- [ ] Print-friendly schedule view (full print CSS pass)
+- [ ] Drag-and-drop schedule editing (re-assign rotations visually)
+
+---
+
+## 🗑️ Removed / Won't Do
+
+- Toggle Vacation Mode paint (replaced by dedicated swap/request workflow)
+- GmailIntegration component (removed; may revisit as Edge Function)

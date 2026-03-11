@@ -84,7 +84,7 @@ export default function SwapsView({
               const toWk = r.to_week_part ?? (tgtKeyMatch ? Number(tgtKeyMatch[2]) : null);
               return (
                 <div key={r.id} className="border dark:border-gray-600 dark:bg-gray-800 p-2 rounded">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-2">
                     <div className="text-sm">
                       <div className="font-semibold dark:text-gray-100 flex items-center gap-1">
                         {r.requester?.name ?? '?'}
@@ -98,7 +98,7 @@ export default function SwapsView({
                         Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {userCanApprove && (
                         <>
                           <button
@@ -109,10 +109,10 @@ export default function SwapsView({
                             <CheckCircle className="w-3 h-3" /> Approve
                           </button>
                           {denyingId === r.id ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 w-full sm:w-auto">
                               <input
                                 type="text"
-                                className="p-1 border rounded text-xs w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
+                                className="p-1 border rounded text-xs w-full sm:w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
                                 placeholder="Denial reason…"
                                 value={denyReason}
                                 onChange={e => setDenyReason(e.target.value)}
@@ -122,8 +122,10 @@ export default function SwapsView({
                                 }}
                                 autoFocus
                               />
-                              <button onClick={() => denyDbSwap(r.id, denyReason)} disabled={submitting} className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
-                              <button onClick={() => { setDenyingId(null); setDenyReason(''); }} className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
+                              <div className="flex gap-1">
+                                <button onClick={() => denyDbSwap(r.id, denyReason)} disabled={submitting} className="flex-1 sm:flex-none px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
+                                <button onClick={() => { setDenyingId(null); setDenyReason(''); }} className="flex-1 sm:flex-none px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
+                              </div>
                             </div>
                           ) : (
                             <button

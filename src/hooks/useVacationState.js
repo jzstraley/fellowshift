@@ -3,7 +3,7 @@
 // Uses deterministic FK joins for vacation_requests (your actual constraint names).
 // Uses map-enrichment for swap_requests to avoid FK-name brittleness.
 
-import { useEffect, useMemo, useCallback, useState } from 'react';
+import { useEffect, useMemo, useCallback, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { blockDates as localBlockDates, allRotationTypes } from '../data/scheduleData';
 import { DAY_NAMES, DAY_OFF_REASONS, SWAP_RESET, getNameFromAssignment, formatPretty, getWeekWindowWithinBlock } from '../utils/vacationHelpers';
@@ -21,6 +21,8 @@ const DAY_OFF_SET = new Set([
   'Personal Day',
   'Conference',
   'CME',
+  'Board Exam',
+  'FLEX Day',
   ...(asArray(DAY_OFF_REASONS) || []),
 ]);
 
@@ -65,6 +67,7 @@ export function useVacationState({
   const [loadingDb, setLoadingDb] = useState(!!useDatabase);
   const [dbError, setDbError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const hasLoadedOnce = useRef(false);
 
   const [dbFellows, setDbFellows] = useState([]);
   const [blockDates, setBlockDates] = useState([]);
@@ -165,7 +168,7 @@ export function useVacationState({
       return;
     }
 
-    setLoadingDb(true);
+    if (!hasLoadedOnce.current) setLoadingDb(true);
     setDbError(null);
 
     try {
@@ -348,6 +351,7 @@ export function useVacationState({
       setDbRequests([]);
       setDbSwapRequests([]);
     } finally {
+      hasLoadedOnce.current = true;
       setLoadingDb(false);
     }
   }, [useDatabase, pid, yid, institutionId]);

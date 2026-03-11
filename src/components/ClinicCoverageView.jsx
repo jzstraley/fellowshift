@@ -19,6 +19,7 @@ export default function ClinicCoverageView({
   clinicDays,
   pgyLevels,
   blockDates,
+  seed = 7,
 }) {
   const { canApprove, isSupabaseConfigured } = useAuth();
   const showPrivileged = !isSupabaseConfigured || canApprove;
@@ -39,11 +40,11 @@ const CANNOT_COVER_ROTATIONS = [
       firstYearExclusionBlocks: FIRST_YEAR_EXCLUSION_BLOCKS,
       pgy6ExclusionStartBlock: 21,
       targetPerFellow: 4,
-      seed: 7,
+      seed,
       iters: 200,
       restarts: 3,
     });
-  }, [fellows, schedule, clinicDays, pgyLevels, blockDates]);
+  }, [fellows, schedule, clinicDays, pgyLevels, blockDates, seed]);
 
   const { entries: coverageEntries } = clinicCoverage;
 
@@ -159,7 +160,6 @@ const CANNOT_COVER_ROTATIONS = [
   };
 
   const totalAssignments = coverageEntries.filter((e) => e.coverer).length;
-  const targetTotal = fellows.length * 4;
 
   return (
     <div className="space-y-4">
@@ -173,8 +173,7 @@ const CANNOT_COVER_ROTATIONS = [
               </div>
 
               <div className="text-base text-gray-600 dark:text-gray-400">
-                Assigned: <span className="font-bold">{totalAssignments}</span> (Target total:{" "}
-                <span className="font-bold">{targetTotal}</span>)
+                Assigned: <span className="font-bold">{totalAssignments}</span>
               </div>
 
               {noCoverageCount > 0 ? (
@@ -515,7 +514,6 @@ const CANNOT_COVER_ROTATIONS = [
       {showPrivileged && <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
           <h3 className="font-bold text-base dark:text-gray-100">Coverage Load Distribution</h3>
-          <p className="text-xs text-gray-600 dark:text-gray-400">Coverage target: 4 per fellow · Total = regular + coverage</p>
         </div>
 
         <div className="p-3 space-y-3">
@@ -525,23 +523,15 @@ const CANNOT_COVER_ROTATIONS = [
               <div className="flex flex-wrap gap-2">
                 {statsByPGY[pgy].map((fellow) => {
                   const count = coverageCounts[fellow] ?? 0;
-                  const isOverTarget = count > 4;
-                  const isUnderTarget = count < 4;
 
                   return (
                     <div
                       key={fellow}
-                      className={`px-3 py-2 rounded border-2 min-w-[110px] ${
-                        isOverTarget
-                          ? "bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-700"
-                          : isUnderTarget
-                          ? "bg-yellow-50 dark:bg-yellow-950/40 border-yellow-300 dark:border-yellow-700"
-                          : getPGYColor(pgy)
-                      }`}
+                      className={`px-3 py-2 rounded border-2 min-w-[110px] ${getPGYColor(pgy)}`}
                     >
                       <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">{fellow}</div>
                       <div className="flex items-baseline gap-1">
-                        <span className={`text-xl font-bold ${isOverTarget ? "text-red-600" : isUnderTarget ? "text-yellow-600" : "text-gray-900 dark:text-gray-100"}`}>
+                        <span className="text-xl font-bold text-gray-900 dark:text-gray-100">
                           {count}
                         </span>
                         <span className="text-[11px] text-gray-600 dark:text-gray-400">covers</span>
@@ -557,12 +547,6 @@ const CANNOT_COVER_ROTATIONS = [
           ))}
         </div>
 
-        <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-          <div className="text-xs text-gray-600 dark:text-gray-400">
-            <span className="font-bold">Rules:</span> PGY-4s excluded blocks 1-4 • PGY-6s excluded blocks 21+ •
-            B2B avoided unless needed • Same clinic day avoided unless needed
-          </div>
-        </div>
       </div>}
     </div>
   );

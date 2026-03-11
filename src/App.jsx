@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import CheckCircle from "lucide-react/dist/esm/icons/check-circle";
 import Shuffle from "lucide-react/dist/esm/icons/shuffle";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Save from "lucide-react/dist/esm/icons/save";
+import Zap from "lucide-react/dist/esm/icons/zap";
 import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
 import CookieConsent from "./components/CookieConsent";
@@ -19,6 +22,7 @@ import {
   pushClinicDaysToSupabase, pullClinicDaysFromSupabase,
 } from "./utils/scheduleSupabaseSync";
 
+import { supabase } from "./lib/supabaseClient";
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 import useIdleTimeout from "./hooks/useIdleTimeout";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -147,6 +151,9 @@ function AppContent() {
   const pendingScheduleSeedRef = useRef(false);
 
   const [clinicDays, setClinicDays] = useState(initialClinicDays);
+  const [clinicSeed, setClinicSeed] = useState(7);
+  const [clinicSyncing, setClinicSyncing] = useState(false);
+  const [clinicSaving, setClinicSaving] = useState(false);
   const [schedule, setSchedule] = useState(initialSchedule);
   const [vacations, setVacations] = useState(initialVacations);
   const [swapRequests, setSwapRequests] = useState(initialSwapRequests);
@@ -522,6 +529,95 @@ if (Array.isArray(swapResult?.swapRequests)) {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [activeView, refreshRequests]);
 
+  // ── Supabase Realtime subscriptions ─────────────────────────────────────────
+  // Tracks whether the schedule toast has been shown recently (throttle: 10s)
+  const scheduleToastThrottleRef = useRef(null);
+
+  useEffect(() => {
+    if (!supabase || !isSupabaseConfigured || !programId || !academicYearId || !dataReady || !user?.id) return;
+
+    const channel = supabase
+      .channel(`fellowshift-${programId}`)
+      // vacation_requests: toast own-user status changes, refresh state
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vacation_requests' }, (payload) => {
+        const row = payload.new;
+        if (!row || row.program_id !== programId) return;
+        if (row.requested_by === user.id) {
+          if (row.status === 'approved') toast.success('Your time off request was approved!');
+          else if (row.status === 'denied') toast.error('Your time off request was denied.');
+        } else if (canApprove && row.status === 'pending') {
+          toast.info('New time off request submitted.');
+        }
+        pullVacationsFromSupabase({ programId, academicYearId }).then(r => {
+          if (Array.isArray(r?.vacations)) setVacations(prev => mergeByReqIdPreferIncoming(prev, r.vacations));
+        });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vacation_requests' }, (payload) => {
+        const row = payload.new;
+        if (!row || row.program_id !== programId) return;
+        if (canApprove && row.requested_by !== user.id) toast.info('New time off request submitted.');
+        pullVacationsFromSupabase({ programId, academicYearId }).then(r => {
+          if (Array.isArray(r?.vacations)) setVacations(prev => mergeByReqIdPreferIncoming(prev, r.vacations));
+        });
+      })
+      // swap_requests: toast own-user status changes, refresh state
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'swap_requests' }, (payload) => {
+        const row = payload.new;
+        if (!row || row.program_id !== programId) return;
+        if (row.requested_by === user.id) {
+          if (row.status === 'approved') toast.success('Your swap request was approved!');
+          else if (row.status === 'denied') toast.error('Your swap request was denied.');
+        } else if (canApprove && row.status === 'pending') {
+          toast.info('New swap request submitted.');
+        }
+        pullSwapRequestsFromSupabase({ programId, academicYearId }).then(r => {
+          if (Array.isArray(r?.swapRequests)) setSwapRequests(prev => mergeByReqIdPreferIncoming(prev, r.swapRequests));
+        });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'swap_requests' }, (payload) => {
+        const row = payload.new;
+        if (!row || row.program_id !== programId) return;
+        if (canApprove && row.requested_by !== user.id) toast.info('New swap request submitted.');
+        pullSwapRequestsFromSupabase({ programId, academicYearId }).then(r => {
+          if (Array.isArray(r?.swapRequests)) setSwapRequests(prev => mergeByReqIdPreferIncoming(prev, r.swapRequests));
+        });
+      })
+      // schedule_assignments: notify other users of schedule changes (throttled)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'schedule_assignments' }, (payload) => {
+        const row = payload.new;
+        if (!row || row.academic_year_id !== academicYearId) return;
+        if (row.updated_by && row.updated_by === user.id) return; // my own change
+        if (scheduleToastThrottleRef.current) return;
+        scheduleToastThrottleRef.current = setTimeout(() => { scheduleToastThrottleRef.current = null; }, 10000);
+        toast.info('Schedule updated by another user — syncing…');
+        pullScheduleFromSupabase({ fellows, blockDates, programId, academicYearId }).then(r => {
+          if (r?.schedule) {
+            setSchedule(prev => {
+              const merged = {};
+              fellows.forEach(f => {
+                const supaBlocks = r.schedule[f] || [];
+                const prevBlocks = prev[f] || [];
+                merged[f] = prevBlocks.map((rot, idx) =>
+                  supaBlocks[idx] !== undefined && supaBlocks[idx] !== '' ? supaBlocks[idx] : rot
+                );
+              });
+              return merged;
+            });
+          }
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (scheduleToastThrottleRef.current) {
+        clearTimeout(scheduleToastThrottleRef.current);
+        scheduleToastThrottleRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupabaseConfigured, programId, academicYearId, dataReady, user?.id, canApprove]);
+
   // Push the full schedule to Supabase — called by ScheduleEditorView's Validate button.
   const onSaveToSupabase = useCallback(async () => {
     if (!isSupabaseConfigured || !profile?.institution_id) return { error: 'Supabase not available' };
@@ -789,6 +885,45 @@ if (Array.isArray(swapResult?.swapRequests)) {
     }
   }, [stats, fellows]);
 
+  const optimizeClinic = useCallback(() => {
+    setClinicSeed(Math.floor(Math.random() * 100000));
+    toast.success('Clinic coverage re-optimized with new seed.');
+  }, []);
+
+  const syncClinicFromSupabase = useCallback(async () => {
+    if (!isSupabaseConfigured || !programId) return;
+    setClinicSyncing(true);
+    try {
+      const result = await pullClinicDaysFromSupabase({ programId });
+      if (result.error) {
+        toast.error(`Sync failed: ${result.error}`);
+      } else {
+        if (result.clinicDays) setClinicDays(result.clinicDays);
+        toast.success('Clinic days synced from server.');
+      }
+    } catch (e) {
+      toast.error(`Sync error: ${e.message}`);
+    } finally {
+      setClinicSyncing(false);
+    }
+  }, [isSupabaseConfigured, programId]);
+
+  const saveClinicToSupabase = useCallback(async () => {
+    if (!isSupabaseConfigured || !programId) return;
+    setClinicSaving(true);
+    try {
+      const result = await pushClinicDaysToSupabase({ clinicDays, programId });
+      if (result.error) {
+        toast.error(`Save failed: ${result.error}`);
+      } else {
+        toast.success('Clinic days saved to server.');
+      }
+    } catch (e) {
+      toast.error(`Save error: ${e.message}`);
+    } finally {
+      setClinicSaving(false);
+    }
+  }, [isSupabaseConfigured, programId, clinicDays]);
 
   // Build views array for keyboard shortcuts (must stay in sync with HeaderBar)
   const viewsList = useMemo(() => {
@@ -827,6 +962,19 @@ if (Array.isArray(swapResult?.swapRequests)) {
 
   const [showLanding, setShowLanding] = useState(true);
 
+  // Badge count for the Requests nav tab — must be above all early returns (Rules of Hooks).
+  // Approvers see total pending (vacation + swap); fellows see their own pending.
+  const requestBadgeCount = useMemo(() => {
+    const uid = user?.id;
+    const pendingVac = vacations.filter(v =>
+      v.status === 'pending' && (canApprove || v.requested_by === uid)
+    ).length;
+    const pendingSwap = swapRequests.filter(s =>
+      s.status === 'pending' && (canApprove || s.requested_by === uid)
+    ).length;
+    return pendingVac + pendingSwap;
+  }, [vacations, swapRequests, canApprove, user?.id]);
+
   // Wait for auth to finish loading before deciding what to show
   if (loading) {
     return <ViewLoader />;
@@ -858,6 +1006,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
         onLogoClick={() => setActiveView("dashboard")}
         onSignOut={async () => { await signOut(); setShowLanding(true);}}
         violationCount={workHourViolations.length}
+        requestBadgeCount={requestBadgeCount}
         showStats={!isSupabaseConfigured || canApprove}
         showViolations={!isSupabaseConfigured || canApprove}
         showEdit={!isSupabaseConfigured || canApprove}
@@ -937,6 +1086,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
               clinicDays={clinicDays}
               pgyLevels={pgyLevels}
               blockDates={blockDates}
+              seed={clinicSeed}
             />
           )}
 
@@ -1061,6 +1211,33 @@ if (Array.isArray(swapResult?.swapRequests)) {
                     <Shuffle className="w-3 h-3" />
                     Optimize Call/Float
                   </button>
+                )}
+                {activeView === "clinic" && (
+                  <>
+                    <button
+                      onClick={optimizeClinic}
+                      className="w-full sm:w-auto flex items-center justify-center gap-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded"
+                    >
+                      <Zap className="w-3 h-3" />
+                      Optimize
+                    </button>
+                    <button
+                      onClick={syncClinicFromSupabase}
+                      disabled={clinicSyncing || !isSupabaseConfigured}
+                      className="w-full sm:w-auto flex items-center justify-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${clinicSyncing ? "animate-spin" : ""}`} />
+                      {clinicSyncing ? "Syncing…" : "Sync"}
+                    </button>
+                    <button
+                      onClick={saveClinicToSupabase}
+                      disabled={clinicSaving || !isSupabaseConfigured}
+                      className="w-full sm:w-auto flex items-center justify-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold rounded"
+                    >
+                      <Save className={`w-3 h-3 ${clinicSaving ? "animate-pulse" : ""}`} />
+                      {clinicSaving ? "Saving…" : "Save"}
+                    </button>
+                  </>
                 )}
               </div>
             )}

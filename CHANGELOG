@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-10 — Realtime Notifications, Mobile Fixes & Request Filtering
+
+- **Supabase Realtime** — `App.jsx` now subscribes to a `fellowshift-{programId}` channel on mount. `vacation_requests` and `swap_requests` inserts/updates trigger in-app toasts: fellows are notified when their request is approved or denied; approvers are notified when a new request is submitted. `schedule_assignments` updates trigger a throttled (10s) "Schedule updated — syncing…" toast and merge the incoming row into local state. Channel is cleaned up on unmount.
+- **Pending request badge** — `HeaderBar` now receives a `requestBadgeCount` prop (computed in `App.jsx` via `useMemo`, placed before all early returns to comply with React Rules of Hooks). A blue badge appears on the Requests tab in the desktop nav, mobile "More" sheet, and mobile bottom nav.
+- **Request filter & sort bar** — `VacationsView` now has a search input (filter by fellow name) and a newest/oldest sort dropdown above the request lists. Filter is applied to all three sub-views (time-off, day-off, swaps); for swaps, both requester and target names are matched.
+- **Mobile responsiveness** — Pending request cards in `TimeOffView`, `DayOffView`, and `SwapsView` changed from a single-row `flex items-center justify-between` layout to `flex-col sm:flex-row`, preventing button overflow on narrow screens. Deny-reason inline inputs and confirm/cancel buttons now stack vertically on mobile (`flex-col sm:flex-row`).
+- **Board Exam & FLEX Day** — Added as selectable `reason_type` options in the `DayOffView` request form. Added to `DAY_OFF_SET` in `useVacationState.js` so they are classified as day-offs (not vacations) everywhere.
+- **Dead code removed** — Deleted `src/services/requestService.js` (stale copy of vacation-state logic, never imported anywhere).
+
 ## 2026-03-10 — Policies CRUD, Stats Time-Off Summary & RLS Fixes
 
 - **PoliciesView** fully rewritten: now fetches from a Supabase `policies` table scoped by `program_id`; falls back to static list when DB is unavailable. Admins/PDs/chiefs can add, edit, and delete documents via a modal form with title, category, description, URL, and sort order fields. Six categories supported: General, Leave & Time Off, Duty Hours, Clinical, Administrative, Education — each with a distinct icon and color accent. Non-managers see a read-only card list.

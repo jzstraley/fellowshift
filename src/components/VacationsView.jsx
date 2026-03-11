@@ -4,8 +4,8 @@
 // 2) Swap "weekend" is NOT a DB column (you encode it in reason). Parse it for display + logic.
 // 3) callSchedule / nightFloatSchedule values can be string OR {name, relaxed}. Handle both everywhere.
 
-import { useState, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Loader2, Search, X as XIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabaseClient';
 import { useVacationState } from '../hooks/useVacationState';
@@ -33,6 +33,8 @@ export default function VacationsView({
   const userCanRequest = canRequest;
 
   const [subView, setSubView] = useState('timeoff');
+  const [fellowFilter, setFellowFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
 
   const useDatabase = isSupabaseConfigured && user && profile;
 
@@ -71,11 +73,56 @@ export default function VacationsView({
       selectableFellows: state.selectableFellows,
     };
 
+    // Filter + sort helpers applied to any request array
+    const filterFellow = (name) => !fellowFilter || (name ?? '').toLowerCase().includes(fellowFilter.toLowerCase());
+
+    const applyFilter = (arr) => {
+      let out = (arr ?? []).filter(r => {
+        if (subView === 'swaps') {
+          return filterFellow(r?.requester?.name) || filterFellow(r?.target?.name);
+        }
+        return filterFellow(r?.fellow?.name);
+      });
+      if (sortOrder === 'oldest') out = [...out].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      else out = [...out].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return out;
+    };
+
     return (
       <div className="space-y-3">
         <h3 className="text-lg font-bold">Requests</h3>
 
         <SubViewTabs subView={subView} setSubView={setSubView} />
+
+        {/* Filter bar */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              value={fellowFilter}
+              onChange={e => setFellowFilter(e.target.value)}
+              placeholder="Filter by fellow name…"
+              className="w-full pl-8 pr-8 py-1.5 text-sm rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+            />
+            {fellowFilter && (
+              <button
+                onClick={() => setFellowFilter('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <select
+            value={sortOrder}
+            onChange={e => setSortOrder(e.target.value)}
+            className="py-1.5 px-2 text-sm rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+        </div>
 
         {!programId && !userCanApprove && (
           <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded p-3 text-sm text-yellow-800 dark:text-yellow-300">
@@ -97,9 +144,9 @@ export default function VacationsView({
         ) : subView === 'timeoff' ? (
           <TimeOffView
             {...commonProps}
-            pendingRequests={state.pendingRequests}
-            approvedRequests={state.approvedRequests}
-            deniedRequests={state.deniedRequests}
+            pendingRequests={applyFilter(state.pendingRequests)}
+            approvedRequests={applyFilter(state.approvedRequests)}
+            deniedRequests={applyFilter(state.deniedRequests)}
             denyingId={state.denyingId} setDenyingId={state.setDenyingId}
             denyReason={state.denyReason} setDenyReason={state.setDenyReason}
             approveDbRequest={state.approveDbRequest}
@@ -117,9 +164,9 @@ export default function VacationsView({
         ) : subView === 'dayoff' ? (
           <DayOffView
             {...commonProps}
-            pendingDayOffs={state.pendingDayOffs}
-            approvedDayOffs={state.approvedDayOffs}
-            deniedDayOffs={state.deniedDayOffs}
+            pendingDayOffs={applyFilter(state.pendingDayOffs)}
+            approvedDayOffs={applyFilter(state.approvedDayOffs)}
+            deniedDayOffs={applyFilter(state.deniedDayOffs)}
             approveDayOff={state.approveDayOff}
             denyDayOff={state.denyDayOff}
             cancelDbRequest={state.cancelDbRequest}
@@ -129,9 +176,9 @@ export default function VacationsView({
         ) : (
           <SwapsView
             {...commonProps}
-            pendingSwaps={state.pendingSwapRequests}
-            approvedSwaps={state.approvedSwapRequests}
-            deniedSwaps={state.deniedSwapRequests}
+            pendingSwaps={applyFilter(state.pendingSwapRequests)}
+            approvedSwaps={applyFilter(state.approvedSwapRequests)}
+            deniedSwaps={applyFilter(state.deniedSwapRequests)}
             dismissedSwapIds={dismissedSwapIds} dismissSwap={dismissSwap}
             denyingId={state.denyingId} setDenyingId={state.setDenyingId}
             denyReason={state.denyReason} setDenyReason={state.setDenyReason}

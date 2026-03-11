@@ -22,6 +22,7 @@ export default function HeaderBar({
   onLogoClick,
   onSignOut,
   violationCount = 0,
+  requestBadgeCount = 0,
   showStats = false,
   showViolations = false,
   showEdit = false,
@@ -240,6 +241,11 @@ export default function HeaderBar({
                     {violationCount > 99 ? '99+' : violationCount}
                   </span>
                 )}
+                {v.key === "vacRequests" && requestBadgeCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 z-10 min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-bold text-white bg-blue-500 rounded-full">
+                    {requestBadgeCount > 99 ? '99+' : requestBadgeCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -287,6 +293,11 @@ export default function HeaderBar({
                         {violationCount > 99 ? '99+' : violationCount}
                       </span>
                     )}
+                    {v.key === "vacRequests" && requestBadgeCount > 0 && (
+                      <span className="absolute -top-1 -right-1 z-10 min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[8px] font-bold text-white bg-blue-500 rounded-full">
+                        {requestBadgeCount > 99 ? '99+' : requestBadgeCount}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -305,7 +316,7 @@ export default function HeaderBar({
                 <button
                   key={key}
                   onClick={() => navigate(key)}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold transition-colors ${
+                  className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold transition-colors ${
                     active
                       ? "text-blue-600 dark:text-blue-400"
                       : darkMode
@@ -315,6 +326,11 @@ export default function HeaderBar({
                 >
                   <Icon className={`w-5 h-5 ${active ? "stroke-[2.5]" : ""}`} />
                   {label}
+                  {key === "vacRequests" && requestBadgeCount > 0 && (
+                    <span className="absolute top-1 right-[calc(50%-16px)] min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[8px] font-bold text-white bg-blue-500 rounded-full">
+                      {requestBadgeCount > 99 ? '99+' : requestBadgeCount}
+                    </span>
+                  )}
                 </button>
               );
             })}

@@ -1,7 +1,8 @@
 // src/components/StatsView.jsx
 import React, { useMemo } from "react";
 import { CalendarDays, Coffee } from "lucide-react";
-import { pgyLevels } from "../data/scheduleData";
+import { pgyLevels, blockDates as allBlockDates } from "../data/scheduleData";
+import { useAuth } from "../context/AuthContext";
 
 const PGYDividerRow = ({ pgy, colSpan }) => (
   <tr>
@@ -18,24 +19,45 @@ const DAY_OFF_REASONS = new Set(['Sick Day', 'Personal Day', 'Conference', 'CME'
 
 export default function StatsView({ stats, fellows, vacations = [] }) {
   if (!stats) return null;
+  const { profile } = useAuth();
+  const canSeeTimeOff = ['admin', 'program_director', 'chief_fellow'].includes(profile?.role);
+
+  const blockDateMap = useMemo(() => {
+    const m = {};
+    for (const b of allBlockDates) m[b.block] = b;
+    return m;
+  }, []);
 
   const vacSummary = useMemo(() => {
     const map = {};
     for (const v of vacations) {
       const name = v.fellow || v.fellow_name;
       if (!name || !fellows.includes(name)) continue;
-      if (!map[name]) map[name] = { vacation: 0, dayOff: 0 };
+      if (!map[name]) map[name] = { vacPending: 0, vacApproved: 0, dayOffPending: 0, dayOffApproved: 0 };
       const isDayOff = DAY_OFF_REASONS.has(v.reason);
+      const status = (v.status ?? '').toLowerCase();
       if (isDayOff) {
-        map[name].dayOff += 1;
+        if (status === 'pending') map[name].dayOffPending += 1;
+        else if (status === 'approved') map[name].dayOffApproved += 1;
       } else {
-        const start = v.startBlock ?? 1;
-        const end = v.endBlock ?? start;
-        map[name].vacation += end - start + 1;
+        const startB = v.startBlock ?? 1;
+        const endB = v.endBlock ?? startB;
+        let days;
+        if (v.weekPart && startB === endB) {
+          days = 7;
+        } else {
+          const s = blockDateMap[startB]?.start;
+          const e = blockDateMap[endB]?.end;
+          days = s && e
+            ? Math.round((new Date(e) - new Date(s)) / 86400000) + 1
+            : (endB - startB + 1) * 14;
+        }
+        if (status === 'pending') map[name].vacPending += days;
+        else if (status === 'approved') map[name].vacApproved += days;
       }
     }
     return map;
-  }, [vacations, fellows]);
+  }, [vacations, fellows, blockDateMap]);
 
   const fellowsByPGY = useMemo(
     () => ({
@@ -137,31 +159,37 @@ export default function StatsView({ stats, fellows, vacations = [] }) {
       </div>
     </div>
 
-    {/* Vacation / Day-Off summary card */}
-    <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
+    {/* Vacation / Day-Off summary card — admins/PDs/chiefs only */}
+    {canSeeTimeOff && <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
       <div className="px-3 py-2 bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 flex items-center gap-2">
         <CalendarDays className="w-4 h-4 text-gray-600 dark:text-gray-300" />
         <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Time Off Summary</span>
-        <span className="ml-auto text-[10px] text-gray-500 dark:text-gray-400">approved requests · vacation counts by block</span>
+        <span className="ml-auto text-[10px] text-gray-500 dark:text-gray-400">calendar days · day offs by request count</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
-            <tr className="bg-gray-100 dark:bg-gray-750">
-              <th className="px-3 py-1.5 text-left font-bold sticky left-0 bg-gray-100 dark:bg-gray-700 border-r border-b border-gray-200 dark:border-gray-600 dark:text-gray-100">Fellow</th>
-              <th className="px-3 py-1.5 text-center font-bold border-b border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-200">
-                <div className="flex items-center justify-center gap-1"><CalendarDays className="w-3 h-3" /> Vacation Blocks</div>
+            <tr className="bg-gray-100 dark:bg-gray-700">
+              <th className="px-3 py-1.5 text-left font-bold sticky left-0 bg-gray-100 dark:bg-gray-700 border-r border-b border-gray-200 dark:border-gray-600 dark:text-gray-100" rowSpan={2}>Fellow</th>
+              <th colSpan={2} className="px-3 py-1 text-center font-bold border-b border-x border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-200 text-xs">
+                <div className="flex items-center justify-center gap-1"><CalendarDays className="w-3 h-3" /> Vacation Days</div>
               </th>
-              <th className="px-3 py-1.5 text-center font-bold border-b border-gray-200 dark:border-gray-600 bg-amber-50 dark:bg-amber-950 dark:text-amber-200">
+              <th colSpan={2} className="px-3 py-1 text-center font-bold border-b border-gray-200 dark:border-gray-600 bg-amber-50 dark:bg-amber-950 dark:text-amber-200 text-xs">
                 <div className="flex items-center justify-center gap-1"><Coffee className="w-3 h-3" /> Days Off</div>
               </th>
+            </tr>
+            <tr className="bg-gray-100 dark:bg-gray-700">
+              <th className="px-3 py-1 text-center text-[10px] font-semibold border-b border-r border-gray-200 dark:border-gray-600 bg-blue-50/70 dark:bg-blue-950/60 text-yellow-600 dark:text-yellow-400">Pending</th>
+              <th className="px-3 py-1 text-center text-[10px] font-semibold border-b border-r border-gray-200 dark:border-gray-600 bg-blue-50/70 dark:bg-blue-950/60 text-green-600 dark:text-green-400">Approved</th>
+              <th className="px-3 py-1 text-center text-[10px] font-semibold border-b border-r border-gray-200 dark:border-gray-600 bg-amber-50/70 dark:bg-amber-950/60 text-yellow-600 dark:text-yellow-400">Pending</th>
+              <th className="px-3 py-1 text-center text-[10px] font-semibold border-b border-gray-200 dark:border-gray-600 bg-amber-50/70 dark:bg-amber-950/60 text-green-600 dark:text-green-400">Approved</th>
             </tr>
           </thead>
           <tbody>
             {[4, 5, 6].map((pgy) => (
               <React.Fragment key={pgy}>
                 <tr>
-                  <td colSpan={3} className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-sm font-extrabold text-gray-700 dark:text-gray-200">
+                  <td colSpan={5} className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-sm font-extrabold text-gray-700 dark:text-gray-200">
                     PGY-{pgy}
                   </td>
                 </tr>
@@ -171,11 +199,17 @@ export default function StatsView({ stats, fellows, vacations = [] }) {
                       {f}
                       <span className="ml-1 text-[10px] text-gray-400 dark:text-gray-500">PGY{pgyLevels[f]}</span>
                     </td>
-                    <td className="px-3 py-1.5 text-center bg-blue-50/50 dark:bg-blue-950/30 font-semibold dark:text-blue-100">
-                      {vacSummary[f]?.vacation ?? 0}
+                    <td className="px-3 py-1.5 text-center bg-blue-50/50 dark:bg-blue-950/30 text-yellow-700 dark:text-yellow-400">
+                      {vacSummary[f]?.vacPending ?? 0}
                     </td>
-                    <td className="px-3 py-1.5 text-center bg-amber-50/50 dark:bg-amber-950/30 font-semibold dark:text-amber-100">
-                      {vacSummary[f]?.dayOff ?? 0}
+                    <td className="px-3 py-1.5 text-center bg-blue-50/50 dark:bg-blue-950/30 font-semibold border-r border-gray-200 dark:border-gray-700 text-green-700 dark:text-green-400">
+                      {vacSummary[f]?.vacApproved ?? 0}
+                    </td>
+                    <td className="px-3 py-1.5 text-center bg-amber-50/50 dark:bg-amber-950/30 text-yellow-700 dark:text-yellow-400">
+                      {vacSummary[f]?.dayOffPending ?? 0}
+                    </td>
+                    <td className="px-3 py-1.5 text-center bg-amber-50/50 dark:bg-amber-950/30 font-semibold text-green-700 dark:text-green-400">
+                      {vacSummary[f]?.dayOffApproved ?? 0}
                     </td>
                   </tr>
                 ))}
@@ -184,7 +218,7 @@ export default function StatsView({ stats, fellows, vacations = [] }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </div>}
     </div>
   );
 }
