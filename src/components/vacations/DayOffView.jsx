@@ -1,7 +1,7 @@
 // DayOffView.js
 
 import { useState } from 'react';
-import { CheckCircle, AlertTriangle, X } from 'lucide-react';
+import { CheckCircle, AlertTriangle, X, ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function DayOffView({
   pendingDayOffs,
@@ -17,6 +17,10 @@ export default function DayOffView({
 }) {
   const [denyingId, setDenyingId] = useState(null);
   const [denyReason, setDenyReason] = useState('');
+  const [historicalOpen, setHistoricalOpen] = useState(false);
+  const [historicalTab, setHistoricalTab] = useState('approved'); // 'approved' | 'denied'
+
+  const historicalRequests = historicalTab === 'approved' ? approvedDayOffs : deniedDayOffs;
 
   const fmtDayDate = (notes) =>
     notes
@@ -24,7 +28,7 @@ export default function DayOffView({
       : null;
 
   return (
-    <>
+    <div className="space-y-3">
       {/* Pending Day Off Requests */}
       <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
         <div className="mb-2 font-semibold dark:text-gray-100">Pending Day Off Requests ({pendingDayOffs.length})</div>
@@ -90,49 +94,6 @@ export default function DayOffView({
         </div>
       </div>
 
-      {/* Approved Day Off Requests */}
-      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-        <div className="mb-2 font-semibold dark:text-gray-100">Approved Day Off Requests ({approvedDayOffs.length})</div>
-        {approvedDayOffs.length === 0 && <div className="text-xs text-gray-500 dark:text-gray-400">No approved day off requests</div>}
-        <div className="space-y-2">
-          {approvedDayOffs.map((r) => (
-            <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
-              <div className="text-sm">
-                <div className="font-semibold dark:text-green-100">
-                  {r.fellow?.name ?? 'Unknown Fellow'}
-                  <span className="ml-2 text-xs font-normal text-green-600 dark:text-green-300">PGY-{r.fellow?.pgy_level}</span>
-                </div>
-                <div className="text-xs text-gray-600 dark:text-green-200">
-                  {r.reason}{r.notes ? ` — ${fmtDayDate(r.notes)}` : ''}
-                </div>
-                {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
-              </div>
-              <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Denied Day Off Requests */}
-      {deniedDayOffs.length > 0 && (
-        <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-          <div className="mb-2 font-semibold dark:text-gray-100">Denied Day Off Requests ({deniedDayOffs.length})</div>
-          <div className="space-y-2">
-            {deniedDayOffs.map((r) => (
-              <div key={r.id} className="flex items-center justify-between border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 p-2 rounded">
-                <div className="text-sm">
-                  <div className="font-semibold dark:text-red-100">{r.fellow?.name ?? 'Unknown Fellow'}</div>
-                  <div className="text-xs text-gray-600 dark:text-red-200">
-                    {r.reason}{r.notes ? ` — ${fmtDayDate(r.notes)}` : ''}
-                  </div>
-                </div>
-                <div className="px-3 py-1 bg-red-600 text-white rounded text-xs">Denied</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Request a Day Off */}
       {userCanRequest && (
         <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
@@ -172,6 +133,95 @@ export default function DayOffView({
           </button>
         </div>
       )}
-    </>
+
+      {/* Historical (Approved/Denied) — Tabbed */}
+      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
+        <button
+          type="button"
+          onClick={() => setHistoricalOpen(o => !o)}
+          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors"
+        >
+          <span className="text-sm font-semibold dark:text-gray-100">History</span>
+          {historicalOpen ? <ChevronDown /> : <ChevronRight />}
+        </button>
+
+        {historicalOpen && (
+          <>
+            <div className="flex items-center gap-0 border-t border-gray-200 dark:border-gray-600">
+              <button
+                type="button"
+                onClick={() => setHistoricalTab('approved')}
+                className={`flex-1 px-3 py-2.5 text-sm font-semibold text-center transition-colors ${
+                  historicalTab === 'approved'
+                    ? 'text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                Approved {approvedDayOffs.length > 0 && <span className="text-xs">({approvedDayOffs.length})</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoricalTab('denied')}
+                className={`flex-1 px-3 py-2.5 text-sm font-semibold text-center transition-colors ${
+                  historicalTab === 'denied'
+                    ? 'text-red-600 dark:text-red-400 border-b-2 border-red-600 dark:border-red-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                Denied {deniedDayOffs.length > 0 && <span className="text-xs">({deniedDayOffs.length})</span>}
+              </button>
+            </div>
+
+            <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-600 space-y-2">
+              {historicalRequests.length === 0 ? (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  No {historicalTab} day off requests
+                </div>
+              ) : (
+                historicalRequests.map((r) => (
+                  <div
+                    key={r.id}
+                    className={`flex items-center justify-between border p-2 rounded ${
+                      historicalTab === 'approved'
+                        ? 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900'
+                        : 'border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30'
+                    }`}
+                  >
+                    <div className="text-sm">
+                      <div className={`font-semibold ${
+                        historicalTab === 'approved'
+                          ? 'dark:text-green-100'
+                          : 'dark:text-red-100'
+                      }`}>
+                        {r.fellow?.name ?? 'Unknown Fellow'}
+                        <span className={`ml-2 text-xs font-normal ${
+                          historicalTab === 'approved'
+                            ? 'text-green-600 dark:text-green-300'
+                            : 'text-red-600 dark:text-red-300'
+                        }`}>PGY-{r.fellow?.pgy_level}</span>
+                      </div>
+                      <div className={`text-xs ${
+                        historicalTab === 'approved'
+                          ? 'text-gray-600 dark:text-green-200'
+                          : 'text-gray-600 dark:text-red-200'
+                      }`}>
+                        {r.reason}{r.notes ? ` — ${fmtDayDate(r.notes)}` : ''}
+                      </div>
+                    </div>
+                    <div className={`px-3 py-1 text-white rounded text-xs ${
+                      historicalTab === 'approved'
+                        ? 'bg-green-600'
+                        : 'bg-red-600'
+                    }`}>
+                      {historicalTab === 'approved' ? 'Approved' : 'Denied'}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

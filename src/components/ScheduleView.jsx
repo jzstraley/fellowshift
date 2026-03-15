@@ -1,5 +1,6 @@
 // src/components/ScheduleView.jsx
 import { useMemo, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { blockDates as defaultBlockDates, pgyLevels } from "../data/scheduleData";
 import {
   getRotationColor,
@@ -12,7 +13,7 @@ const PGYDividerRow = ({ pgy, colSpan }) => (
   <tr>
     <td
       colSpan={colSpan}
-      className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-sm font-extrabold text-gray-700 dark:text-gray-200"
+      className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-0.5 text-xs font-extrabold text-gray-700 dark:text-gray-200"
     >
       PGY-{pgy}
     </td>
@@ -31,6 +32,7 @@ export default function ScheduleView({
   vacations,
   workHourViolations = [],
   blockDates = defaultBlockDates,
+  activeEditors = [],
 }) {
   // Highlight state
   const [highlight, setHighlight] = useState(null);
@@ -132,7 +134,7 @@ export default function ScheduleView({
         } hover:bg-gray-50 dark:hover:bg-gray-700 ${fadeRow ? "opacity-40" : "opacity-100"}`}
       >
         <td
-          className={`sticky left-0 z-10 bg-white dark:bg-gray-800 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 font-semibold text-gray-800 dark:text-gray-100 border-l-4 ${getPGYColor(
+          className={`sticky left-0 z-10 bg-white dark:bg-gray-800 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-1.5 font-semibold text-xs text-gray-800 dark:text-gray-100 border-l-4 ${getPGYColor(
             pgy
           )} cursor-pointer ${hotRow ? "ring-2 ring-blue-500" : ""}`}
           onClick={() => toggleHighlight({ type: "fellow", fellow })}
@@ -159,14 +161,14 @@ export default function ScheduleView({
           return (
             <td
               key={idx}
-              className={`border-r border-gray-200 dark:border-gray-700 px-1 py-1 text-center transition-opacity ${
+              className={`border-r border-gray-200 dark:border-gray-700 px-0.5 py-0.5 text-center transition-opacity ${
                 fadeCell ? "opacity-30" : "opacity-100"
               } cursor-pointer ${
                 isCurrentCol ? "bg-blue-50 dark:bg-blue-900/10" : ""
               }`}
             >
               <div
-                className={`relative px-2 py-1.5 rounded text-[11px] font-semibold whitespace-nowrap transition-all ${
+                className={`relative px-1 py-1 rounded text-[10px] font-semibold whitespace-nowrap transition-all ${
                   isVac ? "" : getRotationColor(rot)
                 } ${vacStyle} ${hotRot ? "ring-2 ring-amber-400" : ""}`}
                 title="Click to highlight this rotation"
@@ -196,9 +198,15 @@ export default function ScheduleView({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
+      {activeEditors?.length > 0 && (
+        <div className="flex items-center gap-2 px-2 py-1 rounded text-xs bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          {activeEditors.map(e => e.userName).join(', ')} {activeEditors.length === 1 ? 'is' : 'are'} currently editing the schedule
+        </div>
+      )}
       {highlight && (
-        <div className="bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded p-2 text-sm text-gray-800 dark:text-gray-200 flex items-center justify-between gap-2">
+        <div className="bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm text-gray-800 dark:text-gray-200 flex items-center justify-between gap-2">
           <div className="truncate">
             Highlighting:{" "}
             {highlight.type === "fellow" && `Fellow ${highlight.fellow}`}
@@ -209,7 +217,7 @@ export default function ScheduleView({
           </div>
           <button
             type="button"
-            className="px-2 py-1 text-xs font-semibold rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
+            className="px-2 py-0.5 text-xs font-semibold rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 shrink-0"
             onClick={() => setHighlight(null)}
           >
             Clear
@@ -226,7 +234,7 @@ export default function ScheduleView({
             <thead>
               {/* Rotation group header row */}
               <tr className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-30">
-                <th className="sticky top-0 left-0 z-40 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 w-24 min-w-[96px]" />
+                <th className="sticky top-0 left-0 z-40 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-1 min-w-[70px]" />
                 {rotationGroups.map((g) => (
                   <th
                     key={g.rotation}
@@ -240,7 +248,7 @@ export default function ScheduleView({
 
               {/* Block header row */}
               <tr className="bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 sticky top-[26px] z-30">
-                <th className="sticky left-0 top-[26px] z-40 bg-gray-200 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-left font-bold min-w-[96px] dark:text-gray-100">
+                <th className="sticky left-0 top-[26px] z-40 bg-gray-200 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-1 text-center font-semibold text-xs min-w-[70px] dark:text-gray-100">
                   Fellow
                 </th>
                 {blockDates.map((bd, i) => {
@@ -292,9 +300,9 @@ export default function ScheduleView({
       </div>
 
       {/* Rotation filter — bottom right */}
-      <div className="flex justify-end items-center gap-2">
-        <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-          Filter rotation:
+      <div className="flex justify-end items-center gap-1 text-xs mt-1">
+        <label className="font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          Filter:
         </label>
         <select
           value={highlight?.type === "rotation" ? highlight.rotation : ""}
@@ -306,7 +314,7 @@ export default function ScheduleView({
               setHighlight(null);
             }
           }}
-          className="px-3 py-1.5 text-xs font-semibold rounded border bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
+          className="px-2 py-0.5 text-xs font-semibold rounded border bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
         >
           <option value="">All Rotations</option>
           {allRotations.map((rot) => (

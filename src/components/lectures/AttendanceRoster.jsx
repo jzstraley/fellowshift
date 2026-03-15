@@ -99,7 +99,7 @@ export default function AttendanceRoster({
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded flex-shrink-0 mt-0.5"
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded flex-shrink-0 mt-0.5 min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               <X className="w-4 h-4" />
             </button>

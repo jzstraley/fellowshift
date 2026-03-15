@@ -8,6 +8,7 @@ import Zap from "lucide-react/dist/esm/icons/zap";
 import HeaderBar from "./components/HeaderBar";
 import ImportExportBar from "./components/ImportExportBar";
 import CookieConsent from "./components/CookieConsent";
+import FeedbackModal from "./components/FeedbackModal";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { scheduleVersion, initialSchedule, initialVacations, initialSwapRequests, pgyLevels, initialClinicDays, blockDates, initialCallSchedule, initialNightFloatSchedule, allRotationTypes } from "./data/scheduleData";
 import { initialLectures, initialSpeakers, initialTopics } from "./data/lectureData";
@@ -58,9 +59,16 @@ const ViewLoader = () => (
 );
 
 // Subtle footer
-const Footer = () => (
+const Footer = ({ onFeedback }) => (
   <footer className="py-1 text-center text-[9px] text-gray-300">
     © {new Date().getFullYear()} Austin Straley
+    {" · "}
+    <button
+      onClick={onFeedback}
+      className="underline hover:text-gray-400 transition-colors"
+    >
+      Send Feedback
+    </button>
   </footer>
 );
 
@@ -94,6 +102,10 @@ const mergeByReqIdPreferIncoming = (prev = [], incoming = []) => {
 
 function AppContent() {
   const { signOut, profile, user, loading, isSupabaseConfigured, canApprove, isAdmin, programId, academicYearId, memberships } = useAuth();
+
+  // Permission gate: allow admin UI in offline mode or for users with canApprove
+  const canManageUI = !isSupabaseConfigured || canApprove;
+
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("fellowshift_darkmode");
@@ -139,6 +151,14 @@ function AppContent() {
 
   const [activeView, setActiveView] = useState("dashboard");
   const [violations, setViolations] = useState([]);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeView]);
 
   const fellows = useMemo(() => Object.keys(initialSchedule), []);
 
@@ -480,6 +500,8 @@ if (Array.isArray(swapResult?.swapRequests)) {
       if (lectResult.speakers) setSpeakers(lectResult.speakers);
       if (lectResult.topics) setTopics(lectResult.topics);
       if (clinicResult.clinicDays) setClinicDays(clinicResult.clinicDays);
+      // Fetch notifications
+      fetchNotifications();
     }).catch((err) => {
       console.error('Initial Supabase load failed:', err);
       setSyncError(err?.message ?? 'Failed to connect to server');
@@ -510,6 +532,30 @@ if (Array.isArray(swapResult?.swapRequests)) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programId, academicYearId]);
 
+  // Fetch notifications on initial load and for manual refresh
+  const fetchNotifications = useCallback(async () => {
+    if (!supabase || !user?.id) return;
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (data) {
+      setNotifications(data);
+      setUnreadNotifCount(data.filter(n => !n.read).length);
+    }
+  }, [user?.id]);
+
+  // Mark all notifications as read
+  const markAllNotifsRead = useCallback(async () => {
+    if (!supabase || !user?.id) return;
+    await supabase.from('notifications').update({ read: true })
+      .eq('user_id', user.id).eq('read', false);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setUnreadNotifCount(0);
+  }, [user?.id]);
+
   // Re-fetch requests whenever the user navigates to the dashboard.
   // No ref guard — refreshRequests already bails if programId/academicYearId are null.
   useEffect(() => {
@@ -532,6 +578,9 @@ if (Array.isArray(swapResult?.swapRequests)) {
   // ── Supabase Realtime subscriptions ─────────────────────────────────────────
   // Tracks whether the schedule toast has been shown recently (throttle: 10s)
   const scheduleToastThrottleRef = useRef(null);
+  // Active editors presence channel
+  const presenceChannelRef = useRef(null);
+  const [activeEditors, setActiveEditors] = useState([]);
 
   useEffect(() => {
     if (!supabase || !isSupabaseConfigured || !programId || !academicYearId || !dataReady || !user?.id) return;
@@ -560,16 +609,10 @@ if (Array.isArray(swapResult?.swapRequests)) {
           if (Array.isArray(r?.vacations)) setVacations(prev => mergeByReqIdPreferIncoming(prev, r.vacations));
         });
       })
-      // swap_requests: toast own-user status changes, refresh state
+      // swap_requests: refresh state on any change (toasts now via notifications subscription)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'swap_requests' }, (payload) => {
         const row = payload.new;
         if (!row || row.program_id !== programId) return;
-        if (row.requested_by === user.id) {
-          if (row.status === 'approved') toast.success('Your swap request was approved!');
-          else if (row.status === 'denied') toast.error('Your swap request was denied.');
-        } else if (canApprove && row.status === 'pending') {
-          toast.info('New swap request submitted.');
-        }
         pullSwapRequestsFromSupabase({ programId, academicYearId }).then(r => {
           if (Array.isArray(r?.swapRequests)) setSwapRequests(prev => mergeByReqIdPreferIncoming(prev, r.swapRequests));
         });
@@ -577,10 +620,18 @@ if (Array.isArray(swapResult?.swapRequests)) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'swap_requests' }, (payload) => {
         const row = payload.new;
         if (!row || row.program_id !== programId) return;
-        if (canApprove && row.requested_by !== user.id) toast.info('New swap request submitted.');
         pullSwapRequestsFromSupabase({ programId, academicYearId }).then(r => {
           if (Array.isArray(r?.swapRequests)) setSwapRequests(prev => mergeByReqIdPreferIncoming(prev, r.swapRequests));
         });
+      })
+      // notifications: real-time toast + state update
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload) => {
+        const n = payload.new;
+        if (n.type === 'swap_request') toast.info(n.message);
+        else if (n.type === 'swap_approved') toast.success(n.message);
+        else if (n.type === 'swap_denied') toast.error(n.message);
+        setNotifications(prev => [n, ...prev]);
+        setUnreadNotifCount(c => c + 1);
       })
       // schedule_assignments: notify other users of schedule changes (throttled)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'schedule_assignments' }, (payload) => {
@@ -608,8 +659,24 @@ if (Array.isArray(swapResult?.swapRequests)) {
       })
       .subscribe();
 
+    // Presence channel for schedule editing
+    const presenceChannel = supabase
+      .channel(`schedule-presence-${programId}`)
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const editors = Object.values(state)
+          .flat()
+          .filter(p => p.editing)
+          .map(p => ({ userId: p.userId, userName: p.userName }));
+        setActiveEditors(editors);
+      })
+      .subscribe();
+
+    presenceChannelRef.current = presenceChannel;
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(presenceChannel);
       if (scheduleToastThrottleRef.current) {
         clearTimeout(scheduleToastThrottleRef.current);
         scheduleToastThrottleRef.current = null;
@@ -730,6 +797,19 @@ if (Array.isArray(swapResult?.swapRequests)) {
   // fellows and blockDates are stable
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.institution_id, programId, academicYearId]);
+
+  // Track when user enters/exits schedule editor via presence channel
+  const onEditStart = useCallback(() => {
+    presenceChannelRef.current?.track({
+      userId: user?.id,
+      userName: profile?.full_name || profile?.email || 'Unknown',
+      editing: true,
+    });
+  }, [user?.id, profile?.full_name, profile?.email]);
+
+  const onEditEnd = useCallback(() => {
+    presenceChannelRef.current?.untrack();
+  }, []);
 
   // Build stats object synchronously from a schedule snapshot.
   const buildCounts = (sched) => {
@@ -936,8 +1016,10 @@ if (Array.isArray(swapResult?.swapRequests)) {
       { key: "vacRequests", label: "Requests" },
       { key: "lectures", label: "Lectures" },
     ];
-    if (!isSupabaseConfigured || canApprove) {
+    if (canApprove) {
       base.splice(2, 0, { key: "stats", label: "Stats" });
+    }
+    if (canManageUI) {
       base.push({ key: "editSchedule", label: "Edit" });
       base.push({ key: "violations", label: "Violations" });
     }
@@ -1007,10 +1089,13 @@ if (Array.isArray(swapResult?.swapRequests)) {
         onSignOut={async () => { await signOut(); setShowLanding(true);}}
         violationCount={workHourViolations.length}
         requestBadgeCount={requestBadgeCount}
-        showStats={!isSupabaseConfigured || canApprove}
-        showViolations={!isSupabaseConfigured || canApprove}
-        showEdit={!isSupabaseConfigured || canApprove}
+        showStats={canApprove}
+        showViolations={canManageUI}
+        showEdit={canManageUI}
         showAdmin={isAdmin}
+        notifCount={unreadNotifCount}
+        notifications={notifications}
+        onMarkAllRead={markAllNotifsRead}
       />
 
       {syncError && (
@@ -1054,10 +1139,11 @@ if (Array.isArray(swapResult?.swapRequests)) {
               workHourViolations={workHourViolations}
               clinicDays={clinicDays}
               blockDates={blockDates}
+              activeEditors={activeEditors}
             />
           )}
 
-          {activeView === "stats" && (!isSupabaseConfigured || canApprove) && <StatsView stats={stats} fellows={fellows} vacations={vacations} />}
+          {activeView === "stats" && canManageUI && <StatsView stats={stats} fellows={fellows} vacations={vacations} />}
 
           {activeView === "call" && (
             <CallView
@@ -1075,6 +1161,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
             <CalendarView
               fellows={fellows}
               schedule={schedule}
+              vacations={vacations}
               dateCallMap={dateCallMap}
             />
           )}
@@ -1099,7 +1186,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
               topics={topics}
               fellows={fellows}
               darkMode={darkMode}
-              canManageLectures={!isSupabaseConfigured || canApprove}
+              canManageLectures={canManageUI}
               onSendReminder={(lecture) => {
                 console.log("Send reminder for:", lecture);
               }}
@@ -1117,7 +1204,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
           )}
 
 
-          {activeView === "violations" && (!isSupabaseConfigured || canApprove) && (
+          {activeView === "violations" && canManageUI && (
             <ViolationsView
               violations={workHourViolations}
               schedule={schedule}
@@ -1132,7 +1219,7 @@ if (Array.isArray(swapResult?.swapRequests)) {
             />
           )}
 
-          {activeView === "editSchedule" && (!isSupabaseConfigured || canApprove) && (
+          {activeView === "editSchedule" && canManageUI && (
             <ScheduleEditorView
               fellows={fellows}
               schedule={schedule}
@@ -1151,6 +1238,11 @@ if (Array.isArray(swapResult?.swapRequests)) {
               isSupabaseConfigured={isSupabaseConfigured}
               onSaveToSupabase={isSupabaseConfigured ? onSaveToSupabase : null}
               onPullFromSupabase={isSupabaseConfigured ? onPullFromSupabase : null}
+              activeEditors={activeEditors}
+              currentUserId={user?.id}
+              currentUserName={profile?.full_name || profile?.email}
+              onEditStart={onEditStart}
+              onEditEnd={onEditEnd}
             />
           )}
 
@@ -1264,9 +1356,17 @@ if (Array.isArray(swapResult?.swapRequests)) {
         </div>
       )}
 
-      <Footer />
+      <Footer onFeedback={() => setFeedbackOpen(true)} />
       <CookieConsent />
       <ToastContainer />
+
+      {feedbackOpen && (
+        <FeedbackModal
+          darkMode={darkMode}
+          profile={profile}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      )}
     </div>
   );
 }

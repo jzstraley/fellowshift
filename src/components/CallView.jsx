@@ -266,7 +266,7 @@ const exportCallFloatCSV = () => {
     ) : null;
 
   return (
-    <div className="space-y-3">
+    <div className="mx-auto max-w-3xl sm:max-w-4xl lg:max-w-6xl space-y-3">
       <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
           <h3 className="font-bold text-sm dark:text-gray-100">Call Weekend & Saturday Night Float Assignments</h3>

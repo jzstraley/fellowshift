@@ -34,6 +34,7 @@ function CollapsibleSection({ title, count, badgeColor, open, onToggle, children
 }
 
 export default function SwapsView({
+  pendingPeerSwaps,
   pendingSwaps,
   approvedSwaps,
   deniedSwaps,
@@ -44,24 +45,138 @@ export default function SwapsView({
   submitting,
   denyingId, setDenyingId,
   denyReason, setDenyReason,
+  peerApproveDbSwap, peerDenyDbSwap,
   approveDbSwap, denyDbSwap, cancelDbSwap,
   newDbSwap, setNewDbSwap, submitDbSwap, newDbSwapError,
   selectableFellows,
   myShifts, validSwapTargets,
   getBlockDetails, getShiftDateLabel,
   blockDates,
+  isMyFellow,
 }) {
+  const [peerOpen, setPeerOpen] = useState(false);
   const [pendingOpen, setPendingOpen] = useState(false);
   const [approvedOpen, setApprovedOpen] = useState(false);
   const [deniedOpen, setDeniedOpen] = useState(false);
+  const [peerDenyingId, setPeerDenyingId] = useState(null);
+  const [peerDenyReason, setPeerDenyReason] = useState('');
 
   const visibleDenied = deniedSwaps.filter(r => !dismissedSwapIds.has(r.id));
 
   return (
     <>
-      {/* Pending Swaps */}
+      {/* Awaiting Your Confirmation (Peer Stage) */}
+      {pendingPeerSwaps.length > 0 && (
+        <CollapsibleSection
+          title="Awaiting Your Confirmation"
+          count={pendingPeerSwaps.length}
+          badgeColor="bg-blue-500"
+          open={peerOpen}
+          onToggle={() => setPeerOpen(o => !o)}
+        >
+          <div className="space-y-2">
+            {pendingPeerSwaps.map((r) => {
+              const parsed = parseSwapReason(r.reason);
+              const label = parsed.swapType
+                ? `${parsed.swapType.toUpperCase()} W${parsed.weekend ?? 1}`
+                : 'Rotation swap';
+              const note = parsed.note ? ` - ${parsed.note}` : '';
+              const reqBlockMatch = (parsed.reqKey || r.reason || '').match(/B(\d+)/);
+              const swapBlockNum = r.block_number || (reqBlockMatch ? Number(reqBlockMatch[1]) : null);
+              const tgtKeyMatch = parsed.tgtKey?.match(/^B(\d+)-W([12])$/);
+              const tgtBlock = tgtKeyMatch ? Number(tgtKeyMatch[1]) : swapBlockNum;
+              const toWk = r.to_week_part ?? (tgtKeyMatch ? Number(tgtKeyMatch[2]) : null);
+              const isTarget = isMyFellow && isMyFellow(r.target_fellow_id);
+              const isRequester = isMyFellow && isMyFellow(r.requester_fellow_id);
+
+              return (
+                <div key={r.id} className="border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 p-2 rounded">
+                  <div className="flex flex-col gap-2">
+                    <div className="text-sm">
+                      <div className="font-semibold dark:text-blue-100 flex items-center gap-1">
+                        {r.requester?.name ?? '?'}
+                        <ArrowLeftRight className="w-3 h-3 text-blue-500" />
+                        {r.target?.name ?? '?'}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-300">
+                        {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} - {label}{note}
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-400 mt-0.5">
+                        Submitted {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isTarget && (
+                        <>
+                          <button
+                            onClick={() => peerApproveDbSwap(r.id)}
+                            disabled={submitting}
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-3 h-3" /> Accept
+                          </button>
+                          {peerDenyingId === r.id ? (
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1 w-full sm:w-auto">
+                              <input
+                                type="text"
+                                className="p-1 border rounded text-xs w-full sm:w-44 dark:bg-gray-700 dark:border-gray-500 dark:text-gray-100"
+                                placeholder="Decline reason…"
+                                value={peerDenyReason}
+                                onChange={e => setPeerDenyReason(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') peerDenyDbSwap(r.id, peerDenyReason);
+                                  if (e.key === 'Escape') { setPeerDenyingId(null); setPeerDenyReason(''); }
+                                }}
+                                autoFocus
+                              />
+                              <div className="flex gap-1">
+                                <button onClick={() => peerDenyDbSwap(r.id, peerDenyReason)} disabled={submitting} className="flex-1 sm:flex-none px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs">Confirm</button>
+                                <button onClick={() => { setPeerDenyingId(null); setPeerDenyReason(''); }} className="flex-1 sm:flex-none px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs">Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setPeerDenyingId(r.id); setPeerDenyReason(''); }}
+                              disabled={submitting}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                            >
+                              <AlertTriangle className="w-3 h-3" /> Decline
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {isRequester && (
+                        <button
+                          onClick={() => cancelDbSwap(r.id)}
+                          disabled={submitting}
+                          className="px-3 py-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
+                        >
+                          <X className="w-3 h-3" /> Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {r.requester?.name && r.target?.name && (swapBlockNum || tgtBlock) && (
+                    <SwapPreview
+                      requester={r.requester.name}
+                      target={r.target.name}
+                      reqBlock={swapBlockNum}
+                      fromWk={r.from_week_part ?? parsed.weekend ?? null}
+                      tgtBlock={tgtBlock}
+                      toWk={toWk}
+                      getBlockDetails={getBlockDetails}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* Awaiting Admin Approval */}
       <CollapsibleSection
-        title="Pending Swaps"
+        title="Awaiting Admin Approval"
         count={pendingSwaps.length}
         badgeColor="bg-yellow-500"
         open={pendingOpen}
@@ -102,7 +217,7 @@ export default function SwapsView({
                       {userCanApprove && (
                         <>
                           <button
-                            onClick={() => approveDbSwap(r.id)}
+                            onClick={() => approveDbSwap(r)}
                             disabled={submitting}
                             className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs flex items-center gap-1"
                           >

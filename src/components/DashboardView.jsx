@@ -196,7 +196,7 @@ const pendingSwaps = useMemo(
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const isAdmin = canApprove;
+  const isApprover = canApprove;
 
   const todayKey = today; // "YYYY-MM-DD"
 
@@ -239,7 +239,7 @@ const pendingSwaps = useMemo(
           </div>
           <button
             onClick={dismissGreeting}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/20 transition-colors text-white/70 hover:text-white"
+            className="w-11 h-11 flex items-center justify-center rounded-md hover:bg-white/20 transition-colors text-white/70 hover:text-white"
             aria-label="Dismiss"
           >
             <X className="w-4 h-4" />
@@ -295,7 +295,7 @@ const pendingSwaps = useMemo(
             </div>
             <button
               onClick={dismissUpdates}
-              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-amber-200/60 dark:hover:bg-amber-800/40 transition-colors text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-200"
+              className="w-11 h-11 flex items-center justify-center rounded-md hover:bg-amber-200/60 dark:hover:bg-amber-800/40 transition-colors text-amber-500 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-200"
               aria-label="Dismiss updates"
             >
               <X className="w-3.5 h-3.5" />
@@ -411,13 +411,13 @@ const pendingSwaps = useMemo(
                 <FileText className="w-4 h-4" />
               </div>
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                {isAdmin ? "Pending Approvals" : "My Requests"}
+                {isApprover ? "Pending Approvals" : "My Requests"}
               </span>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-amber-500 transition-colors" />
           </div>
 
-          {isAdmin ? (
+          {isApprover ? (
             // Admin: show counts needing approval
             pendingVacations + pendingDayOffs + pendingSwaps > 0 ? (
               <div className="space-y-2">
@@ -546,7 +546,7 @@ const pendingSwaps = useMemo(
         </button>
 
         {/* Card 4: Admin gets Violations, Non-admin gets Quick Links */}
-        {isAdmin ? (
+        {isApprover ? (
           <button
             onClick={() => setActiveView("violations")}
             className="group text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm hover:shadow-md hover:border-red-300 dark:hover:border-red-600 transition-all duration-200"

@@ -48,7 +48,7 @@ function PolicyModal({ policy, onSave, onClose }) {
           <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">
             {policy ? "Edit Document" : "Add Document"}
           </h2>
-          <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+          <button onClick={onClose} className="flex items-center justify-center w-11 h-11 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -296,7 +296,7 @@ export default function PoliciesView({ programId: programIdProp }) {
                       <>
                         <button
                           onClick={() => { setEditingPolicy(policy); setModalOpen(true); }}
-                          className="p-1 rounded text-gray-300 hover:text-blue-500 dark:text-gray-600 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-1 rounded text-gray-300 hover:text-blue-500 dark:text-gray-600 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Edit"
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -310,7 +310,7 @@ export default function PoliciesView({ programId: programIdProp }) {
                         ) : (
                           <button
                             onClick={() => setDeleteConfirm(policy.id)}
-                            className="p-1 rounded text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="p-1 rounded text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity min-h-[44px] min-w-[44px] flex items-center justify-center"
                             title="Delete"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

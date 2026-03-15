@@ -176,12 +176,15 @@ export default function VacationsView({
         ) : (
           <SwapsView
             {...commonProps}
+            pendingPeerSwaps={applyFilter(state.pendingPeerSwapRequests)}
             pendingSwaps={applyFilter(state.pendingSwapRequests)}
             approvedSwaps={applyFilter(state.approvedSwapRequests)}
             deniedSwaps={applyFilter(state.deniedSwapRequests)}
             dismissedSwapIds={dismissedSwapIds} dismissSwap={dismissSwap}
             denyingId={state.denyingId} setDenyingId={state.setDenyingId}
             denyReason={state.denyReason} setDenyReason={state.setDenyReason}
+            peerApproveDbSwap={state.peerApproveDbSwap}
+            peerDenyDbSwap={state.peerDenyDbSwap}
             approveDbSwap={state.approveDbSwap}
             denyDbSwap={state.denyDbSwap}
             cancelDbSwap={state.cancelDbSwap}
@@ -194,6 +197,7 @@ export default function VacationsView({
             getShiftDateLabel={state.getShiftDateLabel}
             blockDates={state.blockDates}
             parentBlockDates={state.blockDates}
+            isMyFellow={(id) => state.linkedFellowIds.has(id)}
           />
         )}
       </div>

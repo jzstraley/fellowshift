@@ -6,7 +6,8 @@
 import { useEffect, useMemo, useCallback, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { blockDates as localBlockDates, allRotationTypes } from '../data/scheduleData';
-import { DAY_NAMES, DAY_OFF_REASONS, SWAP_RESET, getNameFromAssignment, formatPretty, getWeekWindowWithinBlock } from '../utils/vacationHelpers';
+import { DAY_NAMES, DAY_OFF_REASONS, SWAP_RESET, getNameFromAssignment, formatPretty, getWeekWindowWithinBlock, parseSwapReason } from '../utils/vacationHelpers';
+import { pullCallFloatFromSupabase } from '../utils/scheduleSupabaseSync';
 
 const asArray = (v) => (Array.isArray(v) ? v : []);
 const safeStr = (v) => (typeof v === 'string' ? v : '');
@@ -31,6 +32,7 @@ const normalizeStatus = (v) => {
   if (!s) return 'pending';
   if (s === 'approved') return 'approved';
   if (s === 'pending') return 'pending';
+  if (s === 'pending_peer') return 'pending_peer';
   if (s === 'denied' || s === 'rejected') return 'denied';
   if (s === 'cancelled' || s === 'canceled') return 'cancelled';
   return s;
@@ -50,11 +52,14 @@ export function useVacationState({
   // optional schedule context (used by getRequestExtras; safe if omitted)
   fellows = [],
   schedule = {},
+  setSchedule = null,
   vacations = [],
   setVacations,
   setSwapRequests,
   callSchedule = {},
   nightFloatSchedule = {},
+  setCallSchedule = null,
+  setNightFloatSchedule = null,
   clinicDays = {},
   pgyLevels = {},
 }) {
@@ -669,7 +674,7 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
         target_fellow_id: targetFellowId,
         block_number: blockNum,
         reason: reason || my_shift_key,
-        status: 'pending',
+        status: 'pending_peer',
         requested_by: uid,
         program_id: pid,
         academic_year_id: yid,
@@ -688,15 +693,17 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
     }
   }, [newDbSwap, uid, pid, yid, blockDates, fetchRequests]);
 
-  const approveDbSwap = useCallback(async (requestId) => {
-    if (!userCanApprove) return;
+  // ---- peer approval (target fellow confirms or declines) ----
+  const peerApproveDbSwap = useCallback(async (requestId) => {
+    const swap = dbSwapRequests.find(r => r.id === requestId);
+    if (!swap || !linkedFellowIds.has(swap.target_fellow_id)) return;
     setSubmitting(true);
     setDbError(null);
     try {
-      const { error } = await supabase
-        .from('swap_requests')
-        .update({ status: 'approved', approved_by: uid, approved_at: new Date().toISOString() })
-        .eq('id', requestId);
+      const { error } = await supabase.from('swap_requests')
+        .update({ status: 'pending', peer_approved_by: uid, peer_approved_at: new Date().toISOString() })
+        .eq('id', requestId)
+        .eq('status', 'pending_peer');
       if (error) throw error;
       await fetchRequests();
     } catch (e) {
@@ -704,7 +711,104 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
     } finally {
       setSubmitting(false);
     }
-  }, [userCanApprove, uid, fetchRequests]);
+  }, [dbSwapRequests, linkedFellowIds, uid, fetchRequests]);
+
+  const peerDenyDbSwap = useCallback(async (requestId, notes = '') => {
+    const swap = dbSwapRequests.find(r => r.id === requestId);
+    if (!swap || !linkedFellowIds.has(swap.target_fellow_id)) return;
+    setSubmitting(true);
+    setDbError(null);
+    try {
+      const patch = { status: 'denied' };
+      if (safeStr(notes)) patch.notes = safeStr(notes);
+      const { error } = await supabase.from('swap_requests')
+        .update(patch)
+        .eq('id', requestId)
+        .eq('status', 'pending_peer');
+      if (error) throw error;
+      await fetchRequests();
+    } catch (e) {
+      setDbError(e?.message || String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [dbSwapRequests, linkedFellowIds, fetchRequests]);
+
+  const approveDbSwap = useCallback(async (swap) => {
+    if (!userCanApprove) return;
+    setSubmitting(true);
+    setDbError(null);
+    try {
+      // 1. Mark swap as approved
+      const { error } = await supabase
+        .from('swap_requests')
+        .update({ status: 'approved', approved_by: uid, approved_at: new Date().toISOString() })
+        .eq('id', swap.id);
+      if (error) throw error;
+
+      // 2. Execute the actual call/float swap (if applicable)
+      const { swapType } = parseSwapReason(swap.reason);
+      const fromWeek = swap.from_week_part;
+      const toWeek = swap.to_week_part;
+
+      // Only swap if both week parts are defined (skip rotation-only swaps)
+      if (fromWeek && toWeek && fromWeek !== toWeek) {
+        const type = swapType === 'float' ? 'float' : 'call';
+        const swapPid = swap.program_id || pid;
+        const swapYid = swap.academic_year_id || yid;
+
+        // Fetch existing rows to preserve relaxed flag
+        const { data: existingRows } = await supabase
+          .from('call_float_assignments')
+          .select('weekend, relaxed')
+          .eq('program_id', swapPid)
+          .eq('academic_year_id', swapYid)
+          .eq('block_number', swap.block_number)
+          .eq('type', type)
+          .in('weekend', [fromWeek, toWeek]);
+
+        const fromRelaxed = existingRows?.find(r => r.weekend === fromWeek)?.relaxed ?? false;
+        const toRelaxed = existingRows?.find(r => r.weekend === toWeek)?.relaxed ?? false;
+
+        const { error: swapErr } = await supabase.from('call_float_assignments').upsert([
+          {
+            program_id: swapPid,
+            academic_year_id: swapYid,
+            block_number: swap.block_number,
+            weekend: fromWeek,
+            type,
+            fellow_id: swap.target_fellow_id,
+            relaxed: fromRelaxed,
+            created_by: uid,
+          },
+          {
+            program_id: swapPid,
+            academic_year_id: swapYid,
+            block_number: swap.block_number,
+            weekend: toWeek,
+            type,
+            fellow_id: swap.requester_fellow_id,
+            relaxed: toRelaxed,
+            created_by: uid,
+          },
+        ], { onConflict: 'program_id,academic_year_id,block_number,weekend,type' });
+
+        if (swapErr) throw swapErr;
+
+        // 3. Refresh in-memory call/float schedule
+        const { callSchedule: newCall, nightFloatSchedule: newFloat } =
+          await pullCallFloatFromSupabase({ programId: swapPid, academicYearId: swapYid });
+        if (newCall && setCallSchedule) setCallSchedule(newCall);
+        if (newFloat && setNightFloatSchedule) setNightFloatSchedule(newFloat);
+      }
+
+      await fetchRequests();
+    } catch (e) {
+      setDbError(e?.message || String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [userCanApprove, uid, pid, yid, fetchRequests, setCallSchedule, setNightFloatSchedule]);
 
   const denyDbSwap = useCallback(async (requestId, notes = '') => {
     if (!userCanApprove) return;
@@ -785,6 +889,7 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
   );
 
   const visibleSwaps = useMemo(() => asArray(dbSwapRequests).filter(isVisibleSwap), [dbSwapRequests, isVisibleSwap]);
+  const pendingPeerSwapRequests = useMemo(() => visibleSwaps.filter(r => r.status === 'pending_peer'), [visibleSwaps]);
   const pendingSwapRequests = useMemo(() => visibleSwaps.filter(r => r.status === 'pending'), [visibleSwaps]);
   const approvedSwapRequests = useMemo(() => visibleSwaps.filter(r => r.status === 'approved'), [visibleSwaps]);
   const deniedSwapRequests = useMemo(() => visibleSwaps.filter(r => r.status === 'denied'), [visibleSwaps]);
@@ -983,6 +1088,7 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
     deniedDayOffs: asArray(deniedDayOffs),
 
     // swaps
+    pendingPeerSwapRequests: asArray(pendingPeerSwapRequests),
     pendingSwapRequests: asArray(pendingSwapRequests),
     approvedSwapRequests: asArray(approvedSwapRequests),
     deniedSwapRequests: asArray(deniedSwapRequests),
@@ -1000,6 +1106,8 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
 
     // actions (swaps)
     submitDbSwap,
+    peerApproveDbSwap,
+    peerDenyDbSwap,
     approveDbSwap,
     denyDbSwap,
     cancelDbSwap,

@@ -212,7 +212,7 @@ function ScheduleContextDropdown({ r, getBlockDetails }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-2 py-1.5 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-[10px] font-semibold text-blue-700 dark:text-blue-300 transition-colors"
+        className="w-full flex items-center justify-between px-2 py-2.5 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-[10px] font-semibold text-blue-700 dark:text-blue-300 transition-colors min-h-[44px]"
       >
         <span>Schedule context</span>
         {open ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
@@ -440,8 +440,8 @@ export default function TimeOffView({
   getBlockDetails = null,
 }) {
   const [pendingOpen, setPendingOpen] = useState(false);
-  const [approvedOpen, setApprovedOpen] = useState(false);
-  const [deniedOpen, setDeniedOpen] = useState(false);
+  const [historicalOpen, setHistoricalOpen] = useState(false);
+  const [historicalTab, setHistoricalTab] = useState('approved'); // 'approved' | 'denied'
 
   const [denyOpen, setDenyOpen] = useState(false);
   const [denyTargetId, setDenyTargetId] = useState(null);
@@ -471,6 +471,8 @@ export default function TimeOffView({
     // leaders can cancel too
     return userCanApprove || safeStr(r?.requested_by) === safeStr(userId);
   };
+
+  const historicalRequests = historicalTab === 'approved' ? approvedRequests : deniedRequests;
 
 return (
   <div className="space-y-3">
@@ -520,104 +522,6 @@ return (
                     showCancel={canCancelNonApproved(r)}
                     rightBadge="Pending"
                     rightBadgeClass="bg-yellow-600 text-white"
-                    rotation={getRotationLabel(r, getBlockDetails)}
-                  />
-                  <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-
-    {/* Approved */}
-    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
-      <button
-        type="button"
-        onClick={() => setApprovedOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors rounded-t"
-      >
-        <span className="flex items-center gap-2 font-semibold dark:text-gray-100 text-sm">
-          Approved Vacations
-          <span className="text-xs font-normal opacity-60">({approvedRequests.length})</span>
-        </span>
-        {approvedOpen
-          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
-      </button>
-
-      {approvedOpen && (
-        <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-600">
-          {approvedRequests.length === 0 ? (
-            <div className="text-xs text-gray-500 dark:text-gray-400">No approved vacations</div>
-          ) : (
-            <div className="space-y-2">
-              {approvedRequests.map((r) => (
-                <div
-                  key={r.id}
-                  className="border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/40 rounded p-2"
-                >
-                  <RequestCard
-                    r={r}
-                    submitting={submitting}
-                    userCanApprove={userCanApprove}
-                    userId={userId}
-                    getRequestExtras={getRequestExtras}
-                    formatBlockRange={formatBlockRange}
-                    onCancel={() => openCancel(r, true)}
-                    showCancel={userCanApprove}
-                    rightBadge="Approved"
-                    rightBadgeClass="bg-green-600 text-white"
-                    rotation={getRotationLabel(r, getBlockDetails)}
-                  />
-                  <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-
-    {/* Denied */}
-    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
-      <button
-        type="button"
-        onClick={() => setDeniedOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors rounded-t"
-      >
-        <span className="flex items-center gap-2 font-semibold dark:text-gray-100 text-sm">
-          Denied Vacations
-          <span className="text-xs font-normal opacity-60">({deniedRequests.length})</span>
-        </span>
-        {deniedOpen
-          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
-      </button>
-
-      {deniedOpen && (
-        <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-600">
-          {deniedRequests.length === 0 ? (
-            <div className="text-xs text-gray-500 dark:text-gray-400">No denied vacations</div>
-          ) : (
-            <div className="space-y-2">
-              {deniedRequests.map((r) => (
-                <div
-                  key={r.id}
-                  className="border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30 rounded p-2"
-                >
-                  <RequestCard
-                    r={r}
-                    submitting={submitting}
-                    userCanApprove={userCanApprove}
-                    userId={userId}
-                    getRequestExtras={getRequestExtras}
-                    formatBlockRange={formatBlockRange}
-                    onCancel={() => openCancel(r, false)}
-                    showCancel={canCancelNonApproved(r)}
-                    rightBadge="Denied"
-                    rightBadgeClass="bg-red-600 text-white"
                     rotation={getRotationLabel(r, getBlockDetails)}
                   />
                   <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
@@ -687,128 +591,216 @@ return (
 
 
     {/* New Request */}
-{/* New Request */}
-<div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
-  <div className="flex items-center justify-between mb-2">
-    <div className="font-semibold dark:text-gray-100">New Vacation Request</div>
-  </div>
+    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-semibold dark:text-gray-100">New Vacation Request</div>
+      </div>
 
-  {!userCanRequest ? (
-    <div className="text-xs text-gray-500 dark:text-gray-400">
-      You do not have permission to submit requests.
+      {!userCanRequest ? (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          You do not have permission to submit requests.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Reason quick buttons */}
+          <div className="flex flex-wrap gap-2">
+            {["Vacation"].map((label) => {
+              const active = (newDbReq?.reason ?? "Vacation") === label;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => setNewDbReq((p) => ({ ...(p || {}), reason: label }))}
+                  className={
+                    "px-3 py-1.5 rounded border text-xs transition-colors disabled:opacity-50 " +
+                    (active
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-100")
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Fellow */}
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-300 mb-1">
+                Fellow
+              </label>
+              <select
+                value={newDbReq?.fellow_id ?? ""}
+                disabled={submitting}
+                onChange={(e) => setNewDbReq((p) => ({ ...(p || {}), fellow_id: e.target.value }))}
+                className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2 text-sm"
+              >
+                <option value="">Select</option>
+                {(selectableFellows || []).map((f, idx) => (
+                  <option key={`${f.id ?? f.name ?? 'f'}-${idx}`} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              {(!selectableFellows || selectableFellows.length === 0) && (
+                <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                  No selectable fellows loaded.
+                </div>
+              )}
+            </div>
+
+            {/* Start block */}
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-300 mb-1">
+                Start week
+              </label>
+              <select
+                value={newDbReq?.start_block_id ?? ""}
+                disabled={submitting}
+                onChange={(e) => setNewDbReq((p) => ({ ...(p || {}), start_block_id: e.target.value }))}
+                className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2 text-sm"
+              >
+                <option value="">Select</option>
+                {((splitLocalWeeks?.length ? splitLocalWeeks : weeklyBlocks) || []).map((b, idx) => {
+                  const id = b.id ?? b.block;
+                  let label = b.label;
+                  if (!label) {
+                    const weekNum = b.parentBlock != null ? (b.parentBlock - 1) * 2 + (b.part ?? 1) : idx + 1;
+                    const fmt = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    label = `Wk ${weekNum}: ${fmt(b.start)} – ${fmt(b.end)}`;
+                  }
+                  return (
+                    <option key={`${id}-${idx}`} value={id}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+              {(!splitLocalWeeks?.length && (!weeklyBlocks || weeklyBlocks.length === 0)) && (
+                <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                  No weeks available. Check block dates loading.
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setNewDbReq({ fellow_id: "", start_block_id: "", reason: "Vacation" })}
+                className="px-3 py-2 rounded border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                disabled={
+                  submitting ||
+                  !(newDbReq?.fellow_id) ||
+                  !(newDbReq?.start_block_id)
+                }
+                onClick={submitDbRequest}
+                className="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:opacity-90 disabled:opacity-50"
+              >
+                {submitting ? "Submitting..." : userCanApprove ? "Submit on Behalf of Fellow" : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  ) : (
-    <div className="space-y-3">
-      {/* Reason quick buttons */}
-      <div className="flex flex-wrap gap-2">
-        {["Vacation"].map((label) => {
-          const active = (newDbReq?.reason ?? "Vacation") === label;
-          return (
+
+    {/* Historical (Approved/Denied) — Tabbed */}
+    <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
+      <button
+        type="button"
+        onClick={() => setHistoricalOpen(o => !o)}
+        className="w-full"
+      >
+        <div className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors">
+          <span className="text-sm font-semibold dark:text-gray-100">History</span>
+          {historicalOpen
+            ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+            : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+        </div>
+      </button>
+
+      {historicalOpen && (
+        <>
+          <div className="flex items-center gap-0 border-t border-gray-200 dark:border-gray-600">
             <button
-              key={label}
               type="button"
-              disabled={submitting}
-              onClick={() => setNewDbReq((p) => ({ ...(p || {}), reason: label }))}
-              className={
-                "px-3 py-1.5 rounded border text-xs transition-colors disabled:opacity-50 " +
-                (active
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-600 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-100")
-              }
+              onClick={() => setHistoricalTab('approved')}
+              className={`flex-1 px-3 py-2.5 text-sm font-semibold text-center transition-colors ${
+                historicalTab === 'approved'
+                  ? 'text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
             >
-              {label}
+              Approved {approvedRequests.length > 0 && <span className="text-xs">({approvedRequests.length})</span>}
             </button>
-          );
-        })}
-      </div>
+            <button
+              type="button"
+              onClick={() => setHistoricalTab('denied')}
+              className={`flex-1 px-3 py-2.5 text-sm font-semibold text-center transition-colors ${
+                historicalTab === 'denied'
+                  ? 'text-red-600 dark:text-red-400 border-b-2 border-red-600 dark:border-red-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              Denied {deniedRequests.length > 0 && <span className="text-xs">({deniedRequests.length})</span>}
+            </button>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* Fellow */}
-        <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-300 mb-1">
-            Fellow
-          </label>
-          <select
-            value={newDbReq?.fellow_id ?? ""}
-            disabled={submitting}
-            onChange={(e) => setNewDbReq((p) => ({ ...(p || {}), fellow_id: e.target.value }))}
-            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2 text-sm"
-          >
-            <option value="">Select</option>
-{(selectableFellows || []).map((f, idx) => (
-  <option key={`${f.id ?? f.name ?? 'f'}-${idx}`} value={f.id}>
-    {f.name}
-  </option>
-))}
-          </select>
-          {(!selectableFellows || selectableFellows.length === 0) && (
-            <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
-              No selectable fellows loaded.
-            </div>
-          )}
-        </div>
-
-        {/* Start block */}
-        <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-300 mb-1">
-            Start week
-          </label>
-          <select
-            value={newDbReq?.start_block_id ?? ""}
-            disabled={submitting}
-            onChange={(e) => setNewDbReq((p) => ({ ...(p || {}), start_block_id: e.target.value }))}
-            className="w-full rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2 text-sm"
-          >
-            <option value="">Select</option>
-{((splitLocalWeeks?.length ? splitLocalWeeks : weeklyBlocks) || []).map((b, idx) => {
-  const id = b.id ?? b.block;
-  let label = b.label;
-  if (!label) {
-    const weekNum = b.parentBlock != null ? (b.parentBlock - 1) * 2 + (b.part ?? 1) : idx + 1;
-    const fmt = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    label = `Wk ${weekNum}: ${fmt(b.start)} – ${fmt(b.end)}`;
-  }
-  return (
-    <option key={`${id}-${idx}`} value={id}>
-      {label}
-    </option>
-  );
-})}
-          </select>
-          {(!splitLocalWeeks?.length && (!weeklyBlocks || weeklyBlocks.length === 0)) && (
-            <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
-              No weeks available. Check block dates loading.
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-end gap-2">
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={() => setNewDbReq({ fellow_id: "", start_block_id: "", reason: "Vacation" })}
-            className="px-3 py-2 rounded border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            disabled={
-              submitting ||
-              !(newDbReq?.fellow_id) ||
-              !(newDbReq?.start_block_id)
-            }
-            onClick={submitDbRequest}
-            className="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:opacity-90 disabled:opacity-50"
-          >
-            {submitting ? "Submitting..." : userCanApprove ? "Submit on Behalf of Fellow" : "Submit"}
-          </button>
-        </div>
-      </div>
+          <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-600">
+            {historicalRequests.length === 0 ? (
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                No {historicalTab} vacations
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {historicalRequests.map((r) => (
+                  <div
+                    key={r.id}
+                    className={`border rounded p-2 ${
+                      historicalTab === 'approved'
+                        ? 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/40'
+                        : 'border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/30'
+                    }`}
+                  >
+                    <RequestCard
+                      r={r}
+                      submitting={submitting}
+                      userCanApprove={userCanApprove}
+                      userId={userId}
+                      getRequestExtras={getRequestExtras}
+                      formatBlockRange={formatBlockRange}
+                      onCancel={
+                        historicalTab === 'approved'
+                          ? () => openCancel(r, true)
+                          : () => openCancel(r, false)
+                      }
+                      showCancel={
+                        historicalTab === 'approved'
+                          ? userCanApprove
+                          : canCancelNonApproved(r)
+                      }
+                      rightBadge={historicalTab === 'approved' ? 'Approved' : 'Denied'}
+                      rightBadgeClass={historicalTab === 'approved' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}
+                      rotation={getRotationLabel(r, getBlockDetails)}
+                    />
+                    <ScheduleContextDropdown r={r} getBlockDetails={getBlockDetails} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
-  )}
-</div>
 
   </div>
 );

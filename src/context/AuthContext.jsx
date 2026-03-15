@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigured, signOutAndClear } from '../lib/supabaseClient';
 import { clearScopeSelection, loadScopeSelection, saveScopeSelection } from '../utils/scope';
 
@@ -18,14 +18,42 @@ export const AuthProvider = ({ children }) => {
   const [isInstitutionAdmin, setIsInstitutionAdmin] = useState(false);
 
   const profileLoadInFlight = useRef(false);
+  const channelRef = useRef(null);
+
+  /**
+   * Broadcast a message to other tabs via BroadcastChannel.
+   */
+  const broadcast = useCallback((msg) => {
+    channelRef.current?.postMessage(msg);
+  }, []);
 
   /**
    * Load normalized scope (programs, academic years, memberships).
    * Gracefully degrades if the migration tables don't exist yet —
    * leaves programId/academicYearId as null rather than crashing.
+   * Silently retries on transient errors.
    */
-  const loadScope = async (userId, instId) => {
+  const loadScope = async (userId, instId, retryCount = 0) => {
     if (!instId) return;
+
+    const MAX_RETRIES = 3;
+    const BACKOFF_MS = [300, 700, 1500];
+
+    const isTransient = (err) => {
+      const code = err?.code ?? '';
+      const msg = String(err?.message ?? err ?? '').toLowerCase();
+      return (
+        msg.includes('aborterror') ||
+        msg.includes('aborted') ||
+        msg.includes('network') ||
+        msg.includes('fetch') ||
+        msg.includes('timeout') ||
+        code === 'PGRST116' ||
+        code === '42501' ||
+        (typeof err?.status === 'number' && (err.status >= 500 || err.status === 429))
+      );
+    };
+
     try {
       const [membershipsRes, yearsRes, adminRes] = await Promise.all([
         supabase
@@ -70,16 +98,45 @@ export const AuthProvider = ({ children }) => {
       setAcademicYearId(resolvedAcademicYearId);
       saveScopeSelection({ programId: resolvedProgramId, academicYearId: resolvedAcademicYearId });
     } catch (e) {
+      // Check if error is transient and we haven't exhausted retries
+      if (isTransient(e) && retryCount < MAX_RETRIES) {
+        const delay = BACKOFF_MS[retryCount];
+        console.warn(
+          `Scope load transient error (retry ${retryCount + 1}/${MAX_RETRIES} in ${delay}ms):`,
+          e?.message ?? e
+        );
+        setTimeout(() => loadScope(userId, instId, retryCount + 1), delay);
+        return;
+      }
       // Tables may not exist before migration — graceful degradation
       console.warn('Could not load program scope (migration may be pending):', e?.message ?? e);
     }
   };
 
-  const loadProfile = async (userId) => {
+  const loadProfile = async (userId, retryCount = 0) => {
     if (!supabase) return;
     if (profileLoadInFlight.current) return;
 
     profileLoadInFlight.current = true;
+
+    const MAX_RETRIES = 3;
+    const BACKOFF_MS = [300, 700, 1500];
+
+    const isTransient = (err) => {
+      const code = err?.code ?? '';
+      const msg = String(err?.message ?? err ?? '').toLowerCase();
+      return (
+        msg.includes('aborterror') ||
+        msg.includes('aborted') ||
+        msg.includes('network') ||
+        msg.includes('fetch') ||
+        msg.includes('timeout') ||
+        code === 'PGRST116' ||
+        code === '42501' ||
+        (typeof err?.status === 'number' && (err.status >= 500 || err.status === 429))
+      );
+    };
+
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -88,11 +145,14 @@ export const AuthProvider = ({ children }) => {
         .single();
 
       if (error) {
-        const msg = String(error?.message || '').toLowerCase();
-        const isAbort = msg.includes('aborterror') || msg.includes('aborted');
-        if (isAbort) {
-          console.warn('Profile load aborted; retrying once...');
-          setTimeout(() => loadProfile(userId), 400);
+        if (isTransient(error) && retryCount < MAX_RETRIES) {
+          const delay = BACKOFF_MS[retryCount];
+          console.warn(
+            `Profile load transient error (retry ${retryCount + 1}/${MAX_RETRIES} in ${delay}ms):`,
+            error?.message
+          );
+          profileLoadInFlight.current = false;
+          setTimeout(() => loadProfile(userId, retryCount + 1), delay);
           return;
         }
         console.error('Error loading profile:', error);
@@ -107,11 +167,14 @@ export const AuthProvider = ({ children }) => {
       // Load normalized scope after profile — non-blocking
       loadScope(userId, data?.institution_id);
     } catch (err) {
-      const msg = String(err?.message || err).toLowerCase();
-      const isAbort = msg.includes('aborterror') || msg.includes('aborted');
-      if (isAbort) {
-        console.warn('Profile load aborted (exception); retrying once...');
-        setTimeout(() => loadProfile(userId), 400);
+      if (isTransient(err) && retryCount < MAX_RETRIES) {
+        const delay = BACKOFF_MS[retryCount];
+        console.warn(
+          `Profile load transient error (retry ${retryCount + 1}/${MAX_RETRIES} in ${delay}ms):`,
+          err?.message
+        );
+        profileLoadInFlight.current = false;
+        setTimeout(() => loadProfile(userId, retryCount + 1), delay);
         return;
       }
       console.error('Exception loading profile:', err);
@@ -121,6 +184,66 @@ export const AuthProvider = ({ children }) => {
       profileLoadInFlight.current = false;
     }
   };
+
+  // Cross-tab session and scope sync via BroadcastChannel + StorageEvent fallback
+  useEffect(() => {
+    const supportsBC = 'BroadcastChannel' in window;
+
+    if (supportsBC) {
+      const channel = new BroadcastChannel('fs_auth_sync');
+      channelRef.current = channel;
+
+      channel.onmessage = ({ data }) => {
+        const { type, ...payload } = data ?? {};
+
+        if (type === 'SIGN_OUT') {
+          clearScopeSelection();
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          setMemberships([]);
+          setAcademicYears([]);
+          setProgramId(null);
+          setAcademicYearId(null);
+          setIsInstitutionAdmin(false);
+        }
+
+        if (type === 'SIGN_IN') {
+          supabase?.auth.getSession().then(({ data: sd }) => {
+            if (sd?.session?.user) {
+              setUser(sd.session.user);
+              setLoading(false);
+              loadProfile(sd.session.user.id);
+            }
+          });
+        }
+
+        if (type === 'SCOPE_CHANGE') {
+          setProgramId(payload.programId);
+          setAcademicYearId(payload.academicYearId);
+        }
+      };
+    }
+
+    // StorageEvent fallback for scope changes (also works when BC not available)
+    const handleStorage = (e) => {
+      if (e.key !== 'fs_scope_v1' || !e.newValue) return;
+      // Only use StorageEvent for scope if we're NOT using BroadcastChannel
+      if (supportsBC) return;
+      try {
+        const { programId: pid, academicYearId: ayid } = JSON.parse(e.newValue);
+        setProgramId(pid);
+        setAcademicYearId(ayid);
+      } catch {}
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      channelRef.current?.close();
+      channelRef.current = null;
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -149,6 +272,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
 
       if (session?.user) {
+        if (event === 'SIGNED_IN') broadcast({ type: 'SIGN_IN' });
         loadProfile(session.user.id);
       } else {
         setProfile(null);
@@ -167,7 +291,7 @@ export const AuthProvider = ({ children }) => {
       clearTimeout(timeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [broadcast]);
 
   const signIn = async (email, password) => {
     if (!isSupabaseConfigured) return { data: null, error: { message: 'Supabase not configured' } };
@@ -182,6 +306,7 @@ export const AuthProvider = ({ children }) => {
     if (!isSupabaseConfigured) return { error: { message: 'Supabase not configured' } };
     try {
       clearScopeSelection();
+      broadcast({ type: 'SIGN_OUT' });
       await signOutAndClear();
       return { error: null };
     } catch (err) {
@@ -200,6 +325,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   // --- Capability flags ---
+  //
+  // PERMISSION HIERARCHY (three-tier):
+  // 1. canRequest — can submit vacation/swap requests (fellows, residents, chiefs, PDs, admins)
+  // 2. canManage / canApprove — can approve requests, view stats, edit schedule, manage policies
+  //    (chief_fellow, program_director, admin, or institution_admin)
+  // 3. isAdmin — strictest gate, admin panel access only (admin role OR institution_admin)
+  //
+  // NOTE: canManage and canApprove are intentionally identical aliases for backward compatibility.
+  // Use whichever name makes semantic sense in your context.
+  //
   // Legacy: derive from profile.role string (works before migration)
   const role = profile?.role ?? null;
   const legacyIsAdmin = role === 'admin';
@@ -248,8 +383,22 @@ export const AuthProvider = ({ children }) => {
     memberships,
     academicYears,
     // allow overriding scope selection (for program-picker UI) — persists to localStorage
-    setProgramId: (id) => { setProgramId(id); setAcademicYearId(prev => { saveScopeSelection({ programId: id, academicYearId: prev }); return prev; }); },
-    setAcademicYearId: (id) => { setAcademicYearId(id); setProgramId(prev => { saveScopeSelection({ programId: prev, academicYearId: id }); return prev; }); },
+    setProgramId: (id) => {
+      setProgramId(id);
+      setAcademicYearId(prev => {
+        saveScopeSelection({ programId: id, academicYearId: prev });
+        broadcast({ type: 'SCOPE_CHANGE', programId: id, academicYearId: prev });
+        return prev;
+      });
+    },
+    setAcademicYearId: (id) => {
+      setAcademicYearId(id);
+      setProgramId(prev => {
+        saveScopeSelection({ programId: prev, academicYearId: id });
+        broadcast({ type: 'SCOPE_CHANGE', programId: prev, academicYearId: id });
+        return prev;
+      });
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

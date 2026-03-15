@@ -25,16 +25,24 @@ export default function ScheduleEditorView({
   isSupabaseConfigured = false,
   onSaveToSupabase = null,
   onPullFromSupabase = null,
+  activeEditors = [],
+  currentUserId = null,
+  currentUserName = null,
+  onEditStart = null,
+  onEditEnd = null,
 }) {
   const [mode, setMode] = useState(MODE_GRID);
   const [conflictResults, setConflictResults] = useState(null);
   const [syncStatus, setSyncStatus] = useState({ state: 'idle', message: '' });
   const [changeLog, setChangeLog] = useState([]);
+  const [showEditingWarning, setShowEditingWarning] = useState(false);
+  const [conflictPrompt, setConflictPrompt] = useState(false);
 
   // Undo/Redo: dual stacks of schedule snapshots
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
   const MAX_HISTORY = 30;
+  const scheduleSnapshotRef = useRef(null);
 
   // Rate-limit snapshotting to avoid serializing the whole schedule on every keystroke.
   // Take a snapshot at most once per SNAPSHOT_COOLDOWN ms.
@@ -105,6 +113,26 @@ export default function ScheduleEditorView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo]);
 
+  // Presence tracking: broadcast when entering/exiting edit mode
+  useEffect(() => {
+    onEditStart?.();
+    return () => onEditEnd?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Show soft warning if another user is already editing on mount
+  useEffect(() => {
+    const othersEditing = activeEditors?.filter(e => e.userId !== currentUserId) ?? [];
+    if (othersEditing.length > 0) setShowEditingWarning(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Capture schedule snapshot on mount for conflict detection
+  useEffect(() => {
+    scheduleSnapshotRef.current = JSON.stringify(schedule);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Violation lookup
   const violationMap = useMemo(() => {
     const m = new Map();
@@ -125,6 +153,11 @@ export default function ScheduleEditorView({
       6: fellows.filter((f) => pgyLevels[f] === 6),
     }),
     [fellows, pgyLevels]
+  );
+
+  const othersEditing = useMemo(
+    () => (activeEditors ?? []).filter(e => e.userId !== currentUserId),
+    [activeEditors, currentUserId]
   );
 
   const handleCellChange = useCallback(
@@ -159,6 +192,19 @@ export default function ScheduleEditorView({
     setConflictResults(results);
 
     if (!onSaveToSupabase) return;
+
+    // Check for conflicts if snapshot exists: pull from Supabase and compare
+    if (scheduleSnapshotRef.current !== null && onPullFromSupabase) {
+      const { schedule: remoteSchedule } = await onPullFromSupabase?.() ?? {};
+      const remoteJson = remoteSchedule ? JSON.stringify(remoteSchedule) : scheduleSnapshotRef.current;
+      if (remoteJson !== scheduleSnapshotRef.current) {
+        // Schedule changed since edit started — show conflict prompt and return
+        setConflictPrompt(true);
+        setSyncStatus({ state: 'idle', message: '' });
+        return;
+      }
+    }
+
     setSyncStatus({ state: 'saving', message: 'Saving to Supabase…' });
     const { error, count } = await onSaveToSupabase();
     if (error) {
@@ -166,7 +212,7 @@ export default function ScheduleEditorView({
     } else {
       setSyncStatus({ state: 'success', message: `${count} assignments saved to Supabase.` });
     }
-  }, [schedule, callSchedule, nightFloatSchedule, fellows, blockDates, vacations, dayOverrides, onSaveToSupabase]);
+  }, [schedule, callSchedule, nightFloatSchedule, fellows, blockDates, vacations, dayOverrides, onSaveToSupabase, onPullFromSupabase]);
 
   const modes = [
     { key: MODE_GRID, label: "Grid" },
@@ -176,6 +222,69 @@ export default function ScheduleEditorView({
 
   return (
     <div className="space-y-3">
+      {/* Soft warning modal: another editor is active on mount */}
+      {showEditingWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-gray-800 shadow-xl p-6 space-y-4">
+            <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400 font-semibold">
+              <AlertTriangle className="w-5 h-5" /> Another editor is active
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {othersEditing.map(e => e.userName).join(', ')} is currently editing the schedule.
+              Your changes will not be blocked, but may conflict. Coordinate before saving.
+            </p>
+            <div className="flex justify-end">
+              <button onClick={() => setShowEditingWarning(false)}
+                className="px-4 py-2 text-sm font-semibold rounded bg-yellow-500 hover:bg-yellow-600 text-white">
+                Continue Editing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict prompt modal: schedule changed since edit started */}
+      {conflictPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-gray-800 shadow-xl p-6 space-y-4">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-semibold">
+              <AlertTriangle className="w-5 h-5" /> Schedule Updated
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              The schedule was changed by another user since you started editing. Reload to get the latest version, or overwrite with your changes.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={async () => {
+                setConflictPrompt(false);
+                const { loaded } = await onPullFromSupabase?.() ?? {};
+                if (loaded) {
+                  scheduleSnapshotRef.current = JSON.stringify(schedule);
+                }
+              }}
+                className="px-4 py-2 text-sm font-semibold rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                Reload
+              </button>
+              <button onClick={() => {
+                setConflictPrompt(false);
+                scheduleSnapshotRef.current = JSON.stringify(schedule);
+                runValidation();
+              }}
+                className="px-4 py-2 text-sm font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white">
+                Overwrite & Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Yellow banner when others are editing */}
+      {othersEditing.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded text-xs bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          {othersEditing.map(e => e.userName).join(', ')} {othersEditing.length === 1 ? 'is' : 'are'} currently editing the schedule
+        </div>
+      )}
+
       {/* Header bar with mode toggle and undo */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
@@ -183,7 +292,7 @@ export default function ScheduleEditorView({
             <button
               key={m.key}
               onClick={() => setMode(m.key)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+              className={`px-3 py-2.5 text-xs font-semibold rounded-md transition-colors ${
                 mode === m.key
                   ? "bg-blue-600 text-white shadow-sm"
                   : "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -199,7 +308,7 @@ export default function ScheduleEditorView({
             <button
               onClick={undo}
               disabled={undoStackRef.current.length === 0}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-l border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded-l border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
               title="Undo (Ctrl+Z)"
             >
               <Undo2 className="w-3.5 h-3.5" />
@@ -208,7 +317,7 @@ export default function ScheduleEditorView({
             <button
               onClick={redo}
               disabled={redoStackRef.current.length === 0}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-r border border-l-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded-r border border-l-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
               title="Redo (Ctrl+Shift+Z)"
             >
               <Redo2 className="w-3.5 h-3.5" />
@@ -218,7 +327,7 @@ export default function ScheduleEditorView({
           <button
             onClick={runValidation}
             disabled={syncStatus.state === 'saving' || syncStatus.state === 'pulling'}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded border border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded border border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
             title={onSaveToSupabase ? 'Validate conflicts & save to Supabase' : 'Check for conflicts and violations'}
           >
             {syncStatus.state === 'saving' ? (
@@ -242,7 +351,7 @@ export default function ScheduleEditorView({
                 }
               }}
               disabled={syncStatus.state === 'saving' || syncStatus.state === 'pulling'}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Pull latest schedule from Supabase"
             >
               {syncStatus.state === 'pulling' ? (
@@ -409,6 +518,12 @@ function GridEditor({
   violationMap,
   onCellChange,
 }) {
+  const currentBlockIdx = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const idx = blockDates.findIndex((bd) => today >= bd.start && today <= bd.end);
+    return idx >= 0 ? idx : 0;
+  }, [blockDates]);
+
   const rotationGroups = useMemo(() => {
     const groups = [];
     let currentRotation = null;
@@ -438,12 +553,9 @@ function GridEditor({
         }`}
       >
         <td
-          className={`sticky left-0 z-10 bg-white dark:bg-gray-800 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 font-semibold text-gray-800 dark:text-gray-100 border-l-4 ${getPGYColor(pgy)}`}
+          className={`sticky left-0 z-10 bg-white dark:bg-gray-800 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-0.5 font-semibold text-xs text-gray-800 dark:text-gray-100 border-l-4 text-center ${getPGYColor(pgy)}`}
         >
-          <div className="flex items-center gap-1">
-            <span className="truncate">{fellow}</span>
-            <span className="text-[8px] text-gray-500 dark:text-gray-400">PGY{pgy}</span>
-          </div>
+          <span className="truncate block">{fellow}</span>
         </td>
         {schedule[fellow]?.map((rot, idx) => {
           const blockNumber = idx + 1;
@@ -451,13 +563,13 @@ function GridEditor({
           return (
             <td
               key={idx}
-              className="border-r border-gray-200 dark:border-gray-700 px-0 py-0.5 text-center"
+              className="border-r border-gray-200 dark:border-gray-700 px-0.5 py-1 text-center"
             >
               <div className="relative">
                 <select
                   value={rot || ""}
                   onChange={(e) => onCellChange(fellow, idx, e.target.value)}
-                  className={`w-full text-[9px] font-semibold px-0.5 py-1 rounded border-0 cursor-pointer appearance-none text-center ${getRotationColor(rot)}`}
+                  className={`w-full text-xs font-semibold px-1 py-1 rounded border-0 cursor-pointer appearance-none text-center ${getRotationColor(rot)}`}
                   title={`${fellow} Block ${blockNumber}: ${rot || "(empty)"}`}
                 >
                   {allRotationTypes.map((r) => (
@@ -489,7 +601,7 @@ function GridEditor({
     <tr>
       <td
         colSpan={colSpan}
-        className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-xs font-extrabold text-gray-700 dark:text-gray-200"
+        className="sticky left-0 z-20 bg-white dark:bg-gray-800 border-y-2 border-gray-400 dark:border-gray-600 px-1 py-0.5 text-xs font-extrabold text-gray-700 dark:text-gray-200"
       >
         PGY-{pgy}
       </td>
@@ -505,32 +617,44 @@ function GridEditor({
         <table className="min-w-full text-[10px] border-separate border-spacing-0">
           <thead>
             <tr className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-30">
-              <th className="sticky top-0 left-0 z-40 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 w-24 min-w-[96px]"></th>
+              <th className="sticky top-0 left-0 z-40 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-0.5 w-20 min-w-[70px]"></th>
               {rotationGroups.map((group, idx) => (
                 <th
                   key={idx}
                   colSpan={group.end - group.start + 1}
-                  className="sticky top-0 z-30 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-1 text-center font-bold dark:text-gray-200"
+                  className="sticky top-0 z-30 bg-gray-100 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-0.5 py-0.5 text-center font-bold text-xs dark:text-gray-200"
                 >
                   Rot {group.rotation}
                 </th>
               ))}
             </tr>
             <tr className="bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600 sticky top-[26px] z-30">
-              <th className="sticky left-0 top-[26px] z-40 bg-gray-200 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-2 py-1 text-left font-bold min-w-[96px] dark:text-gray-100">
+              <th className="sticky left-0 top-[26px] z-40 bg-gray-200 dark:bg-gray-700 border-r-2 border-gray-400 dark:border-gray-600 px-1 py-0.5 text-center font-semibold text-xs min-w-[70px] dark:text-gray-100">
                 Fellow
               </th>
-              {blockDates.map((bd, i) => (
-                <th
-                  key={i}
-                  className="sticky top-[26px] z-30 bg-gray-200 dark:bg-gray-700 border-r border-gray-300 dark:border-gray-600 px-1 py-1 text-center min-w-[60px]"
-                >
-                  <div className="font-bold dark:text-gray-100">{bd.block}</div>
-                  <div className="text-[8px] text-gray-700 dark:text-gray-300 whitespace-nowrap font-semibold">
-                    {formatDate(bd.start)}-{formatDate(bd.end)}
-                  </div>
-                </th>
-              ))}
+              {blockDates.map((bd, i) => {
+                const isCurrentCol = i === currentBlockIdx;
+                return (
+                  <th
+                    key={i}
+                    className={`sticky top-[26px] z-30 border-r border-gray-300 dark:border-gray-600 px-0.5 py-0.5 text-center min-w-[60px] ${
+                      isCurrentCol
+                        ? "bg-blue-100 dark:bg-blue-900/40"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  >
+                    <div className="font-bold text-xs dark:text-gray-100">{bd.block}</div>
+                    <div className="text-[7px] text-gray-700 dark:text-gray-300 whitespace-nowrap font-semibold">
+                      {formatDate(bd.start)}-{formatDate(bd.end)}
+                    </div>
+                    {isCurrentCol && (
+                      <div className="text-[7px] text-blue-600 dark:text-blue-400 font-semibold">
+                        Current
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

@@ -157,7 +157,7 @@ export function useLectureState({
   const toDbRow = (fields) => ({
     institution_id:      iid || null,
     program_id:          pid || null,
-    topic_id:            fields.topicId            ?? null,
+    topic_id:            fields.topicId            || null,
     title:               fields.title              ?? '',
     speaker_id:          fields.speakerId          || null,
     presenter_fellow_id: fields.presenterFellowId  || null,

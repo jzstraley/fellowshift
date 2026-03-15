@@ -1,6 +1,6 @@
 // src/components/AdminView.jsx
 import { useState, useEffect, useCallback } from "react";
-import { Shield, Users, UserPlus, CheckCircle, AlertCircle, RefreshCw, Calendar } from "lucide-react";
+import { Shield, Users, UserPlus, CheckCircle, AlertCircle, RefreshCw, Calendar, MessageSquare } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
 
@@ -22,15 +22,25 @@ const ROLE_COLORS = {
 
 const EMPTY_FORM = { email: "", username: "", full_name: "", role: "fellow", program: "", password: "" };
 const CLINIC_DAY_LABELS = { 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday" };
+const TYPE_COLORS = {
+  bug: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  feature: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  other: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+};
 
 export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clinicDays = {}, setClinicDays }) {
   const { profile } = useAuth();
   const [tab, setTab] = useState("users");
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [feedback, setFeedback] = useState([]);
+  const [loadingFeedback, setLoadingFeedback] = useState(true);
   const [message, setMessage] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [editForm, setEditForm] = useState({ email: "" });
+  const [updating, setUpdating] = useState(false);
 
   const card = `rounded-lg border p-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`;
   const labelCls = `block text-xs font-medium mb-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`;
@@ -53,9 +63,37 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
     setLoadingUsers(false);
   }, [profile?.institution_id]);
 
+  const fetchFeedback = useCallback(async () => {
+    if (!profile?.institution_id) return;
+    setLoadingFeedback(true);
+    const { data, error } = await supabase
+      .from("feedback")
+      .select("id, category, message, anonymous, user_id, status, created_at, profiles(full_name, email)")
+      .eq("institution_id", profile.institution_id)
+      .order("status", { ascending: true })
+      .order("created_at", { ascending: false });
+    if (!error) setFeedback(data || []);
+    setLoadingFeedback(false);
+  }, [profile?.institution_id]);
+
+  const updateFeedbackStatus = async (feedbackId, newStatus) => {
+    const { error } = await supabase
+      .from("feedback")
+      .update({ status: newStatus })
+      .eq("id", feedbackId);
+    if (!error) {
+      setFeedback((prev) =>
+        prev.map((item) =>
+          item.id === feedbackId ? { ...item, status: newStatus } : item
+        )
+      );
+    }
+  };
+
   useEffect(() => {
-    if (tab === "users") fetchUsers();
-  }, [tab, fetchUsers]);
+    if (tab === "users" || tab === "edit") fetchUsers();
+    if (tab === "feedback") fetchFeedback();
+  }, [tab, fetchUsers, fetchFeedback]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -118,6 +156,46 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
 
   const setField = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  const startEditingUser = (user) => {
+    setEditingUserId(user.id);
+    setEditForm({ email: user.email });
+    setMessage(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingUserId(null);
+    setEditForm({ email: "" });
+  };
+
+  const handleUpdateEmail = async (e) => {
+    e.preventDefault();
+    if (!editingUserId || !editForm.email) return;
+
+    setUpdating(true);
+    setMessage(null);
+
+    // Update profile email
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ email: editForm.email })
+      .eq("id", editingUserId);
+
+    if (profileError) {
+      setMessage({ type: "error", text: `Failed to update email: ${profileError.message}` });
+      setUpdating(false);
+      return;
+    }
+
+    setMessage({
+      type: "success",
+      text: "Email updated! Note: The auth email must be updated separately via Supabase dashboard if different.",
+    });
+    // Refresh users list
+    fetchUsers();
+    setTimeout(() => cancelEditing(), 1500);
+    setUpdating(false);
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <h2 className="text-lg font-bold flex items-center gap-2">
@@ -129,7 +207,9 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
         {[
           { key: "users", label: "Users", Icon: Users },
           { key: "create", label: "Create User", Icon: UserPlus },
+          { key: "edit", label: "Edit User", Icon: Users },
           { key: "clinic", label: "Clinic Days", Icon: Calendar },
+          { key: "feedback", label: "Feedback", Icon: MessageSquare },
         ].map(({ key, label, Icon }) => (
           <button
             key={key}
@@ -212,6 +292,102 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Edit User tab ────────────────────────────────────────────── */}
+      {tab === "edit" && (
+        <div className={card}>
+          {editingUserId ? (
+            <form onSubmit={handleUpdateEmail} className="space-y-4">
+              <div>
+                <label className={labelCls}>New Email *</label>
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ email: e.target.value })}
+                  placeholder="user@hospital.edu"
+                  required
+                />
+              </div>
+
+              {message && (
+                <div
+                  className={`flex items-start gap-1.5 text-xs p-2.5 rounded ${
+                    message.type === "error"
+                      ? darkMode ? "bg-red-900/20 text-red-400" : "bg-red-50 text-red-600"
+                      : message.type === "warning"
+                      ? darkMode ? "bg-yellow-900/20 text-yellow-400" : "bg-yellow-50 text-yellow-600"
+                      : darkMode ? "bg-green-900/20 text-green-400" : "bg-green-50 text-green-600"
+                  }`}
+                >
+                  {message.type === "error" ? (
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  ) : (
+                    <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  )}
+                  {message.text}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded transition-colors"
+                >
+                  {updating ? "Updating..." : "Update Email"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEditing}
+                  className={`px-4 py-2 text-sm font-semibold rounded transition-colors ${
+                    darkMode
+                      ? "bg-gray-700 hover:bg-gray-600 text-gray-200"
+                      : "bg-gray-200 hover:bg-gray-300 text-gray-800"
+                  }`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                Select a user to edit their email address.
+              </p>
+              {users.length === 0 ? (
+                <p className={`text-sm text-center py-6 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  No users found. Refresh the Users tab first.
+                </p>
+              ) : (
+                <div className="max-h-96 overflow-y-auto space-y-1.5">
+                  {users.map((user) => (
+                    <button
+                      key={user.id}
+                      onClick={() => startEditingUser(user)}
+                      className={`w-full text-left px-3 py-2.5 rounded border transition-colors ${
+                        darkMode
+                          ? "border-gray-700 bg-gray-700/40 hover:bg-gray-700/60 text-gray-100"
+                          : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{user.full_name || user.username || "Unnamed"}</p>
+                          <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>{user.email}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${ROLE_COLORS[user.role] || ""}`}>
+                          {ROLE_LABELS[user.role]}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -375,6 +551,75 @@ export default function AdminView({ darkMode, fellows = [], pgyLevels = {}, clin
               {creating ? "Creating..." : "Create User"}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ── Feedback tab ───────────────────────────────────────────── */}
+      {tab === "feedback" && (
+        <div className={card}>
+          <div className="flex items-center justify-between mb-3">
+            <span className={`text-xs font-medium ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+              {feedback.length} feedback item{feedback.length !== 1 ? "s" : ""}
+            </span>
+            <button
+              onClick={fetchFeedback}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded ${
+                darkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-gray-100 text-gray-500"
+              }`}
+            >
+              <RefreshCw className="w-3 h-3" /> Refresh
+            </button>
+          </div>
+
+          {loadingFeedback ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+            </div>
+          ) : feedback.length === 0 ? (
+            <p className={`text-sm text-center py-6 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+              No feedback received yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {feedback.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-3 rounded border ${
+                    darkMode ? "border-gray-700 bg-gray-700/30" : "border-gray-200 bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${TYPE_COLORS[item.category] || ""}`}>
+                        {item.category === "bug" ? "Bug" : item.category === "feature" ? "Feature" : "Other"}
+                      </span>
+                      <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                        {item.anonymous ? "Anonymous" : (item.profiles?.full_name || item.profiles?.email || "Unknown")}
+                      </span>
+                      <span className={`text-xs ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <select
+                      value={item.status}
+                      onChange={(e) => updateFeedbackStatus(item.id, e.target.value)}
+                      className={`text-xs rounded border px-2 py-1 ${
+                        darkMode
+                          ? "bg-gray-700 border-gray-600 text-gray-100"
+                          : "bg-white border-gray-300 text-gray-800"
+                      }`}
+                    >
+                      <option value="open">Open</option>
+                      <option value="resolved">Resolved</option>
+                    </select>
+                  </div>
+                  <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
+                    {item.message}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

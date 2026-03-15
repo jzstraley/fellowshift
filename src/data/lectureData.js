@@ -12,6 +12,8 @@ export const LECTURE_SERIES = {
   ECHO_CONFERENCE: "Echo Conference",
   EP_CONFERENCE: "EP Conference",
   M_AND_M: "M&M Conference",
+  MULTI_MODALITY: "Multi-Modality Lecture",
+  GRAND_ROUNDS: "Grand Rounds",
 };
 
 // Recurring patterns

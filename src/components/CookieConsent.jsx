@@ -33,13 +33,13 @@ export default function CookieConsent() {
       <div className="flex gap-2 shrink-0">
         <button
           onClick={handleDecline}
-          className="px-4 py-1.5 text-sm rounded border border-gray-500 hover:bg-gray-700 transition-colors"
+          className="px-4 py-2.5 text-sm rounded border border-gray-500 hover:bg-gray-700 transition-colors"
         >
           Decline
         </button>
         <button
           onClick={handleAccept}
-          className="px-4 py-1.5 text-sm rounded bg-blue-600 hover:bg-blue-500 transition-colors"
+          className="px-4 py-2.5 text-sm rounded bg-blue-600 hover:bg-blue-500 transition-colors"
         >
           Accept
         </button>

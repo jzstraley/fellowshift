@@ -254,14 +254,14 @@ export default function SpeakerTopicManager({
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => openEditSpeaker(speaker)}
-                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteSpeaker(speaker.id)}
-                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-600"
+                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-600 min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -324,14 +324,14 @@ export default function SpeakerTopicManager({
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => openEditTopic(topic)}
-                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteTopic(topic.id)}
-                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-600"
+                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-600 min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -371,7 +371,7 @@ export default function SpeakerTopicManager({
                   setEditingSpeaker(null);
                   resetSpeakerForm();
                 }}
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -474,7 +474,7 @@ export default function SpeakerTopicManager({
                   setEditingTopic(null);
                   resetTopicForm();
                 }}
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>

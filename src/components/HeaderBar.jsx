@@ -1,10 +1,11 @@
 // src/components/HeaderBar.jsx
 import {
-  Moon, Sun, CircleUser, User, FileText, Settings, LogIn, LogOut,
-  ClipboardList, LayoutDashboard, Calendar, BookOpen, MoreHorizontal, X,
+  Moon, Sun, CircleUser, User, Settings, LogIn, LogOut,
+  ClipboardList, LayoutDashboard, Calendar, BookOpen, MoreHorizontal, X, MessageSquare, FileText, Bell,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import FeedbackModal from "./FeedbackModal";
 
 // ── bottom nav definition (primary 4 + More) ─────────────────────────────────
 const PRIMARY_NAV = [
@@ -13,6 +14,35 @@ const PRIMARY_NAV = [
   { key: "vacRequests", label: "Requests", Icon: FileText },
   { key: "lectures",    label: "Lectures", Icon: BookOpen },
 ];
+
+// ── Notification dropdown component ─────────────────────────────────
+function NotifDropdown({ notifications, onMarkAllRead, onClose }) {
+  return (
+    <div className="absolute right-0 top-12 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
+        <span className="font-semibold text-sm dark:text-gray-100">Notifications</span>
+        <button onClick={onMarkAllRead} className="text-xs text-blue-600 hover:underline dark:text-blue-400">
+          Mark all read
+        </button>
+      </div>
+      <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
+        {notifications.length === 0 ? (
+          <div className="px-4 py-6 text-center text-xs text-gray-400 dark:text-gray-500">No notifications</div>
+        ) : notifications.map(n => (
+          <div key={n.id} className={`px-4 py-2.5 flex gap-2.5 ${n.read ? '' : 'bg-blue-50 dark:bg-blue-900/20'}`}>
+            <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.read ? 'bg-transparent' : 'bg-blue-500'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs dark:text-gray-100 leading-snug">{n.message}</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function HeaderBar({
   activeView,
@@ -27,16 +57,22 @@ export default function HeaderBar({
   showViolations = false,
   showEdit = false,
   showAdmin = false,
+  notifCount = 0,
+  notifications = [],
+  onMarkAllRead,
 }) {
   const [userMenuOpen,    setUserMenuOpen]    = useState(false);
   const [moreSheetOpen,  setMoreSheetOpen]   = useState(false);
+  const [feedbackOpen,   setFeedbackOpen]    = useState(false);
+  const [notifOpen,      setNotifOpen]       = useState(false);
   const userMenuRef = useRef(null);
   const moreSheetRef = useRef(null);
+  const notifRef = useRef(null);
   const { user, profile, signOut, isSupabaseConfigured } = useAuth();
 
   const showNavTabs = !!user || !isSupabaseConfigured;
 
-  // Close user menu on outside click
+  // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
@@ -44,6 +80,9 @@ export default function HeaderBar({
       }
       if (moreSheetRef.current && !moreSheetRef.current.contains(e.target)) {
         setMoreSheetOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -116,12 +155,33 @@ export default function HeaderBar({
           <div className="flex items-center gap-2">
             <button
               onClick={toggleDarkMode}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+              className={`w-11 h-11 flex items-center justify-center rounded transition-colors ${
                 darkMode ? "text-gray-300 hover:text-white hover:bg-gray-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
               }`}
             >
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
+
+            {/* Notification bell */}
+            {isSupabaseConfigured && (
+              <div className="relative" ref={notifRef}>
+                <button
+                  onClick={() => setNotifOpen(o => !o)}
+                  className={`relative w-11 h-11 flex items-center justify-center rounded transition-colors ${
+                    darkMode ? "text-gray-300 hover:text-white hover:bg-gray-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                  }`}
+                  aria-label="Notifications"
+                >
+                  <Bell className="w-5 h-5" />
+                  {notifCount > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                      {notifCount > 99 ? '99+' : notifCount}
+                    </span>
+                  )}
+                </button>
+                {notifOpen && <NotifDropdown notifications={notifications} onMarkAllRead={onMarkAllRead} onClose={() => setNotifOpen(false)} />}
+              </div>
+            )}
 
             {/* Username + role — desktop only */}
             {user && profile && (
@@ -141,7 +201,7 @@ export default function HeaderBar({
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+                className={`w-11 h-11 flex items-center justify-center rounded transition-colors ${
                   darkMode ? "text-gray-300 hover:text-white hover:bg-gray-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
                 }`}
               >
@@ -167,14 +227,6 @@ export default function HeaderBar({
                   >
                     <User className="w-4 h-4" /> Profile
                   </button>
-                  <button
-                    onClick={() => navigate("vacRequests")}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
-                      darkMode ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <FileText className="w-4 h-4" /> Requests
-                  </button>
                   <a
                     href="https://github.com/jzstraley/fellowshift/blob/main/CHANGELOG"
                     target="_blank"
@@ -193,6 +245,14 @@ export default function HeaderBar({
                     }`}
                   >
                     <Settings className="w-4 h-4" /> Settings
+                  </button>
+                  <button
+                    onClick={() => { setFeedbackOpen(true); setUserMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                      darkMode ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4" /> Send Feedback
                   </button>
                   <div className={`border-t ${darkMode ? "border-gray-600" : "border-gray-100"}`} />
                   {user ? (
@@ -222,17 +282,19 @@ export default function HeaderBar({
 
         {/* Desktop tabs */}
         {showNavTabs && (
-          <div className="hidden md:flex px-3 py-2 justify-center gap-1">
+          <div className="hidden md:flex px-3 py-2 justify-center gap-2">
             {allViews.map((v) => (
               <button
                 key={v.key}
                 onClick={() => navigate(v.key)}
-                className={`relative px-3 py-1.5 text-xs font-semibold rounded ${
+                className={`relative px-3 py-2.5 text-xs font-semibold rounded transition-colors ${
                   activeView === v.key
-                    ? "bg-blue-600 text-white"
+                    ? darkMode
+                      ? "bg-gray-700/60 text-white border-b-2 border-red-400"
+                      : "bg-gray-100 text-gray-900 border-b-2 border-red-500"
                     : darkMode
-                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    ? "bg-transparent text-gray-400 hover:bg-gray-700/40 hover:text-gray-200"
+                    : "bg-transparent text-gray-600 hover:bg-gray-100/80 hover:text-gray-900"
                 }`}
               >
                 {v.label}
@@ -263,28 +325,32 @@ export default function HeaderBar({
               }`}
               ref={moreSheetRef}
             >
-              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              <div className="flex items-center justify-between px-4 py-3 border-b-2" style={{borderColor: darkMode ? '#4b5563' : '#e5e7eb'}}>
+                <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
                   More
                 </span>
                 <button
                   onClick={() => setMoreSheetOpen(false)}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  className="flex items-center justify-center w-11 h-11 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200/30 dark:hover:bg-gray-600/30 rounded transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-2 p-3">
+              <div className={`grid grid-cols-3 gap-3 p-4 rounded-lg m-3 ${
+                darkMode ? "bg-gray-800/40" : "bg-gray-50/50"
+              }`}>
                 {moreViews.map((v) => (
                   <button
                     key={v.key}
                     onClick={() => navigate(v.key)}
-                    className={`relative px-2 py-2 text-xs font-semibold rounded ${
+                    className={`relative px-2 py-2.5 text-xs font-semibold rounded transition-colors min-h-[44px] flex items-center justify-center ${
                       activeView === v.key
-                        ? "bg-blue-600 text-white"
+                        ? darkMode
+                          ? "bg-gray-700 text-white border-b border-red-400"
+                          : "bg-white text-gray-900 border-b border-red-500 shadow-sm"
                         : darkMode
-                        ? "bg-gray-700 text-gray-300"
-                        : "bg-gray-100 text-gray-700"
+                        ? "bg-transparent text-gray-300 hover:bg-gray-700/40"
+                        : "bg-transparent text-gray-600 hover:bg-white/60"
                     }`}
                   >
                     {v.label}
@@ -316,15 +382,17 @@ export default function HeaderBar({
                 <button
                   key={key}
                   onClick={() => navigate(key)}
-                  className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold transition-colors ${
+                  className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-semibold transition-colors border-b-2 ${
                     active
-                      ? "text-blue-600 dark:text-blue-400"
+                      ? darkMode
+                        ? "text-gray-100 border-red-400"
+                        : "text-gray-900 border-red-500"
                       : darkMode
-                      ? "text-gray-300 hover:text-white"
-                      : "text-gray-600 hover:text-gray-900"
+                      ? "text-gray-400 border-transparent hover:text-gray-200 hover:bg-gray-800/30"
+                      : "text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-50/50"
                   }`}
                 >
-                  <Icon className={`w-5 h-5 ${active ? "stroke-[2.5]" : ""}`} />
+                  <Icon className="w-5 h-5" />
                   {label}
                   {key === "vacRequests" && requestBadgeCount > 0 && (
                     <span className="absolute top-1 right-[calc(50%-16px)] min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[8px] font-bold text-white bg-blue-500 rounded-full">
@@ -338,12 +406,14 @@ export default function HeaderBar({
             {/* More button */}
             <button
               onClick={() => setMoreSheetOpen(v => !v)}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-semibold transition-colors border-b-2 ${
                 moreSheetOpen || (!primaryKeys.includes(activeView))
-                  ? "text-blue-600 dark:text-blue-400"
+                  ? darkMode
+                    ? "text-gray-100 border-red-400"
+                    : "text-gray-900 border-red-500"
                   : darkMode
-                  ? "text-gray-300 hover:text-white"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "text-gray-400 border-transparent hover:text-gray-200 hover:bg-gray-800/30"
+                  : "text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-50/50"
               }`}
             >
               <MoreHorizontal className="w-5 h-5" />
@@ -351,6 +421,16 @@ export default function HeaderBar({
             </button>
           </nav>
         </>
+      )}
+
+      {/* Feedback Modal */}
+      {user && profile && isSupabaseConfigured && (
+        <FeedbackModal
+          open={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
+          user={user}
+          institutionId={profile.institution_id}
+        />
       )}
     </>
   );

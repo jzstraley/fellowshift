@@ -318,16 +318,6 @@ export default function LectureCalendarView({
     setEditingLecture(lecture);
   };
 
-  const getRsvpCounts = (lecture) => {
-    const rsvps = lecture.rsvps || {};
-    return {
-      attending: Object.values(rsvps).filter((r) => r === RSVP_STATUS.ATTENDING).length,
-      notAttending: Object.values(rsvps).filter((r) => r === RSVP_STATUS.NOT_ATTENDING).length,
-      maybe: Object.values(rsvps).filter((r) => r === RSVP_STATUS.MAYBE).length,
-      pending: fellows.length - Object.keys(rsvps).length,
-    };
-  };
-
   const getSpeakerName = (speakerId) => {
     const speaker = speakers.find((s) => s.id === speakerId);
     return speaker?.name || "TBD";
@@ -354,47 +344,84 @@ export default function LectureCalendarView({
   ];
 
   return (
-    <div className={`space-y-4 ${baseClasses}`}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <Calendar className="w-5 h-5" />
-          Lecture Calendar
-          {useDatabase && dbState.loading && (
-            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-          )}
-        </h2>
+    <div className={`mx-auto max-w-3xl sm:max-w-4xl lg:max-w-6xl space-y-3 ${baseClasses}`}>
+      {/* Apple Calendar-style Header */}
+      <div className="space-y-3">
+        {/* Pill-shaped month/year header with navigation */}
+        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+          <button
+            onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1))}
+            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors shrink-0"
+            title="Previous month"
+          >
+            <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {/* View Toggle — scrollable on narrow phones */}
-          <div className="flex rounded overflow-hidden border border-gray-300 dark:border-gray-600 overflow-x-auto flex-1 sm:flex-none">
-            {VIEW_MODES.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setViewMode(key)}
-                className={`px-3 py-2 text-xs font-semibold shrink-0 ${
-                  viewMode === key
-                    ? "bg-blue-600 text-white"
-                    : darkMode
-                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className={`px-4 py-2 rounded-full text-center font-semibold text-sm whitespace-nowrap ${
+            darkMode
+              ? "bg-gray-700 text-white"
+              : "bg-gray-100 text-gray-900"
+          }`}>
+            <div>{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
           </div>
+
+          <button
+            onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1))}
+            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors shrink-0"
+            title="Next month"
+          >
+            <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
 
           {canManageLectures && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded shrink-0"
+              className="hidden sm:flex items-center gap-1 px-3 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-full shrink-0"
+              title="Add lecture"
             >
-              <Plus className="w-3 h-3" />
-              Add Lecture
+              <Plus className="w-3.5 h-3.5" />
+              Add
             </button>
           )}
         </div>
+
+        {/* iOS-style Segmented Control for view modes */}
+        <div className="flex gap-1 p-1 rounded-full bg-gray-100 dark:bg-gray-700 w-full overflow-x-auto sm:w-auto sm:mx-auto">
+          {VIEW_MODES.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setViewMode(key)}
+              className={`flex-shrink-0 sm:flex-none px-3 py-2.5 text-xs font-medium rounded-full transition-all whitespace-nowrap ${
+                viewMode === key
+                  ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                  : darkMode
+                  ? "text-gray-400 hover:text-gray-300"
+                  : "text-gray-600 hover:text-gray-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile Add Lecture button */}
+        {canManageLectures && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="sm:hidden w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Lecture
+          </button>
+        )}
+
+        {/* Loading indicator */}
+        {useDatabase && dbState.loading && (
+          <div className="flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Updating...
+          </div>
+        )}
       </div>
 
       {/* DB error banner */}
@@ -426,173 +453,248 @@ export default function LectureCalendarView({
         />
       )}
 
-      {/* Calendar View */}
-      {viewMode === "calendar" && (
-        <div className={`rounded border-2 ${cardClasses}`}>
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between p-3 border-b border-gray-300 dark:border-gray-600">
-            <button
-              onClick={() =>
-                setCurrentMonth(
-                  new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1)
-                )
-              }
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <h3 className="font-bold">
-              {currentMonth.toLocaleDateString("en-US", {
-                month: "long",
-                year: "numeric",
-              })}
-            </h3>
-            <button
-              onClick={() =>
-                setCurrentMonth(
-                  new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1)
-                )
-              }
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+      {/* Calendar View — Apple Calendar style with day summary */}
+      {viewMode === "calendar" && (() => {
+        const SERIES_COLOR = {
+          [LECTURE_SERIES.CORE_CURRICULUM]:  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+          [LECTURE_SERIES.JOURNAL_CLUB]:     'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+          [LECTURE_SERIES.CASE_CONFERENCE]:  'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+          [LECTURE_SERIES.BOARD_REVIEW]:     'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+          [LECTURE_SERIES.RESEARCH]:         'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+          [LECTURE_SERIES.GUEST_SPEAKER]:    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+          [LECTURE_SERIES.CATH_CONFERENCE]:  'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+          [LECTURE_SERIES.ECHO_CONFERENCE]:  'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+          [LECTURE_SERIES.EP_CONFERENCE]:    'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+          [LECTURE_SERIES.M_AND_M]:          'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+        };
 
-          {/* Weekday Headers */}
-          <div className="grid grid-cols-7 border-b border-gray-300 dark:border-gray-600">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <div
-                key={day}
-                className="p-2 text-center text-xs font-bold text-gray-500"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
+        const today = new Date().toISOString().split('T')[0];
+        const selectedDateForSummary = selectedDate || today;
+        const selectedDayLectures = getLecturesForDate(selectedDateForSummary).sort((a, b) => a.time.localeCompare(b.time));
+        const selectedDayDate = new Date(`${selectedDateForSummary}T00:00:00`);
 
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7">
-            {calendarDays.map((day, idx) => {
-              const dateStr = formatDateStr(day.date);
-              const dayLectures = getLecturesForDate(dateStr);
-              const isToday =
-                formatDateStr(new Date()) === dateStr;
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => setSelectedDate(dateStr)}
-                  className={`min-h-[80px] p-1 border-r border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                    !day.isCurrentMonth ? "opacity-40" : ""
-                  } ${selectedDate === dateStr ? "bg-blue-50 dark:bg-blue-900/30" : ""}`}
-                >
+        return (
+          <div className="space-y-3">
+            {/* Calendar Grid */}
+            <div className={`rounded-2xl overflow-hidden ${cardClasses}`}>
+              {/* Weekday Headers */}
+              <div className="grid grid-cols-7 gap-0 p-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                   <div
-                    className={`text-xs font-semibold mb-1 ${
-                      isToday
-                        ? "bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center"
-                        : ""
-                    }`}
+                    key={day}
+                    className="text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                   >
-                    {day.date.getDate()}
+                    {day.slice(0, 1)}
                   </div>
-                  <div className="space-y-0.5">
-                    {dayLectures.slice(0, 3).map((lec) => (
-                      <div
-                        key={lec.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedLecture(lec);
-                        }}
-                        className={`text-xs px-1 py-0.5 rounded text-white truncate ${getSeriesColor(
-                          lec.series
-                        )}`}
-                        title={lec.title}
-                      >
-                        {formatTime(lec.time)} {lec.title}
+                ))}
+              </div>
+
+              {/* Calendar Grid */}
+              <div className="grid grid-cols-7 gap-0 p-4 pt-3">
+                {calendarDays.map((day, idx) => {
+                  const dateStr = formatDateStr(day.date);
+                  const dayLectures = getLecturesForDate(dateStr);
+                  const isToday = formatDateStr(new Date()) === dateStr;
+                  const isCurrentMonth = day.isCurrentMonth;
+                  const isSelected = selectedDate === dateStr;
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedDate(dateStr)}
+                      className={`aspect-square flex flex-col items-center p-1.5 rounded-lg cursor-pointer transition-all ${
+                        !isCurrentMonth
+                          ? "text-gray-300 dark:text-gray-700"
+                          : ""
+                      } ${
+                        isToday
+                          ? "bg-blue-600 text-white font-semibold"
+                          : isSelected
+                          ? "bg-gray-200 dark:bg-gray-700"
+                          : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                      }`}
+                    >
+                      <div className={`text-base sm:text-sm font-semibold ${
+                        isToday ? "text-white" : isCurrentMonth ? "text-gray-900 dark:text-gray-100" : ""
+                      }`}>
+                        {day.date.getDate()}
                       </div>
-                    ))}
-                    {dayLectures.length > 3 && (
-                      <div className="text-xs text-gray-500">
-                        +{dayLectures.length - 3} more
+                      <div className="flex-1 w-full overflow-hidden flex items-end">
+                        <div className="space-y-0.5 w-full">
+                          {dayLectures.slice(0, 2).map((lec) => (
+                            <div
+                              key={lec.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedLecture(lec);
+                              }}
+                              className={`text-[10px] px-1 py-0.5 rounded truncate font-medium min-w-0 cursor-pointer ${
+                                isToday
+                                  ? "bg-white bg-opacity-30 text-white"
+                                  : `${getSeriesColor(lec.series)} text-white opacity-90 hover:opacity-100`
+                              }`}
+                              title={lec.title}
+                            >
+                              {lec.title.split(' ')[0]}
+                            </div>
+                          ))}
+                          {dayLectures.length > 2 && (
+                            <div className={`text-[9px] font-medium ${
+                              isToday ? "text-white opacity-75" : "text-gray-500 dark:text-gray-400"
+                            }`}>
+                              +{dayLectures.length - 2}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Day Summary — selected day's lectures */}
+            {selectedDate && (
+              <div className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden`}>
+                <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {selectedDayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                   </div>
                 </div>
-              );
-            })}
+                {selectedDayLectures.length === 0 ? (
+                  <div className="px-4 py-4 text-center text-sm text-gray-400 dark:text-gray-500">
+                    No lectures scheduled
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {selectedDayLectures.map((lec) => {
+                      const speaker = lec.speaker?.name || lec.presenter?.name || getSpeakerName(lec.speakerId) || 'TBD';
+
+                      return (
+                        <button
+                          key={lec.id}
+                          onClick={() => setSelectedLecture(lec)}
+                          className="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        >
+                          {/* Date chip */}
+                          <div className="flex-shrink-0 w-12 text-center rounded-lg py-1 bg-blue-600 text-white">
+                            <div className="text-xs font-semibold">
+                              {selectedDayDate.toLocaleDateString('en-US', { month: 'short' })}
+                            </div>
+                            <div className="text-lg font-bold leading-none">
+                              {selectedDayDate.getDate()}
+                            </div>
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${SERIES_COLOR[lec.series] || 'bg-gray-100 text-gray-600'}`}>
+                                {lec.series}
+                              </span>
+                            </div>
+                            <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{lec.title}</div>
+                            <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />{formatTime(lec.time)} · {lec.duration_min || lec.duration || 60} min
+                              </span>
+                              {lec.location && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />{lec.location}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <User className="w-3 h-3" />{speaker}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* List View */}
-      {viewMode === "list" && (
-        <div className={`rounded border-2 ${cardClasses}`}>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {lectures
-              .sort((a, b) => new Date(a.date) - new Date(b.date))
-              .map((lec) => {
-                const counts = getRsvpCounts(lec);
-                return (
-                  <div
-                    key={lec.id}
-                    onClick={() => setSelectedLecture(lec)}
-                    className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded text-white ${getSeriesColor(
-                              lec.series
-                            )}`}
-                          >
+      {viewMode === "list" && (() => {
+        const sorted = [...lectures].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+        const SERIES_COLOR = {
+          [LECTURE_SERIES.CORE_CURRICULUM]:  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+          [LECTURE_SERIES.JOURNAL_CLUB]:     'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+          [LECTURE_SERIES.CASE_CONFERENCE]:  'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+          [LECTURE_SERIES.BOARD_REVIEW]:     'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+          [LECTURE_SERIES.RESEARCH]:         'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+          [LECTURE_SERIES.GUEST_SPEAKER]:    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+          [LECTURE_SERIES.CATH_CONFERENCE]:  'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+          [LECTURE_SERIES.ECHO_CONFERENCE]:  'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+          [LECTURE_SERIES.EP_CONFERENCE]:    'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+          [LECTURE_SERIES.M_AND_M]:          'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+        };
+
+        return (
+          <div className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden`}>
+            {sorted.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+                No lectures scheduled
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                {sorted.map((lec) => {
+                  const speaker = lec.speaker?.name || lec.presenter?.name || getSpeakerName(lec.speakerId) || 'TBD';
+
+                  return (
+                    <button
+                      key={lec.id}
+                      onClick={() => setSelectedLecture(lec)}
+                      className="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      {/* Date chip */}
+                      <div className="flex-shrink-0 w-12 text-center rounded-lg py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        <div className="text-xs font-semibold">
+                          {new Date(`${lec.date}T00:00:00`).toLocaleDateString('en-US', { month: 'short' })}
+                        </div>
+                        <div className="text-lg font-bold leading-none">
+                          {new Date(`${lec.date}T00:00:00`).getDate()}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${SERIES_COLOR[lec.series] || 'bg-gray-100 text-gray-600'}`}>
                             {lec.series}
                           </span>
                           {lec.recurrence !== RECURRENCE.NONE && (
                             <RefreshCw className="w-3 h-3 text-gray-400" />
                           )}
                         </div>
-                        <h4 className="font-semibold text-base">{lec.title}</h4>
-                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                        <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{lec.title}</div>
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
                           <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(lec.date).toLocaleDateString("en-US", {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                            })}
+                            <Clock className="w-3 h-3" />{formatTime(lec.time)} · {lec.duration_min || lec.duration || 60} min
                           </span>
+                          {lec.location && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />{lec.location}
+                            </span>
+                          )}
                           <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatTime(lec.time)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {lec.location}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                          <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {lec.speakerId
-                              ? getSpeakerName(lec.speakerId)
-                              : lec.presenterFellow || "TBD"}
+                            <User className="w-3 h-3" />{speaker}
                           </span>
                         </div>
                       </div>
-                      <div className="text-right text-sm">
-                        <div className="text-green-600">✓ {counts.attending}</div>
-                        <div className="text-red-600">✗ {counts.notAttending}</div>
-                        <div className="text-yellow-600">? {counts.maybe}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Manage View - Topics & Speakers */}
       {viewMode === "manage" && (
@@ -718,8 +820,8 @@ export default function LectureCalendarView({
                 )}
               </div>
 
-              {/* Attendance Section */}
-              {useDatabase && (
+              {/* Attendance Section — admins/chiefs/PDs only */}
+              {useDatabase && canManageLectures && (
                 <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
                   <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                     <ClipboardList className="w-4 h-4" />
@@ -731,42 +833,8 @@ export default function LectureCalendarView({
                     )}
                   </h4>
 
-                  {/* Fellow: self-check-in */}
-                  {!canManageLectures && dbState.myFellowId && (() => {
-                    const myRow = (dbState.attendance ?? []).find(
-                      a => a.lecture_id === selectedLecture.id && a.fellow_id === dbState.myFellowId,
-                    );
-                    if (myRow) {
-                      return (
-                        <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-                          <UserCheck className="w-4 h-4" />
-                          Marked {myRow.status}
-                        </div>
-                      );
-                    }
-                    if (isInCheckInWindow(selectedLecture)) {
-                      return (
-                        <button
-                          onClick={() => handleCheckIn(selectedLecture.id)}
-                          disabled={dbState.submitting}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded disabled:opacity-50"
-                        >
-                          {dbState.submitting
-                            ? <Loader2 className="w-3 h-3 animate-spin" />
-                            : <UserCheck className="w-3 h-3" />}
-                          Check In
-                        </button>
-                      );
-                    }
-                    return (
-                      <div className="text-xs text-gray-400 dark:text-gray-500">
-                        Check-in window is not open
-                      </div>
-                    );
-                  })()}
-
                   {/* Admin: summary + controls */}
-                  {canManageLectures && (() => {
+                  {(() => {
                     const rows = (dbState.attendance ?? []).filter(
                       a => a.lecture_id === selectedLecture.id,
                     );
@@ -805,8 +873,8 @@ export default function LectureCalendarView({
                 </div>
               )}
 
-              {/* RSVP Section */}
-              <div>
+              {/* RSVP Section — hidden for now */}
+              {false && <div>
                 <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                   <Users className="w-4 h-4" />
                   RSVPs
@@ -885,6 +953,7 @@ export default function LectureCalendarView({
                   </table>
                 </div>
               </div>
+              }
 
               {/* Actions */}
               <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
@@ -985,16 +1054,16 @@ export default function LectureCalendarView({
                   setEditingLecture(null);
                   resetForm();
                 }}
-                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                className="flex items-center justify-center w-11 h-11 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-3 space-y-2 max-h-[70vh] overflow-y-auto">
               {/* Title */}
               <div>
-                <label className="block text-xs font-semibold mb-1">Title *</label>
+                <label className="block text-xs font-semibold mb-0.5">Title *</label>
                 <input
                   type="text"
                   value={formData.title}
@@ -1010,7 +1079,7 @@ export default function LectureCalendarView({
 
               {/* Series */}
               <div>
-                <label className="block text-xs font-semibold mb-1">Series *</label>
+                <label className="block text-xs font-semibold mb-0.5">Series *</label>
                 <select
                   value={formData.series}
                   onChange={(e) => {
@@ -1029,9 +1098,9 @@ export default function LectureCalendarView({
               </div>
 
               {/* Date & Time */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Date *</label>
+                  <label className="block text-xs font-semibold mb-0.5">Date *</label>
                   <input
                     type="date"
                     value={formData.date}
@@ -1044,7 +1113,7 @@ export default function LectureCalendarView({
                   {formErrors.date && <p className="text-xs text-red-500 mt-0.5">{formErrors.date}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Time *</label>
+                  <label className="block text-xs font-semibold mb-0.5">Time *</label>
                   <input
                     type="time"
                     value={formData.time}
@@ -1059,9 +1128,9 @@ export default function LectureCalendarView({
               </div>
 
               {/* Duration & Location */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold mb-1">
+                  <label className="block text-xs font-semibold mb-0.5">
                     Duration (min)
                   </label>
                   <input
@@ -1077,7 +1146,7 @@ export default function LectureCalendarView({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Location</label>
+                  <label className="block text-xs font-semibold mb-0.5">Location</label>
                   <input
                     type="text"
                     value={formData.location}
@@ -1091,9 +1160,9 @@ export default function LectureCalendarView({
               </div>
 
               {/* Speaker / Presenter */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold mb-1">
+                  <label className="block text-xs font-semibold mb-0.5">
                     Speaker (Attending)
                   </label>
                   <select
@@ -1112,7 +1181,7 @@ export default function LectureCalendarView({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">
+                  <label className="block text-xs font-semibold mb-0.5">
                     Presenter (Fellow)
                   </label>
                   <select
@@ -1134,7 +1203,7 @@ export default function LectureCalendarView({
 
               {/* Recurrence */}
               <div>
-                <label className="block text-xs font-semibold mb-1">Recurrence</label>
+                <label className="block text-xs font-semibold mb-0.5">Recurrence</label>
                 <select
                   value={formData.recurrence}
                   onChange={(e) =>
@@ -1153,7 +1222,7 @@ export default function LectureCalendarView({
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold mb-1">Notes</label>
+                <label className="block text-xs font-semibold mb-0.5">Notes</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) =>
@@ -1167,7 +1236,7 @@ export default function LectureCalendarView({
 
               {/* Check-In Override */}
               <div>
-                <label className="block text-xs font-semibold mb-1">Check-In Window Override</label>
+                <label className="block text-xs font-semibold mb-0.5">Check-In Window Override</label>
                 <div className="flex gap-2">
                   {[
                     { value: null,  label: 'Auto',   desc: '±15 min around start', cls: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' },

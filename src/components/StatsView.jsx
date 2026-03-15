@@ -19,8 +19,8 @@ const DAY_OFF_REASONS = new Set(['Sick Day', 'Personal Day', 'Conference', 'CME'
 
 export default function StatsView({ stats, fellows, vacations = [] }) {
   if (!stats) return null;
-  const { profile } = useAuth();
-  const canSeeTimeOff = ['admin', 'program_director', 'chief_fellow'].includes(profile?.role);
+  const { canApprove } = useAuth();
+  const canSeeTimeOff = canApprove;
 
   const blockDateMap = useMemo(() => {
     const m = {};

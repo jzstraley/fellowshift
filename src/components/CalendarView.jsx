@@ -81,7 +81,7 @@ const PGY_LABEL  = { 4: "text-blue-400",      5: "text-green-400",     6: "text-
 
 // ── component ──────────────────────────────────────────────────────────────
 
-export default function CalendarView({ fellows, schedule, dateCallMap }) {
+export default function CalendarView({ fellows, schedule, vacations = [], dateCallMap }) {
   const { profile, canManage } = useAuth();
 
   // Auto-select the logged-in fellow if they are a fellow (not admin/PD/chief)
@@ -93,6 +93,8 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
 
   const [selectedRotation, setSelectedRotation] = useState(getInitialRotation);
   const [fellowFilter,     setFellowFilter]     = useState("all");
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => toISODate(new Date()));
 
   // Once profile loads, snap to the linked fellow (only if user hasn't manually picked someone)
   useEffect(() => {
@@ -124,16 +126,46 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
     6: fellows.filter((f) => pgyLevels[f] === 6),
   }), [fellows]);
 
-  const filteredFellowsByPGY = useMemo(() => {
-    if (fellowFilter === "all") return fellowsByPGY;
-    return {
-      4: fellowsByPGY[4].filter((f) => f === fellowFilter),
-      5: fellowsByPGY[5].filter((f) => f === fellowFilter),
-      6: fellowsByPGY[6].filter((f) => f === fellowFilter),
-    };
-  }, [fellowsByPGY, fellowFilter]);
+  // Precompute vacation set for O(1) checks
+  const vacationSet = useMemo(() => {
+    const s = new Set();
+    (vacations || []).forEach((v) => {
+      if (v.reason !== "Vacation") return;
+      if (v.status !== "approved") return;
+      for (let b = v.startBlock; b <= v.endBlock; b++) {
+        s.add(`${v.fellow}#${b}`);
+      }
+    });
+    return s;
+  }, [vacations]);
 
-  const today = new Date().toISOString().split("T")[0];
+  const isBlockInVacationFast = (fellow, blockNumber) => vacationSet.has(`${fellow}#${blockNumber}`);
+
+  // Generate calendar grid for the current month
+  const calendarDays = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startPad = firstDay.getDay();
+    const days = [];
+
+    for (let i = 0; i < startPad; i++) {
+      const d = new Date(year, month, -startPad + i + 1);
+      days.push({ date: d, isCurrentMonth: false });
+    }
+
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push({ date: new Date(year, month, i), isCurrentMonth: true });
+    }
+
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+      days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
+    }
+
+    return days;
+  }, [currentMonth]);
 
   const getCellInfo = (fellow, date) => {
     const dateISO   = toISODate(date);
@@ -145,7 +177,7 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
 
     const dayData = dateCallMap?.[dateISO];
     if (dayData?.call  === fellow) return { label: "Call",  color: "bg-red-500 text-white" };
-    if (dayData?.float === fellow) return { label: "Float", color: "bg-purple-600 text-white" };
+    if (dayData?.float === fellow) return { label: "Float", color: "bg-orange-500 text-white" };
 
     if (isNights) {
       return dow === 6
@@ -158,138 +190,13 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
     return { label: "", color: "" };
   };
 
-  // ── render one fellow card ──────────────────────────────────────────────
-
-  const renderFellowCard = (fellow) => {
-    const pgy = pgyLevels[fellow];
-
-    return (
-      <div
-        key={fellow}
-        className={`rounded-lg border border-gray-200 dark:border-gray-600 border-l-4 ${PGY_BORDER[pgy] ?? "border-l-gray-400"} overflow-hidden shadow-sm bg-white dark:bg-gray-800`}
-      >
-        {/* Card header */}
-        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 flex items-baseline gap-1.5">
-          <span className="font-bold text-sm text-gray-900 dark:text-white">{fellow}</span>
-          <span className={`text-[10px] font-semibold ${PGY_LABEL[pgy] ?? "text-gray-400"}`}>
-            PGY-{pgy}
-          </span>
-        </div>
-
-        {/* Week grids */}
-        <div className="p-2 space-y-2">
-          {/* Day-name header */}
-          <div className="grid grid-cols-7 mb-0.5">
-            {DAY_NAMES.map((d) => (
-              <div key={d} className="text-center text-[9px] font-semibold text-gray-400 dark:text-gray-500">
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {weeks.map((weekDays, wi) => {
-            const isBlock1Start = wi === 0;
-            const isBlock2Start = wi === block2StartWeekIdx;
-            return (
-              <React.Fragment key={wi}>
-                {/* Block label — shown before the first week of each block */}
-                {(isBlock1Start || isBlock2Start) && (
-                  <div className={`text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest px-0.5
-                    ${isBlock2Start ? "border-t border-dashed border-gray-200 dark:border-gray-600 pt-2 mt-1" : ""}
-                  `}>
-                    {isBlock1Start
-                      ? `Block ${rotGroup.blocks[0].block} · ${formatDate(rotGroup.blocks[0].start)}`
-                      : `Block ${rotGroup.blocks[1].block} · ${formatDate(rotGroup.blocks[1].start)}`}
-                  </div>
-                )}
-
-                {/* 7-column day grid */}
-                <div className="grid grid-cols-7 gap-0.5">
-                  {Array.from({ length: 7 }).map((_, col) => {
-                    const offset = wi === 0 ? weekDays[0].getDay() : 0;
-                    const dayIdx = col - offset;
-                    const day    = dayIdx >= 0 && dayIdx < weekDays.length ? weekDays[dayIdx] : null;
-
-                    if (!day) {
-                      return <div key={col} className="h-14 rounded bg-gray-50 dark:bg-gray-700/30" />;
-                    }
-
-                    const iso       = toISODate(day);
-                    const isToday   = iso === today;
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                    const { label, color } = getCellInfo(fellow, day);
-                    const showLabel = label && label !== "—";
-
-                    return (
-                      <div
-                        key={col}
-                        className={`relative flex flex-col items-center justify-start pt-1 h-14 rounded
-                          ${isWeekend ? "bg-yellow-50 dark:bg-yellow-900/20" : "bg-gray-50 dark:bg-gray-700/40"}
-                          ${isToday ? "ring-2 ring-blue-500 ring-inset" : ""}
-                        `}
-                      >
-                        <span className={`text-[9px] font-semibold leading-none
-                          ${isToday ? "text-blue-500 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"}
-                        `}>
-                          {day.getDate()}
-                        </span>
-
-                        {showLabel ? (
-                          <div className={`mt-1 mx-0.5 px-0.5 py-0.5 rounded text-[8px] font-bold leading-tight text-center w-[calc(100%-4px)] truncate ${color}`}>
-                            {label.length > 4 ? label.slice(0, 4) : label}
-                          </div>
-                        ) : (
-                          <div className="mt-1 text-[10px] text-gray-200 dark:text-gray-600 leading-none">—</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </React.Fragment>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   // ── render ────────────────────────────────────────────────────────────────
 
-  const anyVisible = [4, 5, 6].some((p) => filteredFellowsByPGY[p].length > 0);
-
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-6xl space-y-4 px-4 md:px-0">
 
       {/* ── Toolbar ── */}
       <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3 sm:flex-wrap">
-
-        {/* Rotation selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap w-20 sm:w-auto">
-            Rotation:
-          </label>
-          <select
-            value={selectedRotation}
-            onChange={(e) => setSelectedRotation(Number(e.target.value))}
-            className="flex-1 sm:flex-none px-3 py-2 text-sm font-semibold rounded border min-h-[44px] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-          >
-            {ROTATION_GROUPS.map(({ rotation, blocks }) => {
-              const first = blocks[0];
-              const last  = blocks[blocks.length - 1];
-              const isCurrent = blocks.some((b) => {
-                const t = new Date().toISOString().split("T")[0];
-                return t >= b.start && t <= b.end;
-              });
-              const blockNums = blocks.map((b) => `Block ${b.block}`).join(" + ");
-              return (
-                <option key={rotation} value={rotation}>
-                  Rotation {rotation} · {blockNums} · {formatDate(first.start)}–{formatDate(last.end)}
-                  {isCurrent ? " ★ Current" : ""}
-                </option>
-              );
-            })}
-          </select>
-        </div>
 
         {/* Fellow filter */}
         <div className="flex items-center gap-2">
@@ -310,43 +217,249 @@ export default function CalendarView({ fellows, schedule, dateCallMap }) {
           </select>
         </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-2 items-center sm:ml-auto">
-          <span className="font-bold text-sm text-gray-700 dark:text-gray-300">Legend:</span>
+        {/* Legend — mobile only */}
+        <div className="flex flex-wrap gap-2 items-center sm:hidden">
+          <span className="font-bold text-xs text-gray-700 dark:text-gray-300">Legend:</span>
           <span className="px-2 py-1 text-xs bg-red-500 text-white rounded font-semibold">Call</span>
-          <span className="px-2 py-1 text-xs bg-purple-600 text-white rounded font-semibold">Float</span>
+          <span className="px-2 py-1 text-xs bg-orange-500 text-white rounded font-semibold">Float</span>
           <span className="px-2 py-1 text-xs bg-black dark:bg-gray-900 text-white rounded font-semibold">Nights</span>
         </div>
       </div>
 
-      {/* ── Cards ── */}
-      {!anyVisible ? (
-        <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
-          No fellows match the current filter.
+      {/* ── Month Calendar with Day Summary ── */}
+      <div className="space-y-2 max-h-[calc(100vh-240px)] overflow-y-auto hide-scrollbar">
+        {/* Month/Year header with navigation */}
+        <div className="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
+          <button
+            onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1))}
+            className="flex items-center justify-center p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors shrink-0"
+            title="Previous month"
+          >
+            <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          <div className="px-3 py-1 rounded-full text-center font-semibold text-xs whitespace-nowrap bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+            {currentMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+          </div>
+
+          <button
+            onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1))}
+            className="flex items-center justify-center p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors shrink-0"
+            title="Next month"
+          >
+            <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
-      ) : fellowFilter !== "all" ? (
-        // Single fellow — centered, capped width
-        <div className="flex justify-center">
-          <div className="w-full max-w-sm">
-            {renderFellowCard(fellowFilter)}
+
+        {/* Calendar Grid + Day Summary Container */}
+        <div className="flex flex-col lg:flex-row gap-4">
+
+        {/* Calendar Grid */}
+        <div className="flex-1 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          {/* Weekday Headers */}
+          <div className="grid grid-cols-7 gap-0 p-2 pb-1 border-b border-gray-200 dark:border-gray-700">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div
+                key={day}
+                className="text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase"
+              >
+                {day.slice(0, 1)}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar Days */}
+          <div className="grid grid-cols-7 gap-0 p-2 pt-1">
+            {calendarDays.map((day, idx) => {
+              const dateISO = toISODate(day.date);
+              const isCurrentMonth = day.isCurrentMonth;
+              const isSelected = selectedDate === dateISO;
+
+              // Get info for selected fellow or count for all
+              let cellContent = null;
+              let cellBgColor = "";
+              let borderHighlight = "";
+
+              if (fellowFilter !== "all") {
+                // Check for call/float first (overrides rotation)
+                const dayData = dateCallMap?.[dateISO] || {};
+                if (dayData.call === fellowFilter) {
+                  cellContent = "Call";
+                  cellBgColor = "bg-orange-500";
+                  borderHighlight = "";
+                } else if (dayData.float === fellowFilter) {
+                  cellContent = "Float";
+                  cellBgColor = "bg-orange-500";
+                  borderHighlight = "";
+                } else {
+                  // Show selected fellow's rotation
+                  const blockIdx = blockDates.findIndex(bd => dateISO >= bd.start && dateISO <= bd.end);
+                  const rotation = blockIdx >= 0 ? (schedule[fellowFilter]?.[blockIdx] ?? null) : null;
+                  if (rotation) {
+                    cellContent = rotation === "Nights" ? "Nts" : rotation.slice(0, 3);
+                    cellBgColor = getRotationColor(rotation);
+                  }
+                }
+              } else {
+                // Show count of all fellows
+                const dayFellowCount = fellows.filter(f => {
+                  const rot = schedule[f]?.[blockDates.findIndex(bd => toISODate(day.date) >= bd.start && toISODate(day.date) <= bd.end)] ?? "";
+                  return rot && rot !== "";
+                }).length;
+                if (dayFellowCount > 0 && isCurrentMonth) {
+                  cellContent = dayFellowCount;
+                }
+              }
+
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedDate(dateISO)}
+                  className={`aspect-square flex flex-col items-center justify-center p-0.5 rounded cursor-pointer border border-gray-200 dark:border-gray-700 transition-all ${
+                    borderHighlight ? `${borderHighlight} ring-1 ring-offset-0 ring-gray-300 dark:ring-gray-600` : ""
+                  } ${
+                    isSelected ? "bg-teal-500 dark:bg-teal-600" : ""
+                  }`}
+                >
+                  <div
+                    className={`${cellContent === "Call" || cellContent === "Float" ? "w-full h-full border-2 border-black dark:border-white" : "w-3/4 h-3/4"} flex flex-col items-center justify-center rounded transition-all text-[12px] sm:text-[9px] font-semibold ${
+                      !isCurrentMonth
+                        ? "text-gray-300 dark:text-gray-700"
+                        : ""
+                    } ${
+                      cellBgColor
+                        ? cellBgColor
+                        : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    }`}
+                  >
+                    <div>{day.date.getDate()}</div>
+                    {cellContent && (
+                      <div className={`text-[8px] ${cellBgColor ? "text-white font-bold" : "text-gray-500 dark:text-gray-400"}`}>
+                        {cellContent}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
-      ) : (
-        [4, 5, 6].map((pgy) => {
-          const pgyFellows = filteredFellowsByPGY[pgy];
-          if (!pgyFellows.length) return null;
+
+        {/* Day Summary — Stacked fellow rotations */}
+        {(() => {
+          const selectedDay = new Date(`${selectedDate}T00:00:00`);
+          const dayOfWeek = selectedDay.getDay();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          const selectedDayLabel = selectedDay.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+          const blockIdx = blockDates.findIndex(bd => selectedDate >= bd.start && selectedDate <= bd.end);
+
+          // For weekends, get call/float/nights assignments
+          const callFloatData = dateCallMap?.[selectedDate] || {};
+          const callFellow = callFloatData.call;
+          const floatFellow = callFloatData.float;
+
+          // Find fellow with Nights rotation on Sunday night
+          let nightsFellow = null;
+          if (dayOfWeek === 0) { // Sunday
+            nightsFellow = fellows.find((f) => {
+              const rot = schedule[f]?.[blockIdx] ?? "";
+              return rot === "Nights";
+            }) || null;
+          }
+
           return (
-            <div key={pgy}>
-              <h3 className="text-xs font-extrabold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2 px-0.5">
-                PGY-{pgy}
-              </h3>
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {pgyFellows.map(renderFellowCard)}
+            <div className={`rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:w-72 lg:flex-shrink-0`}>
+              <div className="px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 bg-teal-500 dark:bg-teal-600">
+                <div className="text-xs font-semibold text-white">
+                  {selectedDayLabel}
+                </div>
+              </div>
+              <div>
+                {isWeekend ? (
+                  // Weekend: show call/float (Sat) and nights (Sun)
+                  <>
+                    {!callFellow && !floatFellow && !nightsFellow ? (
+                      <div className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">No assignments</div>
+                    ) : (
+                      <>
+                        {callFellow && (
+                          <div className="px-3 py-1.5 flex items-center justify-between border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                            <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{callFellow}</div>
+                            <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-red-500">Call</div>
+                          </div>
+                        )}
+                        {floatFellow && (
+                          <div className={`px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${nightsFellow ? "border-b border-gray-100 dark:border-gray-700" : ""}`}>
+                            <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{floatFellow}</div>
+                            <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-orange-500">Float</div>
+                          </div>
+                        )}
+                        {nightsFellow && (
+                          <div className="px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                            <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{nightsFellow}</div>
+                            <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-black dark:bg-gray-900">Nights</div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  // Weekday: show all fellows with rotations
+                  <>
+                    {fellows.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">No fellows</div>
+                    ) : (
+                      [4, 5, 6].map((pgy) => {
+                        const pgyFellows = fellows.filter((f) => pgyLevels[f] === pgy);
+                        if (pgyFellows.length === 0) return null;
+
+                        return (
+                          <div key={pgy}>
+                            <div className="px-3 py-1 bg-gray-100 dark:bg-gray-700 border-t border-b border-gray-200 dark:border-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                              PGY-{pgy}
+                            </div>
+                            <div>
+                              {pgyFellows.map((fellow, idx) => {
+                                const rotation = blockIdx >= 0 ? (schedule[fellow]?.[blockIdx] ?? "") : "";
+                                const rotColor = rotation ? getRotationColor(rotation) : "bg-gray-100 dark:bg-gray-700";
+                                const isVac = isBlockInVacationFast(fellow, blockIdx >= 0 ? blockIdx + 1 : 0);
+                                const isLast = idx === pgyFellows.length - 1;
+
+                                return (
+                                  <div
+                                    key={fellow}
+                                    className={`px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                                      !isLast ? "border-b border-gray-100 dark:border-gray-700" : ""
+                                    }`}
+                                  >
+                                    <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{fellow}</div>
+                                    {rotation ? (
+                                      <div className={`px-2 py-0.5 text-[10px] font-semibold rounded text-white ${rotColor} ${isVac ? "opacity-50" : ""}`}>
+                                        {rotation}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-gray-400 dark:text-gray-500">—</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </>
+                )}
               </div>
             </div>
           );
-        })
-      )}
+        })()}
+        </div>
+      </div>
     </div>
   );
 }

@@ -83,17 +83,8 @@ export default function LectureList({
   const upcomingGroups = useMemo(() => groupByWeek(upcoming), [upcoming]);
   const pastGroups     = useMemo(() => groupByWeek(past),     [past]);
 
-  // Quick attendance summary for a lecture (admin only)
-  const attSummary = (lectureId) => {
-    const rows = attendance.filter(a => a.lecture_id === lectureId);
-    const present = rows.filter(a => a.status === 'present' || a.status === 'late').length;
-    const absent  = rows.filter(a => a.status === 'absent').length;
-    return rows.length ? `${present}✓ ${absent}✗` : null;
-  };
-
   const renderLecture = (lec) => {
     const speaker    = lec.speaker?.name || lec.presenter?.name || 'TBD';
-    const summary    = canManage ? attSummary(lec.id) : null;
     const isToday    = lec.date === today;
     const inWindow   = isInCheckInWindow(lec);
     const myRow      = myFellowId
@@ -145,12 +136,6 @@ export default function LectureList({
             </div>
           </div>
 
-          {/* Attendance summary (admin only) */}
-          {canManage && summary && (
-            <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono pt-1">
-              {summary}
-            </div>
-          )}
         </button>
 
         {/* Check In button — fellows only, during the live window */}

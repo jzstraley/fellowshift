@@ -198,7 +198,7 @@ const CANNOT_COVER_ROTATIONS = [
         <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
           <button
             onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ChevronLeft className="w-4 h-4 dark:text-gray-200" />
           </button>
@@ -208,7 +208,7 @@ const CANNOT_COVER_ROTATIONS = [
           </h3>
           <button
             onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ChevronRight className="w-4 h-4 dark:text-gray-200" />
           </button>
