@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-14 — Vacation Day Calculation Fixes & Case Sensitivity Hardening
+
+- **StatsView vacation day calculation** — Fixed day calculation to use actual calendar dates instead of the flawed `(endB - startB + 1) * 14` fallback that was overestimating days (e.g., a 2-block vacation spanning ~26 calendar days was incorrectly calculated as 28 days)
+- **Vacation deduplication** — Added deduplication logic in StatsView to prevent counting the same vacation request multiple times if duplicates exist in the array
+- **Case-insensitive status checks** — Fixed case-sensitive `v.status === "approved"` checks across 5 files: `ScheduleView.jsx` (vacationSet), `CalendarView.jsx` (vacationSet & vacationDateSet), `MobileScheduleView.jsx` (vacationSet), and `scheduleUtils.js` (getBlockDisplay). All now use `(v.status ?? '').toLowerCase() === 'approved'` to handle status variants like "Approved", "APPROVED", etc. This fixes the bug where Mahmoud's (and other fellows') approved vacations weren't displaying as "VAC" blocks on the schedule views.
+- **FeedbackModal prop fix** — Fixed missing props in App.jsx: FeedbackModal now receives `open={feedbackOpen}`, `user={user}`, and `institutionId={profile?.institution_id}`. The modal was checking for an `open` prop that was never passed, causing it to always return null and the "Send Feedback" link to not work.
+- **Calendar month header styling** — Changed month/year display on CalendarView from gray (`bg-gray-100 dark:bg-gray-700`) to teal (`bg-teal-500 dark:bg-teal-600`) to match the header bar styling of other list views.
+
 ## 2026-03-10 — Realtime Notifications, Mobile Fixes & Request Filtering
 
 - **Supabase Realtime** — `App.jsx` now subscribes to a `fellowshift-{programId}` channel on mount. `vacation_requests` and `swap_requests` inserts/updates trigger in-app toasts: fellows are notified when their request is approved or denied; approvers are notified when a new request is submitted. `schedule_assignments` updates trigger a throttled (10s) "Schedule updated — syncing…" toast and merge the incoming row into local state. Channel is cleaned up on unmount.

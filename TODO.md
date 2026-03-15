@@ -208,6 +208,12 @@
 
 ## ✅ Recently Completed
 
+- [X] Vacation display & calculation consistency fixes (2026-03-14)
+    - [X] Fixed StatsView day calculation to use actual calendar dates instead of block-count estimate
+    - [X] Added deduplication logic to prevent double-counting vacation requests
+    - [X] Fixed case-sensitive status checks across ScheduleView, CalendarView, MobileScheduleView, scheduleUtils — vacations now display correctly as "VAC" blocks
+    - [X] Fixed FeedbackModal prop passing — "Send Feedback" link now works
+    - [X] Calendar month header now uses teal color to match list headers
 - [X] Schedule Edit Conflict — Rethink
     - [X] Enable Supabase Realtime presence channel on schedule page (`channel: 'schedule-presence'`)
     - [X] On entering edit mode, broadcast presence event: `{ user: name, editing: true }`
