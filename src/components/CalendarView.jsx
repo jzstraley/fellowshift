@@ -95,6 +95,8 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
   const [fellowFilter,     setFellowFilter]     = useState("all");
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => toISODate(new Date()));
+  const [highlightedFellow, setHighlightedFellow] = useState(null);
+  const [highlightedBlockIdx, setHighlightedBlockIdx] = useState(null);
 
   // Once profile loads, snap to the linked fellow (only if user hasn't manually picked someone)
   useEffect(() => {
@@ -139,6 +141,33 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
     return s;
   }, [vacations]);
 
+  // Precompute vacation dates for calendar highlighting
+  const vacationDateSet = useMemo(() => {
+    const s = new Set();
+    (vacations || []).forEach((v) => {
+      if (v.reason !== "Vacation") return;
+      if (v.status !== "approved") return;
+      // Find the date range for this vacation using block dates
+      let startDate = null;
+      let endDate = null;
+      for (let b = v.startBlock; b <= v.endBlock; b++) {
+        const bd = blockDates[b - 1]; // blocks are 1-indexed
+        if (bd && !startDate) startDate = new Date(bd.start + "T00:00:00");
+        if (bd) endDate = new Date(bd.end + "T23:59:59");
+      }
+      // Add all dates in the range
+      if (startDate && endDate) {
+        const cur = new Date(startDate);
+        while (cur <= endDate) {
+          s.add(`${v.fellow}#${toISODate(cur)}`);
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+    });
+    return s;
+  }, [vacations]);
+
+  const isDateInVacation = (fellow, dateISO) => vacationDateSet.has(`${fellow}#${dateISO}`);
   const isBlockInVacationFast = (fellow, blockNumber) => vacationSet.has(`${fellow}#${blockNumber}`);
 
   // Generate calendar grid for the current month
@@ -278,28 +307,36 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
               const dateISO = toISODate(day.date);
               const isCurrentMonth = day.isCurrentMonth;
               const isSelected = selectedDate === dateISO;
+              const blockIdx = blockDates.findIndex(bd => dateISO >= bd.start && dateISO <= bd.end);
 
               // Get info for selected fellow or count for all
               let cellContent = null;
               let cellBgColor = "";
               let borderHighlight = "";
 
-              if (fellowFilter !== "all") {
+              // Determine which fellow to display (from dropdown filter or highlighted from list)
+              // Only show highlighted fellow if we're in the same block they were selected in
+              const displayFellow = fellowFilter !== "all" ? fellowFilter : (highlightedFellow && highlightedBlockIdx === blockIdx ? highlightedFellow : null);
+
+              if (displayFellow) {
                 // Check for call/float first (overrides rotation)
                 const dayData = dateCallMap?.[dateISO] || {};
-                if (dayData.call === fellowFilter) {
+                if (dayData.call === displayFellow) {
                   cellContent = "Call";
                   cellBgColor = "bg-orange-500";
                   borderHighlight = "";
-                } else if (dayData.float === fellowFilter) {
+                } else if (dayData.float === displayFellow) {
                   cellContent = "Float";
                   cellBgColor = "bg-orange-500";
                   borderHighlight = "";
                 } else {
                   // Show selected fellow's rotation
-                  const blockIdx = blockDates.findIndex(bd => dateISO >= bd.start && dateISO <= bd.end);
-                  const rotation = blockIdx >= 0 ? (schedule[fellowFilter]?.[blockIdx] ?? null) : null;
-                  if (rotation) {
+                  const rotation = blockIdx >= 0 ? (schedule[displayFellow]?.[blockIdx] ?? null) : null;
+                  const isVac = isBlockInVacationFast(displayFellow, blockIdx >= 0 ? blockIdx + 1 : 0);
+                  if (isVac) {
+                    cellContent = "Vac";
+                    cellBgColor = "bg-yellow-500";
+                  } else if (rotation) {
                     cellContent = rotation === "Nights" ? "Nts" : rotation.slice(0, 3);
                     cellBgColor = getRotationColor(rotation);
                   }
@@ -307,7 +344,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
               } else {
                 // Show count of all fellows
                 const dayFellowCount = fellows.filter(f => {
-                  const rot = schedule[f]?.[blockDates.findIndex(bd => toISODate(day.date) >= bd.start && toISODate(day.date) <= bd.end)] ?? "";
+                  const rot = schedule[f]?.[blockIdx >= 0 ? blockIdx : blockDates.findIndex(bd => toISODate(day.date) >= bd.start && toISODate(day.date) <= bd.end)] ?? "";
                   return rot && rot !== "";
                 }).length;
                 if (dayFellowCount > 0 && isCurrentMonth) {
@@ -315,12 +352,27 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
                 }
               }
 
+              // Check for vacation dates
+              let vacationBgColor = "";
+              if (fellowFilter !== "all") {
+                if (isDateInVacation(fellowFilter, dateISO)) {
+                  vacationBgColor = "bg-yellow-200 dark:bg-yellow-900/40";
+                }
+              }
+
               return (
                 <button
                   key={idx}
-                  onClick={() => setSelectedDate(dateISO)}
-                  className={`aspect-square flex flex-col items-center justify-center p-0.5 rounded cursor-pointer border border-gray-200 dark:border-gray-700 transition-all ${
-                    borderHighlight ? `${borderHighlight} ring-1 ring-offset-0 ring-gray-300 dark:ring-gray-600` : ""
+                  onClick={() => {
+                    setSelectedDate(dateISO);
+                    // Clear highlight if clicking on a different block
+                    if (highlightedBlockIdx !== null && blockIdx !== highlightedBlockIdx) {
+                      setHighlightedFellow(null);
+                      setHighlightedBlockIdx(null);
+                    }
+                  }}
+                  className={`aspect-square flex flex-col items-center justify-center p-0.5 rounded cursor-pointer sm:border sm:border-gray-200 sm:dark:border-gray-700 transition-all ${vacationBgColor} ${
+                    highlightedBlockIdx !== null && blockIdx === highlightedBlockIdx ? "shadow-lg shadow-teal-400/50 dark:shadow-teal-500/50" : ""
                   } ${
                     isSelected ? "bg-teal-500 dark:bg-teal-600" : ""
                   }`}
@@ -432,13 +484,28 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
                                 return (
                                   <div
                                     key={fellow}
-                                    className={`px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                                    onClick={() => {
+                                      if (highlightedFellow === fellow) {
+                                        setHighlightedFellow(null);
+                                        setHighlightedBlockIdx(null);
+                                      } else {
+                                        setHighlightedFellow(fellow);
+                                        setHighlightedBlockIdx(blockIdx);
+                                      }
+                                    }}
+                                    className={`px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${
+                                      highlightedFellow === fellow ? "bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-400 dark:ring-teal-500" : ""
+                                    } ${
                                       !isLast ? "border-b border-gray-100 dark:border-gray-700" : ""
                                     }`}
                                   >
                                     <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{fellow}</div>
-                                    {rotation ? (
-                                      <div className={`px-2 py-0.5 text-[10px] font-semibold rounded text-white ${rotColor} ${isVac ? "opacity-50" : ""}`}>
+                                    {isVac ? (
+                                      <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-yellow-500">
+                                        Vacation
+                                      </div>
+                                    ) : rotation ? (
+                                      <div className={`px-2 py-0.5 text-[10px] font-semibold rounded text-white ${rotColor}`}>
                                         {rotation}
                                       </div>
                                     ) : (

@@ -10,7 +10,8 @@ import FeedbackModal from "./FeedbackModal";
 // ── bottom nav definition (primary 4 + More) ─────────────────────────────────
 const PRIMARY_NAV = [
   { key: "dashboard",   label: "Home",     Icon: LayoutDashboard },
-  { key: "schedule",    label: "Schedule", Icon: Calendar },
+  { key: "schedule",    label: "Schedule", Icon: ClipboardList },
+  { key: "calendar",    label: "Calendar", Icon: Calendar },
   { key: "vacRequests", label: "Requests", Icon: FileText },
   { key: "lectures",    label: "Lectures", Icon: BookOpen },
 ];
@@ -120,9 +121,9 @@ export default function HeaderBar({
   const allViews = [
     { key: "dashboard",   label: "Home" },
     { key: "schedule",    label: "Schedule" },
+    { key: "calendar",    label: "Calendar" },
     ...(showStats       ? [{ key: "stats",       label: "Stats" }]       : []),
     { key: "call",        label: "Call/Float" },
-    { key: "calendar",    label: "Calendar" },
     { key: "clinic",      label: "Clinic" },
     { key: "vacRequests", label: "Requests" },
     { key: "lectures",    label: "Lectures" },
