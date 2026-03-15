@@ -110,7 +110,7 @@ export default function StatsView({ stats, fellows, vacations = [] }) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-6xl space-y-4 px-4 md:px-0">
     <div className="bg-white dark:bg-gray-800 rounded border-2 border-gray-400 dark:border-gray-600 overflow-hidden">
       {/* Table without its own scroll container so page scrolls instead */}
       <div className="w-full">

@@ -89,7 +89,7 @@ export default function VacationsView({
     };
 
     return (
-      <div className="space-y-3">
+      <div className="mx-auto max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-6xl space-y-3 px-4 md:px-0">
         <h3 className="text-lg font-bold">Requests</h3>
 
         <SubViewTabs subView={subView} setSubView={setSubView} />

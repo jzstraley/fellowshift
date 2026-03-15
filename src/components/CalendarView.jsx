@@ -439,19 +439,58 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
                     ) : (
                       <>
                         {callFellow && (
-                          <div className="px-3 py-1.5 flex items-center justify-between border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <div
+                            onClick={() => {
+                              if (highlightedFellow === callFellow) {
+                                setHighlightedFellow(null);
+                                setHighlightedBlockIdx(null);
+                              } else {
+                                setHighlightedFellow(callFellow);
+                                setHighlightedBlockIdx(blockIdx);
+                              }
+                            }}
+                            className={`px-3 py-1.5 flex items-center justify-between border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${
+                              highlightedFellow === callFellow ? "bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-400 dark:ring-teal-500" : ""
+                            }`}
+                          >
                             <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{callFellow}</div>
                             <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-red-500">Call</div>
                           </div>
                         )}
                         {floatFellow && (
-                          <div className={`px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${nightsFellow ? "border-b border-gray-100 dark:border-gray-700" : ""}`}>
+                          <div
+                            onClick={() => {
+                              if (highlightedFellow === floatFellow) {
+                                setHighlightedFellow(null);
+                                setHighlightedBlockIdx(null);
+                              } else {
+                                setHighlightedFellow(floatFellow);
+                                setHighlightedBlockIdx(blockIdx);
+                              }
+                            }}
+                            className={`px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${nightsFellow ? "border-b border-gray-100 dark:border-gray-700" : ""} ${
+                              highlightedFellow === floatFellow ? "bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-400 dark:ring-teal-500" : ""
+                            }`}
+                          >
                             <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{floatFellow}</div>
                             <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-orange-500">Float</div>
                           </div>
                         )}
                         {nightsFellow && (
-                          <div className="px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <div
+                            onClick={() => {
+                              if (highlightedFellow === nightsFellow) {
+                                setHighlightedFellow(null);
+                                setHighlightedBlockIdx(null);
+                              } else {
+                                setHighlightedFellow(nightsFellow);
+                                setHighlightedBlockIdx(blockIdx);
+                              }
+                            }}
+                            className={`px-3 py-1.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${
+                              highlightedFellow === nightsFellow ? "bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-400 dark:ring-teal-500" : ""
+                            }`}
+                          >
                             <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{nightsFellow}</div>
                             <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-black dark:bg-gray-900">Nights</div>
                           </div>
