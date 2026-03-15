@@ -365,6 +365,10 @@ export function useVacationState({
     fetchRequests();
   }, [fetchRequests]);
 
+  // ---- visibility: derived fellow lists (needed by callbacks below) ----
+  const linkedFellows = useMemo(() => asArray(dbFellows).filter(f => f?.user_id === uid), [dbFellows, uid]);
+  const linkedFellowIds = useMemo(() => new Set(linkedFellows.map(f => f.id).filter(Boolean)), [linkedFellows]);
+
   // ---- helpers: translate UI "3-1" to a block_dates.id (creates row if needed) ----
   const ensureBlockDateIdForUiWeek = useCallback(
     async (uiWeekValue) => {
@@ -846,9 +850,6 @@ const cancelDbRequest = useCallback(async (requestId, notes = '') => {
   }, [uid, fetchRequests]);
 
   // ---- visibility + derived lists (ALWAYS arrays) ----
-  const linkedFellows = useMemo(() => asArray(dbFellows).filter(f => f?.user_id === uid), [dbFellows, uid]);
-  const linkedFellowIds = useMemo(() => new Set(linkedFellows.map(f => f.id).filter(Boolean)), [linkedFellows]);
-
   const selectableFellows = useMemo(() => {
     if (userCanApprove) return asArray(dbFellows);
     return linkedFellows.length ? linkedFellows : asArray(dbFellows);
