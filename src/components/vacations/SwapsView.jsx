@@ -56,12 +56,13 @@ export default function SwapsView({
 }) {
   const [peerOpen, setPeerOpen] = useState(false);
   const [pendingOpen, setPendingOpen] = useState(false);
-  const [approvedOpen, setApprovedOpen] = useState(false);
-  const [deniedOpen, setDeniedOpen] = useState(false);
+  const [historicalOpen, setHistoricalOpen] = useState(false);
+  const [historicalTab, setHistoricalTab] = useState('approved'); // 'approved' | 'denied'
   const [peerDenyingId, setPeerDenyingId] = useState(null);
   const [peerDenyReason, setPeerDenyReason] = useState('');
 
   const visibleDenied = deniedSwaps.filter(r => !dismissedSwapIds.has(r.id));
+  const historicalSwaps = historicalTab === 'approved' ? approvedSwaps : visibleDenied;
 
   return (
     <>
@@ -282,108 +283,6 @@ export default function SwapsView({
         )}
       </CollapsibleSection>
 
-      {/* Approved Swaps */}
-      <CollapsibleSection
-        title={`Approved Swaps (${approvedSwaps.length})`}
-        count={0}
-        badgeColor="bg-green-600"
-        open={approvedOpen}
-        onToggle={() => setApprovedOpen(o => !o)}
-      >
-        {approvedSwaps.length === 0 ? (
-          <div className="text-xs text-gray-500 dark:text-gray-400">No approved swaps</div>
-        ) : (
-          <div className="space-y-2">
-            {approvedSwaps.map((r) => {
-              const parsed = parseSwapReason(r.reason);
-              const label = parsed.swapType
-                ? `${parsed.swapType === 'call' ? 'Call' : 'Float'} W${parsed.weekend ?? 1}`
-                : 'Rotation swap';
-              return (
-                <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
-                  <div className="text-sm">
-                    <div className="font-semibold dark:text-green-100 flex items-center gap-1">
-                      {r.requester?.name ?? '?'} <ArrowLeftRight className="w-3 h-3 text-green-500" /> {r.target?.name ?? '?'}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-green-200">
-                      {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} — {label}{parsed.note ? ` — ${parsed.note}` : ''}
-                    </div>
-                    {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
-                  </div>
-                  <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CollapsibleSection>
-
-      {/* Denied Swaps */}
-      {visibleDenied.length > 0 && (
-        <CollapsibleSection
-          title={`Denied Swaps (${visibleDenied.length})`}
-          count={0}
-          badgeColor="bg-red-600"
-          open={deniedOpen}
-          onToggle={() => setDeniedOpen(o => !o)}
-        >
-          <div className="space-y-2">
-            {visibleDenied.map((r) => {
-              const parsed = parseSwapReason(r.reason);
-              const swapLabel = parsed.swapType === 'call' ? 'Call' : parsed.swapType === 'float' ? 'Float' : null;
-              const fromWk = r.from_week_part ?? parsed.weekend ?? null;
-              const toWk = r.to_week_part ?? null;
-              const violationLines = r.notes ? r.notes.split('\n').filter(Boolean) : [];
-
-              let swapDetail;
-              if (swapLabel && fromWk) {
-                const reqPart = `${r.requester?.name ?? 'Requester'} gives up ${swapLabel} Wk ${fromWk}`;
-                const tgtPart = toWk ? ` · ${r.target?.name ?? 'Target'} gives up ${swapLabel} Wk ${toWk}` : '';
-                swapDetail = reqPart + tgtPart;
-              } else {
-                swapDetail = fmtSwapBlock(r.block_number, parsed.weekend, blockDates);
-              }
-
-              return (
-                <div key={r.id} className="border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-2 rounded text-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <span className="font-medium dark:text-gray-100">{r.requester?.name ?? '?'}</span>
-                        <ArrowLeftRight className="w-3 h-3 text-red-400 shrink-0" />
-                        <span className="font-medium dark:text-gray-100">{r.target?.name ?? '?'}</span>
-                        <span className="ml-1 text-xs text-red-600 dark:text-red-400 font-medium">Denied</span>
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {swapDetail}{parsed.note ? ` — ${parsed.note}` : ''}
-                      </div>
-                      {violationLines.length > 0 ? (
-                        <div className="mt-1 space-y-0.5">
-                          {violationLines.map((line, i) => (
-                            <div key={i} className="text-xs text-red-700 dark:text-red-300 leading-tight">
-                              ⚠ {line}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-xs text-gray-400 dark:text-gray-500 italic">No denial reason recorded</div>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => dismissSwap(r.id)}
-                      className="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 rounded"
-                      title="Hide from view"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CollapsibleSection>
-      )}
-
       {/* Request Schedule Swap */}
       {userCanRequest && (
         <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600 p-3">
@@ -459,6 +358,129 @@ export default function SwapsView({
           </button>
         </div>
       )}
+
+      {/* History (Approved/Denied) — Tabbed */}
+      <div className="bg-white dark:bg-gray-700 rounded border dark:border-gray-600">
+        <button
+          type="button"
+          onClick={() => setHistoricalOpen(o => !o)}
+          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors"
+        >
+          <span className="text-sm font-semibold dark:text-gray-100">History</span>
+          {historicalOpen ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+        </button>
+
+        {historicalOpen && (
+          <>
+            <div className="flex items-center gap-0 border-t border-gray-200 dark:border-gray-600">
+              <button
+                type="button"
+                onClick={() => setHistoricalTab('approved')}
+                className={`flex-1 px-3 py-2.5 text-sm font-semibold text-center transition-colors ${
+                  historicalTab === 'approved'
+                    ? 'text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                Approved {approvedSwaps.length > 0 && <span className="text-xs">({approvedSwaps.length})</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoricalTab('denied')}
+                className={`flex-1 px-3 py-2.5 text-sm font-semibold text-center transition-colors ${
+                  historicalTab === 'denied'
+                    ? 'text-red-600 dark:text-red-400 border-b-2 border-red-600 dark:border-red-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                Denied {visibleDenied.length > 0 && <span className="text-xs">({visibleDenied.length})</span>}
+              </button>
+            </div>
+
+            <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-600 space-y-2">
+              {historicalSwaps.length === 0 ? (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  No {historicalTab} swaps
+                </div>
+              ) : (
+                historicalSwaps.map((r) => {
+                  if (historicalTab === 'approved') {
+                    const parsed = parseSwapReason(r.reason);
+                    const label = parsed.swapType
+                      ? `${parsed.swapType === 'call' ? 'Call' : 'Float'} W${parsed.weekend ?? 1}`
+                      : 'Rotation swap';
+                    return (
+                      <div key={r.id} className="flex items-center justify-between border border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900 p-2 rounded">
+                        <div className="text-sm">
+                          <div className="font-semibold dark:text-green-100 flex items-center gap-1">
+                            {r.requester?.name ?? '?'} <ArrowLeftRight className="w-3 h-3 text-green-500" /> {r.target?.name ?? '?'}
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-green-200">
+                            {fmtSwapBlock(r.block_number, parsed.weekend, blockDates)} — {label}{parsed.note ? ` — ${parsed.note}` : ''}
+                          </div>
+                          {r.approved_at && <div className="text-xs text-gray-400 dark:text-green-300 mt-0.5">Approved {new Date(r.approved_at).toLocaleDateString()}</div>}
+                        </div>
+                        <div className="px-3 py-1 bg-green-600 text-white rounded text-xs">Approved</div>
+                      </div>
+                    );
+                  } else {
+                    const parsed = parseSwapReason(r.reason);
+                    const swapLabel = parsed.swapType === 'call' ? 'Call' : parsed.swapType === 'float' ? 'Float' : null;
+                    const fromWk = r.from_week_part ?? parsed.weekend ?? null;
+                    const toWk = r.to_week_part ?? null;
+                    const violationLines = r.notes ? r.notes.split('\n').filter(Boolean) : [];
+
+                    let swapDetail;
+                    if (swapLabel && fromWk) {
+                      const reqPart = `${r.requester?.name ?? 'Requester'} gives up ${swapLabel} Wk ${fromWk}`;
+                      const tgtPart = toWk ? ` · ${r.target?.name ?? 'Target'} gives up ${swapLabel} Wk ${toWk}` : '';
+                      swapDetail = reqPart + tgtPart;
+                    } else {
+                      swapDetail = fmtSwapBlock(r.block_number, parsed.weekend, blockDates);
+                    }
+
+                    return (
+                      <div key={r.id} className="border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-2 rounded text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="font-medium dark:text-gray-100">{r.requester?.name ?? '?'}</span>
+                              <ArrowLeftRight className="w-3 h-3 text-red-400 shrink-0" />
+                              <span className="font-medium dark:text-gray-100">{r.target?.name ?? '?'}</span>
+                              <span className="ml-1 text-xs text-red-600 dark:text-red-400 font-medium">Denied</span>
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              {swapDetail}{parsed.note ? ` — ${parsed.note}` : ''}
+                            </div>
+                            {violationLines.length > 0 ? (
+                              <div className="mt-1 space-y-0.5">
+                                {violationLines.map((line, i) => (
+                                  <div key={i} className="text-xs text-red-700 dark:text-red-300 leading-tight">
+                                    ⚠ {line}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="mt-1 text-xs text-gray-400 dark:text-gray-500 italic">No denial reason recorded</div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => dismissSwap(r.id)}
+                            className="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 rounded"
+                            title="Hide from view"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+                })
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }

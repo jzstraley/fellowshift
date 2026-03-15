@@ -1362,8 +1362,9 @@ if (Array.isArray(swapResult?.swapRequests)) {
 
       {feedbackOpen && (
         <FeedbackModal
-          darkMode={darkMode}
-          profile={profile}
+          open={feedbackOpen}
+          user={user}
+          institutionId={profile?.institution_id}
           onClose={() => setFeedbackOpen(false)}
         />
       )}

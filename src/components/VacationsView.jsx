@@ -92,7 +92,13 @@ export default function VacationsView({
       <div className="mx-auto max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-6xl space-y-3 px-4 md:px-0">
         <h3 className="text-lg font-bold">Requests</h3>
 
-        <SubViewTabs subView={subView} setSubView={setSubView} />
+        <SubViewTabs
+          subView={subView}
+          setSubView={setSubView}
+          pendingTimeOff={state.pendingRequests?.length ?? 0}
+          pendingDayOff={state.pendingDayOffs?.length ?? 0}
+          pendingSwaps={(state.pendingPeerSwapRequests?.length ?? 0) + (state.pendingSwapRequests?.length ?? 0)}
+        />
 
         {/* Filter bar */}
         <div className="flex flex-col sm:flex-row gap-2">

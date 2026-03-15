@@ -133,7 +133,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
     const s = new Set();
     (vacations || []).forEach((v) => {
       if (v.reason !== "Vacation") return;
-      if (v.status !== "approved") return;
+      if ((v.status ?? '').toLowerCase() !== "approved") return;
       for (let b = v.startBlock; b <= v.endBlock; b++) {
         s.add(`${v.fellow}#${b}`);
       }
@@ -146,7 +146,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
     const s = new Set();
     (vacations || []).forEach((v) => {
       if (v.reason !== "Vacation") return;
-      if (v.status !== "approved") return;
+      if ((v.status ?? '').toLowerCase() !== "approved") return;
       // Find the date range for this vacation using block dates
       let startDate = null;
       let endDate = null;
@@ -251,7 +251,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
           <span className="font-bold text-xs text-gray-700 dark:text-gray-300">Legend:</span>
           <span className="px-2 py-1 text-xs bg-red-500 text-white rounded font-semibold">Call</span>
           <span className="px-2 py-1 text-xs bg-orange-500 text-white rounded font-semibold">Float</span>
-          <span className="px-2 py-1 text-xs bg-black dark:bg-gray-900 text-white rounded font-semibold">Nights</span>
+          <span className="px-2 py-1 text-xs bg-black dark:bg-gray-900 text-white dark:text-white rounded font-semibold">Nights</span>
         </div>
       </div>
 
@@ -269,7 +269,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
             </svg>
           </button>
 
-          <div className="px-3 py-1 rounded-full text-center font-semibold text-xs whitespace-nowrap bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+          <div className="px-3 py-1 rounded-full text-center font-semibold text-xs whitespace-nowrap bg-teal-500 dark:bg-teal-600 text-white">
             {currentMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
           </div>
 
@@ -337,7 +337,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
                     cellContent = "Vac";
                     cellBgColor = "bg-yellow-500";
                   } else if (rotation) {
-                    cellContent = rotation === "Nights" ? "Nts" : rotation.slice(0, 3);
+                    cellContent = rotation;
                     cellBgColor = getRotationColor(rotation);
                   }
                 }
@@ -492,7 +492,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
                             }`}
                           >
                             <div className="font-semibold text-xs text-gray-900 dark:text-gray-100">{nightsFellow}</div>
-                            <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-black dark:bg-gray-900">Nights</div>
+                            <div className="px-2 py-0.5 text-[10px] font-semibold rounded text-white bg-black dark:bg-gray-900 dark:text-white">Nights</div>
                           </div>
                         )}
                       </>

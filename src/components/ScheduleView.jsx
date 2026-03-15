@@ -61,7 +61,7 @@ export default function ScheduleView({
     const s = new Set();
     (vacations || []).forEach((v) => {
       if (v.reason !== "Vacation") return;
-      if (v.status !== "approved") return;
+      if ((v.status ?? '').toLowerCase() !== "approved") return;
       for (let b = v.startBlock; b <= v.endBlock; b++) {
         s.add(`${v.fellow}#${b}`);
       }

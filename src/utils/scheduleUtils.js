@@ -8,7 +8,7 @@ export const getRotationColor = (rot) => {
   if (rot === 'Floor B') return 'bg-blue-900 text-white';
   if (rot.includes('Cath')) return 'bg-blue-400 text-white';
   if (rot.includes('Echo')) return 'bg-cyan-400 text-white';
-  if (rot.includes('Nuclear')) return 'bg-yellow-300 text-gray-800';
+  if (rot.includes('Nuclear')) return 'bg-yellow-300 text-black';
   if (rot === 'EP') return 'bg-green-400 text-white';
   if (rot.includes('AI')) return 'bg-purple-300 text-gray-800';
   if (rot.includes('Research')) return 'bg-pink-200 text-gray-800';
@@ -45,7 +45,7 @@ export const getBlockDisplay = (fellow, blockIdx, schedule, vacations, blockDate
   // Only approved vacations affect the schedule view
   const vacation = vacations.find(v =>
     v.fellow === fellow &&
-    v.status === 'approved' &&
+    (v.status ?? '').toLowerCase() === 'approved' &&
     v.startBlock <= currentBlock &&
     v.endBlock >= currentBlock
   );

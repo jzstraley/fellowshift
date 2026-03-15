@@ -30,9 +30,18 @@ export default function StatsView({ stats, fellows, vacations = [] }) {
 
   const vacSummary = useMemo(() => {
     const map = {};
+    // Deduplicate by ID/request_id first to avoid counting the same request twice
+    const seen = new Set();
+
     for (const v of vacations) {
       const name = v.fellow || v.fellow_name;
       if (!name || !fellows.includes(name)) continue;
+
+      // Skip duplicates using ID
+      const reqId = v.id || v.vacation_request_id || v.request_id;
+      if (reqId && seen.has(reqId)) continue;
+      if (reqId) seen.add(reqId);
+
       if (!map[name]) map[name] = { vacPending: 0, vacApproved: 0, dayOffPending: 0, dayOffApproved: 0 };
       const isDayOff = DAY_OFF_REASONS.has(v.reason);
       const status = (v.status ?? '').toLowerCase();
@@ -43,14 +52,22 @@ export default function StatsView({ stats, fellows, vacations = [] }) {
         const startB = v.startBlock ?? 1;
         const endB = v.endBlock ?? startB;
         let days;
+        // For single-block vacations with weekPart, count as 7 days (half a block)
         if (v.weekPart && startB === endB) {
           days = 7;
         } else {
-          const s = blockDateMap[startB]?.start;
-          const e = blockDateMap[endB]?.end;
-          days = s && e
-            ? Math.round((new Date(e) - new Date(s)) / 86400000) + 1
-            : (endB - startB + 1) * 14;
+          // Use actual calendar dates when available
+          const startBlockInfo = blockDateMap[startB];
+          const endBlockInfo = blockDateMap[endB];
+          if (startBlockInfo && endBlockInfo) {
+            const startDate = new Date(startBlockInfo.start + 'T00:00:00');
+            const endDate = new Date(endBlockInfo.end + 'T23:59:59');
+            const diffMs = endDate - startDate;
+            days = Math.ceil(diffMs / 86400000);
+          } else {
+            // Fallback: estimate based on block count
+            days = (endB - startB + 1) * 14;
+          }
         }
         if (status === 'pending') map[name].vacPending += days;
         else if (status === 'approved') map[name].vacApproved += days;
