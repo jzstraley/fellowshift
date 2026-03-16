@@ -60,12 +60,12 @@ const ViewLoader = () => (
 
 // Subtle footer
 const Footer = ({ onFeedback }) => (
-  <footer className="py-1 text-center text-[9px] text-gray-300">
+  <footer className="mt-12 pt-8 mb-20 border-t border-gray-200 dark:border-gray-700 text-center text-[9px] text-gray-500 dark:text-gray-400">
     © {new Date().getFullYear()} Austin Straley
     {" · "}
     <button
       onClick={onFeedback}
-      className="underline hover:text-gray-400 transition-colors"
+      className="underline hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
     >
       Send Feedback
     </button>
@@ -1336,6 +1336,8 @@ if (Array.isArray(swapResult?.swapRequests)) {
           </div>
         )}
 
+        {/* Footer */}
+        <Footer onFeedback={() => setFeedbackOpen(true)} />
       </div>
 
       {/* Idle timeout warning modal */}
@@ -1356,7 +1358,6 @@ if (Array.isArray(swapResult?.swapRequests)) {
         </div>
       )}
 
-      <Footer onFeedback={() => setFeedbackOpen(true)} />
       <CookieConsent />
       <ToastContainer />
 
