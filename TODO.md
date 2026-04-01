@@ -113,6 +113,8 @@
 
 ### UX Polish
 
+- [X] CalendarView max-width bounds per breakpoint — prevents over-expansion on fullscreen/wide displays (lg→3xl, xl→4xl, 2xl→5xl)
+- [X] ScheduleView color key — compact rotation legend at the bottom of the schedule tab
 - [ ] Keyboard shortcut reference modal (Ctrl+/ or ? key)
 - [ ] Onboarding flow for new programs: step-by-step setup wizard (fellows → blocks → schedule)
 - [ ] Print-friendly schedule view (full print CSS pass)

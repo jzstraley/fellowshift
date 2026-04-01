@@ -222,7 +222,7 @@ export default function CalendarView({ fellows, schedule, vacations = [], dateCa
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="mx-auto max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-6xl space-y-4 px-4 md:px-0">
+    <div className="mx-auto max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl 2xl:max-w-5xl space-y-4 px-4 md:px-0">
 
       {/* ── Toolbar ── */}
       <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3 sm:flex-wrap">

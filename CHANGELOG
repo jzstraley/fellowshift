@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-31 — UI Polish: Calendar Bounds & Schedule Key
+
+- **CalendarView max-width bounds** — Tightened responsive max-widths so the calendar doesn't over-expand on large/fullscreen displays. Breakpoints now: `lg:max-w-3xl` (768px), `xl:max-w-4xl` (896px), `2xl:max-w-5xl` (1024px). Prevents oversized calendar cells on wide monitors.
+- **ScheduleView color key** — Added a compact color legend below the rotation filter. Shows a color pill for every rotation type (ICU, Floor A/B, Cath, Echo, Nuclear, EP, AI, Research, Admin, Vascular, Structural, CTS, Nights, VAC) plus an "Unassigned" indicator. Colors match `getRotationColor` exactly.
+
 ## 2026-03-14 — Vacation Day Calculation Fixes & Case Sensitivity Hardening
 
 - **StatsView vacation day calculation** — Fixed day calculation to use actual calendar dates instead of the flawed `(endB - startB + 1) * 14` fallback that was overestimating days (e.g., a 2-block vacation spanning ~26 calendar days was incorrectly calculated as 28 days)

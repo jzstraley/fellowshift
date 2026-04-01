@@ -324,6 +324,37 @@ export default function ScheduleView({
           ))}
         </select>
       </div>
+
+      {/* Color key */}
+      <div className="mt-2 p-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Key</div>
+        <div className="flex flex-wrap gap-1">
+          {[
+            { label: "ICU",        cls: "bg-red-600 text-white" },
+            { label: "Floor A",    cls: "bg-green-600 text-white" },
+            { label: "Floor B",    cls: "bg-blue-900 text-white" },
+            { label: "Cath",       cls: "bg-blue-400 text-white" },
+            { label: "Echo",       cls: "bg-cyan-400 text-white" },
+            { label: "Nuclear",    cls: "bg-yellow-300 text-black" },
+            { label: "EP",         cls: "bg-green-400 text-white" },
+            { label: "AI",         cls: "bg-purple-300 text-gray-800" },
+            { label: "Research",   cls: "bg-pink-200 text-gray-800" },
+            { label: "Admin",      cls: "bg-gray-300 text-gray-800" },
+            { label: "Vascular",   cls: "bg-rose-300 text-gray-800" },
+            { label: "Structural", cls: "bg-amber-300 text-gray-800" },
+            { label: "CTS",        cls: "bg-indigo-400 text-white" },
+            { label: "Nights",     cls: "bg-black text-white" },
+            { label: "VAC",        cls: "bg-yellow-500 text-white" },
+          ].map(({ label, cls }) => (
+            <span key={label} className={`px-2 py-0.5 rounded text-[10px] font-semibold ${cls}`}>
+              {label}
+            </span>
+          ))}
+          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400">
+            — = Unassigned
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
