@@ -181,7 +181,8 @@ export function useLectureState({
       const { error } = await supabase.from('lectures').insert(toDbRow(fields));
       if (error) throw error;
       await fetchAll();
-    } catch (e) { setError(e?.message || String(e)); }
+      return true;
+    } catch (e) { setError(e?.message || String(e)); return false; }
     finally { setSubmitting(false); }
   }, [iid, pid, uid, fetchAll]);
 
@@ -194,7 +195,8 @@ export function useLectureState({
       const { error } = await supabase.from('lectures').update(row).eq('id', id);
       if (error) throw error;
       await fetchAll();
-    } catch (e) { setError(e?.message || String(e)); }
+      return true;
+    } catch (e) { setError(e?.message || String(e)); return false; }
     finally { setSubmitting(false); }
   }, [iid, pid, fetchAll]);
 

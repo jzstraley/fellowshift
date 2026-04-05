@@ -262,11 +262,28 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }, 10000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!alive) return;
 
       clearTimeout(timeout);
       if (import.meta.env.DEV) console.log('AUTH EVENT:', event, !!session?.user);
+
+      if (event === 'SIGNED_OUT') {
+        console.warn('[AuthContext] SIGNED_OUT received — verifying session before logout');
+        // Supabase can fire SIGNED_OUT transiently (e.g. failed token refresh retry).
+        // Re-check the actual session before evicting the user.
+        try {
+          const { data: sd } = await supabase.auth.getSession();
+          if (!alive) return;
+          if (sd?.session?.user) {
+            // Session is still valid — ignore the spurious SIGNED_OUT.
+            console.warn('[AuthContext] Ignoring spurious SIGNED_OUT — session is still valid');
+            return;
+          }
+        } catch {
+          // If getSession itself throws, fall through to the real sign-out path.
+        }
+      }
 
       setUser(session?.user ?? null);
       setLoading(false);
@@ -302,7 +319,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     if (!isSupabaseConfigured) return { error: { message: 'Supabase not configured' } };
     try {
       clearScopeSelection();
@@ -312,7 +329,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       return { error: err };
     }
-  };
+  }, [broadcast]);
 
   const updateProfile = async (payload) => {
     if (!supabase || !user) return { error: { message: 'Not authenticated' } };

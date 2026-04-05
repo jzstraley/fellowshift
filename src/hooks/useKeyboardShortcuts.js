@@ -14,9 +14,9 @@ export default function useKeyboardShortcuts({ views, setActiveView }) {
       const tag = document.activeElement?.tagName;
       const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
-      // Escape: always works (close modals)
+      // Escape: close modals, but not when typing in a form field
       if (e.key === "Escape") {
-        window.dispatchEvent(new CustomEvent("fellowshift:escape"));
+        if (!isInput) window.dispatchEvent(new CustomEvent("fellowshift:escape"));
         return;
       }
 

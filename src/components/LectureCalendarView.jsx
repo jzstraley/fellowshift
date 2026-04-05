@@ -224,7 +224,8 @@ export default function LectureCalendarView({
     if (Object.keys(errors).length) { setFormErrors(errors); return; }
     setFormErrors({});
     if (useDatabase) {
-      await dbState.addLecture({ ...formData, rsvps: {}, reminderSent: false });
+      const ok = await dbState.addLecture({ ...formData, rsvps: {}, reminderSent: false });
+      if (!ok) return; // error displayed in modal via dbState.error
     } else {
       const newLecture = { id: `lec${Date.now()}`, ...formData, rsvps: {}, reminderSent: false };
       setLectures([...(propLectures ?? []), newLecture]);
@@ -238,7 +239,8 @@ export default function LectureCalendarView({
     if (Object.keys(errors).length) { setFormErrors(errors); return; }
     setFormErrors({});
     if (useDatabase) {
-      await dbState.updateLecture(editingLecture.id, formData);
+      const ok = await dbState.updateLecture(editingLecture.id, formData);
+      if (!ok) return; // error displayed in modal via dbState.error
     } else {
       setLectures(
         (propLectures ?? []).map((l) =>
@@ -1264,6 +1266,13 @@ export default function LectureCalendarView({
                   {formData.checkInOpen === null  && 'Check-in opens automatically ±15 min around the lecture start time.'}
                 </p>
               </div>
+
+              {/* DB error inside modal */}
+              {useDatabase && dbState.error && (
+                <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded p-2">
+                  {dbState.error}
+                </div>
+              )}
 
               {/* Submit */}
               <div className="flex justify-end gap-2 pt-2">
