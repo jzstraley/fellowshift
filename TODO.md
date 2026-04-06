@@ -114,6 +114,7 @@
 ### UX Polish
 
 - [X] CalendarView max-width bounds per breakpoint — prevents over-expansion on fullscreen/wide displays (lg→3xl, xl→4xl, 2xl→5xl)
+- [X] Lecture Calendar max-width capped at `max-w-4xl` on large screens — was too wide on fullscreen/wide displays
 - [X] ScheduleView color key — compact rotation legend at the bottom of the schedule tab
 - [ ] Keyboard shortcut reference modal (Ctrl+/ or ? key)
 - [ ] Onboarding flow for new programs: step-by-step setup wizard (fellows → blocks → schedule)
@@ -253,7 +254,7 @@
 - [X] Request lists scoped: non-approvers see only their own requests
 - [X] Dashboard redesign with greeting, current block hero banner, quick links for fellows
 - [X] ACGME work-hour violation checker + Violations view with fix suggester
-- [X] Session idle timeout (15 min) with warning modal at 13 min
+- [X] Session idle timeout (15 min) with warning modal at 13 min — fixed: interval was being cleared/restarted when warning appeared, preventing actual sign-out
 - [X] AES-GCM encrypted localStorage for sensitive cached data
 - [X] Undo/redo for schedule changes (dual stack, Ctrl+Z / Ctrl+Shift+Z)
 - [X] Dark mode (full Tailwind dark: variants across all components)

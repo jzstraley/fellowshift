@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-05 — Bug Fixes: Idle Timeout & Lecture Calendar Width
+
+- **Idle timeout sign-out fixed** — `useIdleTimeout.js` was re-creating the `resetActivity` callback whenever `showWarning` changed (because it closed over it), which caused the `useEffect` to re-run, clearing and restarting the 30-second interval. This indefinitely deferred `onTimeout()` so the user was never actually signed out. Fixed by moving `onTimeout` into a ref so it's always current without being a dep, reading `showWarning` via its own ref inside `throttledReset`, and giving `resetActivity` a stable reference. The effect now only restarts when `enabled` changes (user logs in/out).
+- **Lecture Calendar max-width** — Capped the lecture tab calendar at `max-w-4xl` (896px) on large screens. Previously used `lg:max-w-6xl` (1152px) which made the calendar oversized on wide/fullscreen displays. Mobile behavior unchanged.
+
 ## 2026-03-31 — UI Polish: Calendar Bounds & Schedule Key
 
 - **CalendarView max-width bounds** — Tightened responsive max-widths so the calendar doesn't over-expand on large/fullscreen displays. Breakpoints now: `lg:max-w-3xl` (768px), `xl:max-w-4xl` (896px), `2xl:max-w-5xl` (1024px). Prevents oversized calendar cells on wide monitors.

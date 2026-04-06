@@ -346,7 +346,7 @@ export default function LectureCalendarView({
   ];
 
   return (
-    <div className={`mx-auto max-w-3xl sm:max-w-4xl lg:max-w-6xl space-y-3 ${baseClasses}`}>
+    <div className={`mx-auto max-w-3xl sm:max-w-4xl lg:max-w-4xl xl:max-w-4xl space-y-3 ${baseClasses}`}>
       {/* Apple Calendar-style Header */}
       <div className="space-y-3">
         {/* Pill-shaped month/year header with navigation */}

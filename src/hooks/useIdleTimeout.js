@@ -14,21 +14,24 @@ const CHECK_INTERVAL = 30 * 1000;  // check every 30 seconds
  * @param {boolean} opts.enabled - only active when true (i.e. user is authenticated)
  */
 export default function useIdleTimeout({ onTimeout, enabled }) {
-  const lastActivityRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
   const [showWarning, setShowWarning] = useState(false);
 
-  // Initialize the ref on first effect run (not during render)
-  useEffect(() => {
-    lastActivityRef.current = Date.now();
-  }, []);
+  // Keep callbacks in refs so the effect never needs to restart when they change
+  const onTimeoutRef = useRef(onTimeout);
+  onTimeoutRef.current = onTimeout;
+  const showWarningRef = useRef(showWarning);
+  showWarningRef.current = showWarning;
 
   const resetActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
-    if (showWarning) setShowWarning(false);
-  }, [showWarning]);
+    setShowWarning(false);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
+
+    lastActivityRef.current = Date.now();
 
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
     let throttleTimer = null;
@@ -37,8 +40,9 @@ export default function useIdleTimeout({ onTimeout, enabled }) {
       if (throttleTimer) return;
       throttleTimer = setTimeout(() => {
         throttleTimer = null;
-        resetActivity();
-      }, 5000); // throttle to every 5s
+        lastActivityRef.current = Date.now();
+        if (showWarningRef.current) setShowWarning(false);
+      }, 5000);
     };
 
     events.forEach((ev) => window.addEventListener(ev, throttledReset, { passive: true }));
@@ -46,7 +50,7 @@ export default function useIdleTimeout({ onTimeout, enabled }) {
     const interval = setInterval(() => {
       const elapsed = Date.now() - lastActivityRef.current;
       if (elapsed >= IDLE_LIMIT) {
-        onTimeout();
+        onTimeoutRef.current();
       } else if (elapsed >= WARNING_AT) {
         setShowWarning(true);
       }
@@ -57,7 +61,7 @@ export default function useIdleTimeout({ onTimeout, enabled }) {
       clearInterval(interval);
       if (throttleTimer) clearTimeout(throttleTimer);
     };
-  }, [enabled, onTimeout, resetActivity]);
+  }, [enabled]); // only restarts if enabled changes (user logs in/out)
 
   return { showWarning, dismissWarning: resetActivity };
 }
